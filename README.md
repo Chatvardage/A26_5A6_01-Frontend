@@ -17,3 +17,10 @@
 - Frontend: React
 - Backend: Nodejs
 - BD: SQLite
+
+# Comment démarrer
+  
+  ```bash
+  npm install
+  npm start
+  ```
