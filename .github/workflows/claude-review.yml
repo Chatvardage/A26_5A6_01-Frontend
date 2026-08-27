@@ -22,7 +22,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Capture the changes made in this PR
-          git diff origin/${{ github.base_ref }}...HEAD > /tmp/diff.txt
+          git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} > /tmp/diff.txt
           
           # Ask Claude to review the diff
           claude --print "Review this git diff for code quality, bugs, performance, and security issues. Format your feedback as clean markdown comments referencing the files. $(cat /tmp/diff.txt)" > /tmp/review.md
