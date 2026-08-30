@@ -226,3 +226,34 @@ ChatVardage <br />
 &emsp;&emsp;&emsp;&emsp;&emsp;# Contrats de communication frontend/backend.<br />
 &emsp;&emsp;&emsp;&emsp;&emsp;# Exemple : SendMessageRequest,<br />
 &emsp;&emsp;&emsp;&emsp;&emsp;# MessageResponse, WebSocketEvent.<br />
+
+## Sécurité Electron
+
+Cette section documente les choix effectués pour sécuriser l'architecture Electron, conformément aux exigences du contrôle 1 (`Configurer Electron sécurisé`, issue #8).
+
+### Isolation du renderer
+
+| Réglage | Valeur | Rôle |
+|---|---|---|
+| `contextIsolation` | `true` | Le contexte JS du `preload.js` est isolé de celui de la page web chargée. Le renderer ne peut pas accéder aux objets internes exposés par le preload autrement que via `contextBridge`. |
+| `nodeIntegration` | `false` | Le renderer n'a aucun accès direct à Node.js (`require`, `process`, `fs`, etc.). |
+| `sandbox` | `true` | Le processus renderer (y compris le preload) tourne dans un environnement restreint façon Chromium, avec un accès Node minimal même dans le preload. |
+| `webviewTag` | `false` | La balise `<webview>` est désactivée (surface d'attaque supplémentaire évitée). |
+
+### API preload minimale
+
+Le renderer communique avec le processus Main **uniquement** via `window.chatAPI`, exposé par `preload.js` avec `contextBridge.exposeInMainWorld`. Aucune méthode générique (`send(channel, data)` / `on(channel, cb)`) n'est exposée : chaque canal IPC est déclaré en dur dans le preload, le renderer ne peut donc pas invoquer un canal arbitraire.
+
+### Navigation et fenêtres
+
+- `will-navigate` est intercepté : toute navigation hors de l'app (`file://` ou `localhost` en dev) est bloquée.
+- `setWindowOpenHandler` refuse systématiquement l'ouverture de nouvelles fenêtres Electron ; un lien `http(s)` est redirigé vers le navigateur système via `shell.openExternal`, jamais ouvert dans une fenêtre Electron non contrôlée.
+
+### Menu et interface
+
+- Le menu par défaut d'Electron est remplacé par un menu applicatif réduit (`Menu.setApplicationMenu`), sans les éléments de debug en production.
+- Les DevTools ne sont ouverts qu'en développement (`NODE_ENV === 'development'`), jamais en production.
+
+### Anti-XSS côté affichage
+
+Les messages affichés dans le renderer sont insérés via `textContent` (jamais `innerHTML`) — voir `renderer.js`. Le texte d'un autre utilisateur ne peut donc jamais être interprété comme du HTML/JS.
