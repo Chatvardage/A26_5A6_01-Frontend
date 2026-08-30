@@ -24,8 +24,3 @@
   npm install
   npm start
   ```
-# Comment exécuter les tests
-  ```bash
-  npm install -D vitest@^2 @vitest/coverage-v8@^2
-  npm run test:coverage
-  ```
