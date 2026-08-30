@@ -27,13 +27,13 @@
 
 ## Architecture
 
-ChatVardage
-|
-├── frontend/\n
-│   │\n
-│   └── src/\n
-│       │\n
-│       ├── presentation/\n
+ChatVardage <br />
+| <br />
+├── frontend/ <br />
+│   │
+│   └── src/
+│       │
+│       ├── presentation/
 │       │   │
 │       │   │   # Affichage et interaction avec l'utilisateur.
 │       │   │   # Cette couche ne contient pas la logique métier.
@@ -217,11 +217,11 @@ ChatVardage
     │   # Éléments communs au frontend et au backend.
     │   # Permet d'éviter de dupliquer certains contrats/types.
     │
-    ├── types/\n
-    │   # Types TypeScript communs.\n
-    │   # Exemple : UserId, MessageId, ChannelId.\n
-    │\n
-    └── contracts/\n
-        # Contrats de communication frontend/backend.\n
-        # Exemple : SendMessageRequest,\n
-        # MessageResponse, WebSocketEvent.\n
+    ├── types/
+    │   # Types TypeScript communs.
+    │   # Exemple : UserId, MessageId, ChannelId.
+    │
+    └── contracts/
+        # Contrats de communication frontend/backend.
+        # Exemple : SendMessageRequest,
+        # MessageResponse, WebSocketEvent.
