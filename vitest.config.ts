@@ -9,7 +9,7 @@ export default defineConfig({
             include: ['src/**/*.ts'],
             exclude: [
                 'src/**/*.test.ts',
-                'src/entities/Conversation.ts',
+                'src/domain/entities/Conversation.ts',
             ],
             thresholds: {
                 statements: 95,
