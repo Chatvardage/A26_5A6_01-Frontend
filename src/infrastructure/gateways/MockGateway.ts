@@ -1,22 +1,22 @@
-import type { Utilisateur } from '../../entities/Utilisateur.ts';
-import type { Message } from '../../entities/Message.ts';
-import type { Salon } from '../../entities/Salon.ts';
-import type { Presence } from '../../entities/Presence.ts';
-import type { Conversation, ConversationId } from '../../entities/Conversation.ts';
-import type { ConversationPrivee } from '../../entities/ConversationPrivee.ts';
-import type { EtatConnexion, Etat } from '../../entities/EtatConnexion.ts';
+import type { Utilisateur } from '../../entities/Utilisateur';
+import type { Message } from '../../entities/Message';
+import type { Salon } from '../../entities/Salon';
+import type { Presence } from '../../entities/Presence';
+import type { Conversation, ConversationId } from '../../entities/Conversation';
+import type { ConversationPrivee } from '../../entities/ConversationPrivee';
+import type { EtatConnexion, Etat } from '../../entities/EtatConnexion';
 import {
     creerUtilisateur,
     validationPseudo,
-} from '../../entities/Utilisateur.ts';
-import { creerMessage, AUTEUR_SYSTEME } from '../../entities/Message.ts';
-import { creerSalon } from '../../entities/Salon.ts';
-import { creerPresence } from '../../entities/Presence.ts';
-import { creerEtatConnexion } from '../../entities/EtatConnexion.ts';
+} from '../../entities/Utilisateur';
+import { creerMessage, AUTEUR_SYSTEME } from '../../entities/Message';
+import { creerSalon } from '../../entities/Salon';
+import { creerPresence } from '../../entities/Presence';
+import { creerEtatConnexion } from '../../entities/EtatConnexion';
 import {
     creerConversationPrivee,
     trouverAutreParticipant,
-} from '../../entities/ConversationPrivee.ts';
+} from '../../entities/ConversationPrivee';
 
 /**
  * Types d'événements pouvant être émis par le MockGateway
