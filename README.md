@@ -22,11 +22,11 @@
 - BD: SQLite
 
 # Comment démarrer
-
-```bash
-npm install
-npm start
-```
+  
+  ```bash
+  npm install
+  npm start
+  ```
 
 ## Architecture
 
@@ -229,3 +229,10 @@ ChatVardage <br />
 &emsp;&emsp;&emsp;&emsp;&emsp;# Contrats de communication frontend/backend.<br />
 &emsp;&emsp;&emsp;&emsp;&emsp;# Exemple : SendMessageRequest,<br />
 &emsp;&emsp;&emsp;&emsp;&emsp;# MessageResponse, WebSocketEvent.<br />
+
+### Exécuter les tests unitaires
+
+```bash
+npm install -D vitest@^2 @vitest/coverage-v8@^2
+npm run test:coverage
+```

@@ -4,6 +4,15 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.9",
+    "electron": "^30.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^2.1.9"
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,html,css,md,txt}\""
   },
