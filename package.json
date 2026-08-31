@@ -3,9 +3,33 @@
   "version": "1.0.0",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,html,css,md,txt}\""
   },
   "devDependencies": {
-    "electron": "^30.0.0"
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "electron": "^44.0.0",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  },
+  "description": "Application pour communiquer par des chats - ChatVardage",
+  "keywords": [
+    "chatvardage",
+    "chatbot",
+    "electron"
+  ],
+  "author": "Eva-afk",
+  "license": "ISC",
+  "allowScripts": {
+    "electron@30.5.1": true
   }
 }

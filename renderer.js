@@ -7,9 +7,10 @@ const chromeVer = document.getElementById('chrome-ver');
 const electronVer = document.getElementById('electron-ver');
 
 if (window.electronAPI) {
-    if (nodeVer) nodeVer.textContent = window.electronAPI.nodeVersion();
-    if (chromeVer) chromeVer.textContent = window.electronAPI.chromeVersion();
-    if (electronVer) electronVer.textContent = window.electronAPI.electronVersion();
+  if (nodeVer) nodeVer.textContent = window.electronAPI.nodeVersion();
+  if (chromeVer) chromeVer.textContent = window.electronAPI.chromeVersion();
+  if (electronVer)
+    electronVer.textContent = window.electronAPI.electronVersion();
 }
 
 // Exemple IPC scoped : bouton ping -> Main répond pong
