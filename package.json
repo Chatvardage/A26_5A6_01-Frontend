@@ -6,23 +6,20 @@
     "start": "electron .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
-  },
-  "devDependencies": {
-    "@vitest/coverage-v8": "^2.1.9",
-    "electron": "^30.0.0",
-    "typescript": "^7.0.2",
-    "vitest": "^2.1.9"
+    "test:coverage": "vitest run --coverage",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,html,css,md,txt}\""
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
+    "@vitest/coverage-v8": "^4.1.11",
     "electron": "^44.0.0",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.0.0",
-    "prettier": "^3.0.0"
+    "prettier": "^3.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
   },
   "description": "Application pour communiquer par des chats - ChatVardage",
   "keywords": [
