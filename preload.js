@@ -8,21 +8,21 @@ const { contextBridge, ipcRenderer } = require('electron');
 // renderer ne peut pas choisir ou inventer un canal.
 
 contextBridge.exposeInMainWorld('electronAPI', {
-    // Infos de runtime (lecture seule, aucun accès Node au-delà de ça).
-    nodeVersion: () => process.versions.node,
-    chromeVersion: () => process.versions.chrome,
-    electronVersion: () => process.versions.electron,
+  // Infos de runtime (lecture seule, aucun accès Node au-delà de ça).
+  nodeVersion: () => process.versions.node,
+  chromeVersion: () => process.versions.chrome,
+  electronVersion: () => process.versions.electron,
 
-    // Exemple d'IPC scoped : un seul canal fixe dans chaque sens, déclaré en
-    // dur ici. Le renderer ne peut pas choisir/inventer un nom de canal
-    // (contrairement à un passthrough générique send(channel, data)).
-    ping: () => ipcRenderer.send('ping'),
-    onPong: (callback) => {
-        const listener = (_event, data) => callback(data);
-        ipcRenderer.on('pong', listener);
-        return () => ipcRenderer.removeListener('pong', listener);
-    },
+  // Exemple d'IPC scoped : un seul canal fixe dans chaque sens, déclaré en
+  // dur ici. Le renderer ne peut pas choisir/inventer un nom de canal
+  // (contrairement à un passthrough générique send(channel, data)).
+  ping: () => ipcRenderer.send('ping'),
+  onPong: (callback) => {
+    const listener = (_event, data) => callback(data);
+    ipcRenderer.on('pong', listener);
+    return () => ipcRenderer.removeListener('pong', listener);
+  },
 
-    // Ajouter ici une méthode nommée par nouveau besoin métier (ex: plus tard
-    // pour le ChatGateway), jamais un send/on générique à canal arbitraire.
+  // Ajouter ici une méthode nommée par nouveau besoin métier (ex: plus tard
+  // pour le ChatGateway), jamais un send/on générique à canal arbitraire.
 });

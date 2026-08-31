@@ -4,10 +4,10 @@
  * est en train d'écrire, et un timestamp de la dernière actualisation de cet état.
  */
 export interface EtatSaisie {
-    readonly idConversation: string;
-    readonly idUtilisateur: string;
-    readonly enTrainDEcrire: boolean;
-    readonly actualisation: number;
+  readonly idConversation: string;
+  readonly idUtilisateur: string;
+  readonly enTrainDEcrire: boolean;
+  readonly actualisation: number;
 }
 
 /**
@@ -28,17 +28,17 @@ export const DELAI_EXPIRATION_MS = 4000;
  * @returns Un objet EtatSaisie représentant l'état de saisie de l'utilisateur dans la conversation
  */
 export function creerEtatSaisie(
-    idConversation: string,
-    idUtilisateur: string,
-    enTrainDEcrire: boolean,
-    actualisation: number = Date.now()
+  idConversation: string,
+  idUtilisateur: string,
+  enTrainDEcrire: boolean,
+  actualisation: number = Date.now()
 ): EtatSaisie {
-    return {
-        idConversation : idConversation,
-        idUtilisateur : idUtilisateur,
-        enTrainDEcrire : enTrainDEcrire,
-        actualisation : actualisation
-    };
+  return {
+    idConversation: idConversation,
+    idUtilisateur: idUtilisateur,
+    enTrainDEcrire: enTrainDEcrire,
+    actualisation: actualisation,
+  };
 }
 
 /**
@@ -50,8 +50,11 @@ export function creerEtatSaisie(
  *
  * @returns true si l'état de saisie a expiré, false sinon
  */
-export function etatDEcritureExpire(etat: EtatSaisie, maintenant: number = Date.now()): boolean {
-    return maintenant - etat.actualisation > DELAI_EXPIRATION_MS;
+export function etatDEcritureExpire(
+  etat: EtatSaisie,
+  maintenant: number = Date.now()
+): boolean {
+  return maintenant - etat.actualisation > DELAI_EXPIRATION_MS;
 }
 
 /**
@@ -65,8 +68,11 @@ export function etatDEcritureExpire(etat: EtatSaisie, maintenant: number = Date.
  *
  * @returns true si l'utilisateur est activement en train d'écrire, false sinon
  */
-export function estActivementEnTrainDEcrire(etat: EtatSaisie, maintenant: number = Date.now()): boolean {
-    return etat.enTrainDEcrire && !etatDEcritureExpire(etat, maintenant);
+export function estActivementEnTrainDEcrire(
+  etat: EtatSaisie,
+  maintenant: number = Date.now()
+): boolean {
+  return etat.enTrainDEcrire && !etatDEcritureExpire(etat, maintenant);
 }
 
 /**
@@ -81,14 +87,14 @@ export function estActivementEnTrainDEcrire(etat: EtatSaisie, maintenant: number
  * @returns liste des idUtilisateur actuellement en train d'écrire dans la conversation donnée
  */
 export function utilisateursEnTrainDecrire(
-    etats: readonly EtatSaisie[],
-    idConversation: string,
-    maintenant: number = Date.now(),
-    exclureUtilisateurId?: string,
+  etats: readonly EtatSaisie[],
+  idConversation: string,
+  maintenant: number = Date.now(),
+  exclureUtilisateurId?: string
 ): string[] {
-    return etats
-        .filter((etat) => etat.idConversation === idConversation)
-        .filter((etat) => etat.idUtilisateur !== exclureUtilisateurId)
-        .filter((etat) => estActivementEnTrainDEcrire(etat, maintenant))
-        .map((etat) => etat.idUtilisateur);
+  return etats
+    .filter((etat) => etat.idConversation === idConversation)
+    .filter((etat) => etat.idUtilisateur !== exclureUtilisateurId)
+    .filter((etat) => estActivementEnTrainDEcrire(etat, maintenant))
+    .map((etat) => etat.idUtilisateur);
 }

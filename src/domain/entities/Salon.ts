@@ -12,15 +12,14 @@ export type Visibilite = 'public' | 'prive';
  * un hôte (propriétaire) et une liste de membres.
  */
 export interface Salon {
-    readonly type: 'salon';
-    readonly id: ConversationId;
-    readonly nom: string;
-    readonly visibilite: Visibilite;
-    readonly hoteId: string;
-    readonly membreIds: readonly string[];
-    readonly membresInvites: readonly string[];
+  readonly type: 'salon';
+  readonly id: ConversationId;
+  readonly nom: string;
+  readonly visibilite: Visibilite;
+  readonly hoteId: string;
+  readonly membreIds: readonly string[];
+  readonly membresInvites: readonly string[];
 }
-
 
 /**
  * Crée un nouveau salon de discussion (channel) avec les informations fournies.
@@ -34,21 +33,21 @@ export interface Salon {
  * @returns Un objet Salon représentant le salon créé
  */
 export function creerSalon(
-    id: ConversationId,
-    nom: string,
-    hoteId: string,
-    visibilite: Visibilite = 'public',
-    membreIds: readonly string[] = [hoteId],
+  id: ConversationId,
+  nom: string,
+  hoteId: string,
+  visibilite: Visibilite = 'public',
+  membreIds: readonly string[] = [hoteId]
 ): Salon {
-    return {
-        type: 'salon',
-        id,
-        nom,
-        visibilite,
-        hoteId,
-        membreIds: membreIds.includes(hoteId) ? membreIds : [...membreIds, hoteId],
-        membresInvites: [],
-    };
+  return {
+    type: 'salon',
+    id,
+    nom,
+    visibilite,
+    hoteId,
+    membreIds: membreIds.includes(hoteId) ? membreIds : [...membreIds, hoteId],
+    membresInvites: [],
+  };
 }
 
 /**
@@ -60,7 +59,7 @@ export function creerSalon(
  * @returns true si l'utilisateur est membre du salon, false sinon
  */
 export function estMembre(salon: Salon, utilisateurId: string): boolean {
-    return salon.membreIds.includes(utilisateurId);
+  return salon.membreIds.includes(utilisateurId);
 }
 
 /**
@@ -72,7 +71,7 @@ export function estMembre(salon: Salon, utilisateurId: string): boolean {
  * @returns true si l'utilisateur est invité à rejoindre le salon, false sinon
  */
 export function estInvite(salon: Salon, utilisateurId: string): boolean {
-    return salon.membresInvites.includes(utilisateurId);
+  return salon.membresInvites.includes(utilisateurId);
 }
 
 /**
@@ -84,7 +83,7 @@ export function estInvite(salon: Salon, utilisateurId: string): boolean {
  * @returns true si l'utilisateur est l'hôte du salon, false sinon
  */
 export function estHote(salon: Salon, utilisateurId: string): boolean {
-    return salon.hoteId === utilisateurId;
+  return salon.hoteId === utilisateurId;
 }
 
 /**
@@ -97,8 +96,9 @@ export function estHote(salon: Salon, utilisateurId: string): boolean {
  * @returns un nouveau Salon avec l'invitation ajoutée, ou le même salon si déjà membre/invité.
  */
 export function inviterMembre(salon: Salon, utilisateurId: string): Salon {
-    if (estMembre(salon, utilisateurId) || estInvite(salon, utilisateurId)) return salon;
-    return { ...salon, membresInvites: [...salon.membresInvites, utilisateurId] };
+  if (estMembre(salon, utilisateurId) || estInvite(salon, utilisateurId))
+    return salon;
+  return { ...salon, membresInvites: [...salon.membresInvites, utilisateurId] };
 }
 
 /**
@@ -112,17 +112,20 @@ export function inviterMembre(salon: Salon, utilisateurId: string): Salon {
  * @returns le nouveau Salon si l'utilisateur peut rejoindre, `undefined` sinon (déjà membre,
  * ou salon privé sans invitation).
  */
-export function rejoindreSalon(salon: Salon, utilisateurId: string): Salon | undefined {
-    if (estMembre(salon, utilisateurId)) return undefined;
-    const invite = estInvite(salon, utilisateurId);
-    if (salon.visibilite === 'prive' && !invite) return undefined;
-    return {
-        ...salon,
-        membreIds: [...salon.membreIds, utilisateurId],
-        membresInvites: invite
-            ? salon.membresInvites.filter((id) => id !== utilisateurId)
-            : salon.membresInvites,
-    };
+export function rejoindreSalon(
+  salon: Salon,
+  utilisateurId: string
+): Salon | undefined {
+  if (estMembre(salon, utilisateurId)) return undefined;
+  const invite = estInvite(salon, utilisateurId);
+  if (salon.visibilite === 'prive' && !invite) return undefined;
+  return {
+    ...salon,
+    membreIds: [...salon.membreIds, utilisateurId],
+    membresInvites: invite
+      ? salon.membresInvites.filter((id) => id !== utilisateurId)
+      : salon.membresInvites,
+  };
 }
 
 /**
@@ -135,10 +138,16 @@ export function rejoindreSalon(salon: Salon, utilisateurId: string): Salon | und
  *
  * @returns nouveau Salon si l'utilisateur peut quitter, `undefined` sinon (pas membre ou hôte du salon).
  */
-export function quitterSalon(salon: Salon, utilisateurId: string): Salon | undefined {
-    if (!estMembre(salon, utilisateurId)) return undefined;
-    if (estHote(salon, utilisateurId)) return undefined;
-    return { ...salon, membreIds: salon.membreIds.filter((id) => id !== utilisateurId) };
+export function quitterSalon(
+  salon: Salon,
+  utilisateurId: string
+): Salon | undefined {
+  if (!estMembre(salon, utilisateurId)) return undefined;
+  if (estHote(salon, utilisateurId)) return undefined;
+  return {
+    ...salon,
+    membreIds: salon.membreIds.filter((id) => id !== utilisateurId),
+  };
 }
 
 /**
@@ -150,9 +159,13 @@ export function quitterSalon(salon: Salon, utilisateurId: string): Salon | undef
  *
  * @return le nouveau Salon avec le nom changé si l'utilisateur est l'hôte, `undefined` sinon.
  */
-export function changerNomSalon(salon: Salon, nouveauNom: string, utilisateurId: string): Salon | undefined {
-    if (!estHote(salon, utilisateurId)) return undefined;
-    return { ...salon, nom: nouveauNom };
+export function changerNomSalon(
+  salon: Salon,
+  nouveauNom: string,
+  utilisateurId: string
+): Salon | undefined {
+  if (!estHote(salon, utilisateurId)) return undefined;
+  return { ...salon, nom: nouveauNom };
 }
 
 /**
@@ -165,10 +178,10 @@ export function changerNomSalon(salon: Salon, nouveauNom: string, utilisateurId:
  * @return le nouveau Salon avec la visibilité changée si l'utilisateur est l'hôte, `undefined` sinon.
  */
 export function changerVisibiliteSalon(
-    salon: Salon,
-    nouvelleVisibilite: Visibilite,
-    utilisateurId: string,
+  salon: Salon,
+  nouvelleVisibilite: Visibilite,
+  utilisateurId: string
 ): Salon | undefined {
-    if (!estHote(salon, utilisateurId)) return undefined;
-    return { ...salon, visibilite: nouvelleVisibilite };
+  if (!estHote(salon, utilisateurId)) return undefined;
+  return { ...salon, visibilite: nouvelleVisibilite };
 }

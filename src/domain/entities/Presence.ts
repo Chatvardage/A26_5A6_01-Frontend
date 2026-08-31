@@ -10,9 +10,9 @@ export type Statut = 'en-ligne' | 'hors-ligne';
  * Contient l'identifiant de l'utilisateur, son statut et le timestamp de sa dernière activité.
  */
 export interface Presence {
-    readonly utilisateurId: string;
-    readonly statut: Statut;
-    readonly vuLaDerniereFois: number;
+  readonly utilisateurId: string;
+  readonly statut: Statut;
+  readonly vuLaDerniereFois: number;
 }
 
 /**
@@ -26,15 +26,15 @@ export interface Presence {
  * @returns Un objet Presence représentant la présence de l'utilisateur
  */
 export function creerPresence(
-    utilisateurId: string,
-    statut: Statut,
-    maintenant: number = Date.now()
+  utilisateurId: string,
+  statut: Statut,
+  maintenant: number = Date.now()
 ): Presence {
-    return {
-        utilisateurId : utilisateurId,
-        statut : statut,
-        vuLaDerniereFois : maintenant
-    };
+  return {
+    utilisateurId: utilisateurId,
+    statut: statut,
+    vuLaDerniereFois: maintenant,
+  };
 }
 
 /**
@@ -45,5 +45,5 @@ export function creerPresence(
  * @returns true si l'utilisateur est en ligne, false sinon
  */
 export function estEnLigne(presence: Presence): boolean {
-    return presence.statut === 'en-ligne';
+  return presence.statut === 'en-ligne';
 }

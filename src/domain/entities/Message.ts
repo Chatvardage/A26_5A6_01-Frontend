@@ -15,13 +15,13 @@ export const AUTEUR_SYSTEME = 'systeme';
  * Modèle Message — représente un message envoyé dans une conversation (channel ou DM).
  */
 export interface Message {
-    readonly id: string;
-    readonly conversationId: ConversationId;
-    readonly auteurId: string;
-    readonly contenu: string;
-    readonly type: TypeMessage;
-    readonly envoi: number;
-    readonly modification?: number;
+  readonly id: string;
+  readonly conversationId: ConversationId;
+  readonly auteurId: string;
+  readonly contenu: string;
+  readonly type: TypeMessage;
+  readonly envoi: number;
+  readonly modification?: number;
 }
 
 /**
@@ -37,21 +37,21 @@ export interface Message {
  * @returns Un objet Message
  */
 export function creerMessage(
-    id: string,
-    conversationId: ConversationId,
-    auteurId: string,
-    contenu: string,
-    envoi?: number,
-    type: TypeMessage = 'texte'
-) : Message {
-    return {
-        id: id,
-        conversationId: conversationId,
-        auteurId: auteurId,
-        contenu: contenu,
-        envoi: envoi ?? Date.now(),
-        type: type
-    };
+  id: string,
+  conversationId: ConversationId,
+  auteurId: string,
+  contenu: string,
+  envoi?: number,
+  type: TypeMessage = 'texte'
+): Message {
+  return {
+    id: id,
+    conversationId: conversationId,
+    auteurId: auteurId,
+    contenu: contenu,
+    envoi: envoi ?? Date.now(),
+    type: type,
+  };
 }
 
 /**
@@ -65,12 +65,19 @@ export function creerMessage(
  * @returns Un objet Message de type 'systeme'
  */
 export function creerMessageSysteme(
-    id: string,
-    conversationId: ConversationId,
-    contenu: string,
-    envoi?: number,
+  id: string,
+  conversationId: ConversationId,
+  contenu: string,
+  envoi?: number
 ): Message {
-    return creerMessage(id, conversationId, AUTEUR_SYSTEME, contenu, envoi, 'systeme');
+  return creerMessage(
+    id,
+    conversationId,
+    AUTEUR_SYSTEME,
+    contenu,
+    envoi,
+    'systeme'
+  );
 }
 
 /**
@@ -81,7 +88,7 @@ export function creerMessageSysteme(
  * @returns true si le message est de type 'systeme', false sinon
  */
 export function estMessageSysteme(message: Message): boolean {
-    return message.type === 'systeme';
+  return message.type === 'systeme';
 }
 
 /**
@@ -92,7 +99,7 @@ export function estMessageSysteme(message: Message): boolean {
  * @returns Un nouveau tableau de messages triés par date d'envoi
  */
 export function trierMessagesParEnvoi(messages: readonly Message[]): Message[] {
-    return [...messages].sort((a, b) => a.envoi - b.envoi);
+  return [...messages].sort((a, b) => a.envoi - b.envoi);
 }
 
 /**
@@ -111,13 +118,15 @@ export function trierMessagesParEnvoi(messages: readonly Message[]): Message[] {
  * @returns Un tableau de messages paginés avant l'identifiant donné
  */
 export function paginerAvant(
-    messages: readonly Message[],
-    beforeId: string | undefined,
-    pageSize: number,
+  messages: readonly Message[],
+  beforeId: string | undefined,
+  pageSize: number
 ): Message[] {
-    const sorted = trierMessagesParEnvoi(messages);
-    const endIndex = beforeId ? sorted.findIndex((m) => m.id === beforeId) : sorted.length;
-    const safeEnd = endIndex === -1 ? sorted.length : endIndex;
-    const startIndex = Math.max(0, safeEnd - pageSize);
-    return sorted.slice(startIndex, safeEnd);
+  const sorted = trierMessagesParEnvoi(messages);
+  const endIndex = beforeId
+    ? sorted.findIndex((m) => m.id === beforeId)
+    : sorted.length;
+  const safeEnd = endIndex === -1 ? sorted.length : endIndex;
+  const startIndex = Math.max(0, safeEnd - pageSize);
+  return sorted.slice(startIndex, safeEnd);
 }

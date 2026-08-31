@@ -12,9 +12,9 @@ export type Etat = 'connecte' | 'deconnecte' | 'reconnexion';
  * reconnexions.
  */
 export interface EtatConnexion {
-    readonly statut: Etat;
-    readonly depuis: number;
-    readonly reconnexions?: number;
+  readonly statut: Etat;
+  readonly depuis: number;
+  readonly reconnexions?: number;
 }
 
 /**
@@ -28,15 +28,15 @@ export interface EtatConnexion {
  * @returns Un objet EtatConnexion représentant l'état de la connexion de l'utilisateur
  */
 export function creerEtatConnexion(
-    statut: Etat,
-    depuis: number = Date.now(),
-    reconnexions?: number,
+  statut: Etat,
+  depuis: number = Date.now(),
+  reconnexions?: number
 ): EtatConnexion {
-    return {
-        statut : statut,
-        depuis : depuis,
-        reconnexions : reconnexions
-    };
+  return {
+    statut: statut,
+    depuis: depuis,
+    reconnexions: reconnexions,
+  };
 }
 
 /**
@@ -47,7 +47,7 @@ export function creerEtatConnexion(
  * @returns true si l'utilisateur est connecté, false sinon
  */
 export function estConnecte(etat: EtatConnexion): boolean {
-    return etat.statut === 'connecte';
+  return etat.statut === 'connecte';
 }
 
 /**
@@ -58,7 +58,7 @@ export function estConnecte(etat: EtatConnexion): boolean {
  * @returns true si l'utilisateur est déconnecté, false sinon
  */
 export function estDeconnecte(etat: EtatConnexion): boolean {
-    return etat.statut === 'deconnecte';
+  return etat.statut === 'deconnecte';
 }
 
 /**
@@ -69,5 +69,5 @@ export function estDeconnecte(etat: EtatConnexion): boolean {
  * @returns true si l'utilisateur est en train de se reconnecter, false sinon
  */
 export function estEnReconnexion(etat: EtatConnexion): boolean {
-    return etat.statut === 'reconnexion';
+  return etat.statut === 'reconnexion';
 }

@@ -4,10 +4,10 @@
  * Modèle ConversationPrivee — représente une conversation privée (DM) entre deux utilisateurs.
  */
 export interface ConversationPrivee {
-    readonly type: 'privee';
-    readonly id: ConversationId;
-    readonly participantIds: readonly [string, string];
-    readonly creation: number;
+  readonly type: 'privee';
+  readonly id: ConversationId;
+  readonly participantIds: readonly [string, string];
+  readonly creation: number;
 }
 
 /**
@@ -19,8 +19,11 @@ export interface ConversationPrivee {
  *
  * @returns Un identifiant unique pour la conversation privée entre les deux utilisateurs
  */
-export function creerDmId(utilisateurAId: string, utilisateurBId: string): string {
-    return [utilisateurAId, utilisateurBId].sort().join(':');
+export function creerDmId(
+  utilisateurAId: string,
+  utilisateurBId: string
+): string {
+  return [utilisateurAId, utilisateurBId].sort().join(':');
 }
 
 /**
@@ -33,15 +36,15 @@ export function creerDmId(utilisateurAId: string, utilisateurBId: string): strin
  * @returns Un objet ConversationPrivee représentant la conversation privée entre les deux utilisateurs
  */
 export function creerConversationPrivee(
-    utilisateurAId: string,
-    utilisateurBId: string,
+  utilisateurAId: string,
+  utilisateurBId: string
 ): ConversationPrivee {
-    return {
-        type: 'privee',
-        id: creerDmId(utilisateurAId, utilisateurBId),
-        participantIds: [utilisateurAId, utilisateurBId],
-        creation: Date.now(),
-    };
+  return {
+    type: 'privee',
+    id: creerDmId(utilisateurAId, utilisateurBId),
+    participantIds: [utilisateurAId, utilisateurBId],
+    creation: Date.now(),
+  };
 }
 
 /**
@@ -52,7 +55,11 @@ export function creerConversationPrivee(
  *
  * @returns L'identifiant de l'autre participant si trouvé, sinon undefined
  */
-export function trouverAutreParticipant(conversationPrivee: ConversationPrivee, utilisateurId: string): string | undefined {
-    if (!conversationPrivee.participantIds.includes(utilisateurId)) return undefined;
-    return conversationPrivee.participantIds.find((id) => id !== utilisateurId);
+export function trouverAutreParticipant(
+  conversationPrivee: ConversationPrivee,
+  utilisateurId: string
+): string | undefined {
+  if (!conversationPrivee.participantIds.includes(utilisateurId))
+    return undefined;
+  return conversationPrivee.participantIds.find((id) => id !== utilisateurId);
 }

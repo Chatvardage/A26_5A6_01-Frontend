@@ -2,8 +2,8 @@
  * Représente un utilisateur dans le système.
  */
 export interface Utilisateur {
-    readonly id: string;
-    readonly pseudo: string;
+  readonly id: string;
+  readonly pseudo: string;
 }
 
 /**
@@ -12,14 +12,11 @@ export interface Utilisateur {
  * @param pseudo Le pseudo de l'utilisateur
  * @returns Un objet Utilisateur
  */
-export function creerUtilisateur(
-    id: string,
-    pseudo: string
-): Utilisateur {
-    return {
-        id: id,
-        pseudo: pseudo,
-    };
+export function creerUtilisateur(id: string, pseudo: string): Utilisateur {
+  return {
+    id: id,
+    pseudo: pseudo,
+  };
 }
 
 /**
@@ -32,5 +29,5 @@ export function creerUtilisateur(
  * @returns true si le pseudo est valide, false sinon
  */
 export function validationPseudo(username: string): boolean {
-    return /^[a-zA-Z0-9_\-]{3,20}$/.test(username);
+  return /^[a-zA-Z0-9_-]{3,20}$/.test(username);
 }
