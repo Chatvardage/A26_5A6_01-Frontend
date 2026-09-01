@@ -10,7 +10,28 @@ const DEV_SERVER_PORT = '5173';
 // Chemin absolu du point d'entrée de l'app, utilisé pour vérifier qu'une
 // navigation file:// reste bien à l'intérieur du bundle (et non, par ex.,
 // file:///etc/passwd ou un autre fichier arbitraire du disque).
-const APP_INDEX_PATH = path.resolve(__dirname, 'index.html');
+const APP_INDEX_PATH = path.resolve(
+  __dirname,
+  'src',
+  'presentation',
+  'pages',
+  'index.html'
+);
+
+// Icône personnalisée de l'app (mascotte de la maquette), utilisée à la
+// fois pour la fenêtre (barre des tâches/dock en dev) et comme base des
+// icônes de build packagées séparément.
+const APP_ICON_PATH = path.join(__dirname, 'assets', 'icon.png');
+
+// Couleur de fond peinte avant que index.html ne soit chargé/affiché.
+// Évite le flash de fenêtre blanche par défaut d'Electron au démarrage ;
+// reprend la teinte sombre de la maquette (voir maquette/maquette_multi.pdf).
+const WINDOW_BACKGROUND_COLOR = '#0d3d38';
+
+const DEFAULT_WINDOW_WIDTH = 1280;
+const DEFAULT_WINDOW_HEIGHT = 800;
+const MIN_WINDOW_WIDTH = 960;
+const MIN_WINDOW_HEIGHT = 600;
 
 // --- Vérification structurée d'une URL "interne à l'app" --------------------
 // Utilisée à la fois pour le garde-fou de navigation (will-navigate) et pour
@@ -79,15 +100,26 @@ function buildMenu() {
   return Menu.buildFromTemplate(template);
 }
 
+// Référence vers la fenêtre principale, utilisée par le verrou d'instance
+// unique (second-instance) et par 'activate' pour savoir si une fenêtre
+// existe déjà plutôt que de se fier uniquement à getAllWindows().
+let mainWindow = null;
+
 function createWindow() {
   const win = new BrowserWindow({
-    width: 900,
-    height: 700,
-    // TODO(assets): remplacer par l'icône réelle de l'app avant release
-    // (voir issue à créer) ; en son absence Electron retombe silencieusement
-    // sur une icône par défaut, donc rien ne casse mais ça ne doit pas être
-    // oublié avant le packaging final.
-    icon: path.join(__dirname, 'assets', 'icon.png'),
+    width: DEFAULT_WINDOW_WIDTH,
+    height: DEFAULT_WINDOW_HEIGHT,
+    minWidth: MIN_WINDOW_WIDTH,
+    minHeight: MIN_WINDOW_HEIGHT,
+    center: true,
+    show: false, // affichée seulement une fois prête (voir 'ready-to-show' plus bas)
+    backgroundColor: WINDOW_BACKGROUND_COLOR,
+    // Barre de menu masquée par défaut (Alt pour l'afficher sur
+    // Windows/Linux) : notre menu applicatif (buildMenu) reste actif et
+    // accessible, mais n'est pas imposé visuellement — élément Electron
+    // "non désiré" en moins dans l'interface par défaut.
+    autoHideMenuBar: true,
+    icon: APP_ICON_PATH,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true, // isole le contexte JS du preload de celui de la page web
@@ -99,9 +131,31 @@ function createWindow() {
     },
   });
 
+  // Affiche la fenêtre seulement quand son contenu est prêt à être peint,
+  // pour éviter le flash de fenêtre blanche vide typique d'Electron.
+  win.once('ready-to-show', () => {
+    win.show();
+  });
+
+  // Désactive le zoom Chromium par défaut (Ctrl+molette, pincement) : pas
+  // pertinent pour cette application de bureau et pas prévu dans la maquette.
+  win.webContents.setVisualZoomLevelLimits(1, 1);
+
   // DevTools jamais ouverts automatiquement en production.
   if (isDev) {
     win.webContents.openDevTools({ mode: 'detach' });
+  } else {
+    // Le menu ne propose déjà plus l'accès aux DevTools en production (voir
+    // buildMenu), mais les raccourcis clavier Chromium (F12, Ctrl+Shift+I)
+    // restent actifs par défaut indépendamment du menu : on les bloque ici.
+    win.webContents.on('before-input-event', (event, input) => {
+      const isDevToolsShortcut =
+        input.key === 'F12' ||
+        (input.control && input.shift && input.key.toUpperCase() === 'I');
+      if (isDevToolsShortcut) {
+        event.preventDefault();
+      }
+    });
   }
 
   // --- Navigation contrôlée ------------------------------------------------
@@ -127,7 +181,17 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  win.loadFile('index.html');
+  // Le comportement de fermeture (window-all-closed / activate ci-dessous)
+  // et la relance depuis une deuxième instance (second-instance) dépendent
+  // de cette référence : on l'efface quand la fenêtre est réellement fermée
+  // pour ne jamais agir sur une fenêtre détruite.
+  win.on('closed', () => {
+    if (mainWindow === win) {
+      mainWindow = null;
+    }
+  });
+
+  win.loadFile(APP_INDEX_PATH);
 
   return win;
 }
@@ -154,22 +218,47 @@ ipcMain.on('ping', (event) => {
   event.sender.send('pong', 'pong depuis le processus Main');
 });
 
-app.whenReady().then(() => {
-  Menu.setApplicationMenu(buildMenu());
-  createWindow();
+// --- Instance unique ---------------------------------------------------
+// Une appli de clavardage locale n'a pas de sens ouverte deux fois en
+// parallèle (deux fenêtres se disputeraient la même session/persistance
+// locale). Si une deuxième instance est lancée, on la ferme immédiatement
+// et on redonne le focus à la fenêtre existante plutôt que de laisser
+// cohabiter deux processus.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.focus();
     }
   });
-});
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
+  app.whenReady().then(() => {
+    Menu.setApplicationMenu(buildMenu());
+    mainWindow = createWindow();
+
+    app.on('activate', () => {
+      // Comportement standard macOS : l'app reste active dans le dock après
+      // la fermeture de toutes les fenêtres, et on en recrée une au clic.
+      if (BrowserWindow.getAllWindows().length === 0) {
+        mainWindow = createWindow();
+      }
+    });
+  });
+
+  app.on('window-all-closed', () => {
+    // Sur macOS, une app reste active sans fenêtre ouverte (convention de
+    // plateforme) ; ailleurs, fermer la dernière fenêtre ferme l'app.
+    if (process.platform !== 'darwin') {
+      app.quit();
+    }
+  });
+}
 
 // Défense en profondeur : avec webviewTag: false déjà positionné dans
 // webPreferences (ci-dessus), <webview> ne peut de toute façon pas être
