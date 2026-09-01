@@ -2,15 +2,9 @@ import type { Utilisateur } from '../../domain/entities/Utilisateur.js';
 import type { Message } from '../../domain/entities/Message.js';
 import type { Salon } from '../../domain/entities/Salon.js';
 import type { Presence } from '../../domain/entities/Presence.js';
-import type {
-  Conversation,
-  ConversationId,
-} from '../../domain/entities/Conversation.js';
+import type { ConversationId } from '../../domain/entities/Conversation.js';
 import type { ConversationPrivee } from '../../domain/entities/ConversationPrivee.js';
-import type {
-  EtatConnexion,
-  Etat,
-} from '../../domain/entities/EtatConnexion.js';
+import type { EtatConnexion } from '../../domain/entities/EtatConnexion.js';
 import {
   creerUtilisateur,
   validationPseudo,
@@ -19,10 +13,7 @@ import { creerMessage, AUTEUR_SYSTEME } from '../../domain/entities/Message.js';
 import { creerSalon } from '../../domain/entities/Salon.js';
 import { creerPresence } from '../../domain/entities/Presence.js';
 import { creerEtatConnexion } from '../../domain/entities/EtatConnexion.js';
-import {
-  creerConversationPrivee,
-  trouverAutreParticipant,
-} from '../../domain/entities/ConversationPrivee.js';
+import { creerConversationPrivee } from '../../domain/entities/ConversationPrivee.js';
 
 /**
  * Types d'événements pouvant être émis par le MockGateway

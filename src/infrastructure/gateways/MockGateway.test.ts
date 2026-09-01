@@ -177,14 +177,16 @@ describe('MockGateway', () => {
       const salonTest = await gateway.creerSalon('TestInvit', 'u2', 'public');
 
       // Directement modifier le gateway pour ajouter u1 aux membresInvites (hack pour tester)
-      (gateway as any).salons.set(salonTest.id, {
+      const salonModifie = {
         ...salonTest,
         membresInvites: ['u1'],
-      });
+      };
+      gateway['salons'].set(salonTest.id, salonModifie);
 
       const messagesSysteme: unknown[] = [];
       gateway.ecouterEvenement('message-recu', (evt) => {
-        if (evt.donnees.message?.type === 'systeme') {
+        const message = evt.donnees.message as Record<string, unknown>;
+        if (message?.type === 'systeme') {
           messagesSysteme.push(evt.donnees.message);
         }
       });
@@ -266,7 +268,10 @@ describe('MockGateway', () => {
 
       // Ne devrait pas lever d'erreur
       expect(() => {
-        gateway.retirerEcouteur('evenement-inexistant' as any, ecouteur);
+        gateway.retirerEcouteur(
+          'evenement-inexistant' as TypeEvenement,
+          ecouteur
+        );
       }).not.toThrow();
     });
   });
@@ -394,7 +399,6 @@ describe('MockGateway', () => {
     });
 
     it("devrait retourner le salon sans le modifier si l'utilisateur n'en fait pas partie", async () => {
-      const salonAvant = await gateway.obtenirSalon('s1');
       await gateway.retirerUtilisateurDuSalon('s1', 'u1'); // u1 déjà dans s1, donc le retire
 
       const salonAvant2 = await gateway.obtenirSalon('s1');

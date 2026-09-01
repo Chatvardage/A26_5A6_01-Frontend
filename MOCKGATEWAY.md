@@ -5,6 +5,7 @@ Le **MockGateway** est un système complet de simulation pour tester l'applicati
 ## 🎯 Caractéristiques
 
 ### 1. **Simulation de la Connexion**
+
 Simule la connexion d'un utilisateur au système avec gestion de l'état et émission d'événements.
 
 ```typescript
@@ -17,6 +18,7 @@ console.log(etat.statut); // 'connecte'
 ```
 
 **Points clés:**
+
 - Valide l'existence de l'utilisateur
 - Met à jour l'état de connexion
 - Émet un événement `connexion`
@@ -24,6 +26,7 @@ console.log(etat.statut); // 'connecte'
 - Met à jour la présence de l'utilisateur
 
 ### 2. **Simulation de la Déconnexion**
+
 Simule la déconnexion d'un utilisateur avec nettoyage d'état approprié.
 
 ```typescript
@@ -36,12 +39,14 @@ console.log(etat.statut); // 'deconnecte'
 ```
 
 **Points clés:**
+
 - Met à jour la présence à "hors-ligne"
 - Émet des messages système
 - Émet un événement `deconnexion`
 - Nettoie l'utilisateur connecté
 
 ### 3. **Simulation de la Reconnexion**
+
 Simule une reconnexion après une déconnexion, avec incrémentation du compteur.
 
 ```typescript
@@ -54,11 +59,13 @@ console.log(etat.reconnexions); // 1 (ou plus)
 ```
 
 **Points clés:**
+
 - Incrémente le compteur de reconnexions
 - Passe par l'état 'reconnexion' temporaire
 - Émet les événements `reconnexion` et `connexion`
 
 ### 4. **Simulation de la Latence**
+
 Simule un délai réseau réaliste pour chaque opération.
 
 ```typescript
@@ -72,17 +79,19 @@ const duree = Date.now() - debut; // ~100ms
 ```
 
 **Points clés:**
+
 - Applicable à toutes les opérations asynchrones
 - Configurable après création
 - Utile pour tester le comportement avec une connexion lente
 
 ### 5. **Gestion des Événements**
+
 Système complet d'événements pour observer les changements.
 
 ```typescript
 // Écouter un événement
 gateway.ecouterEvenement('message-recu', (evenement) => {
-    console.log('Nouveau message:', evenement.donnees.message);
+  console.log('Nouveau message:', evenement.donnees.message);
 });
 
 // Retirer un écouteur
@@ -90,6 +99,7 @@ gateway.retirerEcouteur('message-recu', ecouteur);
 ```
 
 **Types d'événements disponibles:**
+
 - `connexion` - Utilisateur connecté
 - `deconnexion` - Utilisateur déconnecté
 - `reconnexion` - Utilisateur en reconnexion
@@ -108,17 +118,20 @@ gateway.retirerEcouteur('message-recu', ecouteur);
 ### 6. **Gestion des Utilisateurs**
 
 #### Créer un utilisateur
+
 ```typescript
 const utilisateur = await gateway.creerUtilisateur('nouveau_user');
-console.log(utilisateur.id);     // 'u4' (ou autre)
+console.log(utilisateur.id); // 'u4' (ou autre)
 console.log(utilisateur.pseudo); // 'nouveau_user'
 ```
 
 **Validation:**
+
 - Le pseudo doit contenir 3-20 caractères
 - Caractères autorisés: lettres, chiffres, underscore (_), tiret (-)
 
 #### Récupérer les utilisateurs
+
 ```typescript
 // Un utilisateur spécifique
 const user = await gateway.obtenirUtilisateur('u1');
@@ -134,15 +147,17 @@ console.log(presence.statut); // 'en-ligne' ou 'hors-ligne'
 ### 7. **Gestion des Salons**
 
 #### Créer un salon
+
 ```typescript
 const salon = await gateway.creerSalon(
-    'Général',           // nom
-    'u1',                // hôte (créateur)
-    'public'             // visibilité: 'public' ou 'prive'
+  'Général', // nom
+  'u1', // hôte (créateur)
+  'public' // visibilité: 'public' ou 'prive'
 );
 ```
 
 #### Gérer les membres
+
 ```typescript
 // Ajouter un utilisateur
 await gateway.ajouterUtilisateurAuSalon('s1', 'u3');
@@ -155,6 +170,7 @@ await gateway.supprimerSalon('s1');
 ```
 
 #### Récupérer les salons
+
 ```typescript
 // Un salon spécifique
 const salon = await gateway.obtenirSalon('s1');
@@ -166,23 +182,26 @@ const salons = await gateway.obtenirTouLesSalons();
 ### 8. **Gestion des Messages**
 
 #### Envoyer un message
+
 ```typescript
 const message = await gateway.envoyerMessage(
-    's1',                        // ID de la conversation
-    'u1',                        // ID de l'auteur
-    'Bonjour tout le monde!'     // contenu
+  's1', // ID de la conversation
+  'u1', // ID de l'auteur
+  'Bonjour tout le monde!' // contenu
 );
 ```
 
 #### Modifier un message
+
 ```typescript
 const messageModifie = await gateway.modifierMessage(
-    messageId,
-    'Contenu modifié'
+  messageId,
+  'Contenu modifié'
 );
 ```
 
 #### Récupérer les messages
+
 ```typescript
 // Un message spécifique
 const message = await gateway.obtenirMessage('msg-1');
@@ -192,6 +211,7 @@ const messages = await gateway.obtenirMessagesConversation('s1');
 ```
 
 #### Supprimer un message
+
 ```typescript
 await gateway.supprimerMessage('msg-1');
 ```
@@ -199,11 +219,13 @@ await gateway.supprimerMessage('msg-1');
 ### 9. **Conversations Privées**
 
 #### Créer une conversation privée
+
 ```typescript
 const conversation = await gateway.creerConversationPrivee('u1', 'u2');
 ```
 
 #### Récupérer une conversation privée
+
 ```typescript
 const conv = await gateway.obtenirConversationPrivee(conversationId);
 ```
@@ -218,56 +240,49 @@ const gateway = creerMockGateway(100); // 100ms de latence
 
 // Définir des écouteurs
 gateway.ecouterEvenement('connexion', (evt) => {
-    console.log('Utilisateur connecté:', evt.donnees);
+  console.log('Utilisateur connecté:', evt.donnees);
 });
 
 gateway.ecouterEvenement('message-recu', (evt) => {
-    console.log('Nouveau message:', evt.donnees.message);
+  console.log('Nouveau message:', evt.donnees.message);
 });
 
 // Scénario de test
 async function scenario() {
-    try {
-        // 1. Connexion
-        await gateway.simulerConnexion('u1');
-        console.log('✓ Utilisateur connecté');
+  try {
+    // 1. Connexion
+    await gateway.simulerConnexion('u1');
+    console.log('✓ Utilisateur connecté');
 
-        // 2. Créer un salon
-        const salon = await gateway.creerSalon('Discussion', 'u1', 'public');
-        console.log('✓ Salon créé:', salon.nom);
+    // 2. Créer un salon
+    const salon = await gateway.creerSalon('Discussion', 'u1', 'public');
+    console.log('✓ Salon créé:', salon.nom);
 
-        // 3. Ajouter un utilisateur
-        await gateway.ajouterUtilisateurAuSalon(salon.id, 'u2');
-        console.log('✓ Utilisateur ajouté au salon');
+    // 3. Ajouter un utilisateur
+    await gateway.ajouterUtilisateurAuSalon(salon.id, 'u2');
+    console.log('✓ Utilisateur ajouté au salon');
 
-        // 4. Envoyer des messages
-        const msg1 = await gateway.envoyerMessage(
-            salon.id,
-            'u1',
-            'Bonjour!'
-        );
-        console.log('✓ Message envoyé');
+    // 4. Envoyer des messages
+    const msg1 = await gateway.envoyerMessage(salon.id, 'u1', 'Bonjour!');
+    console.log('✓ Message envoyé');
 
-        // 5. Modifier le message
-        const msgModifie = await gateway.modifierMessage(
-            msg1.id,
-            'Bonjour tout le monde!'
-        );
-        console.log('✓ Message modifié');
+    // 5. Modifier le message
+    const msgModifie = await gateway.modifierMessage(
+      msg1.id,
+      'Bonjour tout le monde!'
+    );
+    console.log('✓ Message modifié');
 
-        // 6. Récupérer les messages
-        const messages = await gateway.obtenirMessagesConversation(
-            salon.id
-        );
-        console.log('✓ Messages récupérés:', messages.length);
+    // 6. Récupérer les messages
+    const messages = await gateway.obtenirMessagesConversation(salon.id);
+    console.log('✓ Messages récupérés:', messages.length);
 
-        // 7. Déconnexion
-        await gateway.simulerDeconnexion();
-        console.log('✓ Utilisateur déconnecté');
-
-    } catch (erreur) {
-        console.error('✗ Erreur:', erreur);
-    }
+    // 7. Déconnexion
+    await gateway.simulerDeconnexion();
+    console.log('✓ Utilisateur déconnecté');
+  } catch (erreur) {
+    console.error('✗ Erreur:', erreur);
+  }
 }
 
 // Exécuter le scénario
@@ -279,17 +294,20 @@ await scenario();
 Le MockGateway est pré-configuré avec des données de test:
 
 **Utilisateurs:**
+
 - `u1`: alice
 - `u2`: bob
 - `u3`: charlie
 
 **Salons:**
+
 - `s1`: Général (public, membres: u1, u2)
 - `s2`: Privé (privé, membres: u1, u3)
 
 ## 💡 Cas d'Usage
 
 ### Test d'une application de chat
+
 ```typescript
 // Tester le flux d'authentification
 await gateway.simulerConnexion(userId);
@@ -297,6 +315,7 @@ expect(gateway.obtenirEtatConnexion().statut).toBe('connecte');
 ```
 
 ### Simulation de problèmes de réseau
+
 ```typescript
 // Augmenter la latence pour simuler une connexion lente
 gateway.definirLatence(1000); // 1 seconde
@@ -306,10 +325,11 @@ await gateway.simulerReconnexion(userId);
 ```
 
 ### Test des événements
+
 ```typescript
 let messageRecu = false;
 gateway.ecouterEvenement('message-recu', () => {
-    messageRecu = true;
+  messageRecu = true;
 });
 
 await gateway.envoyerMessage('s1', 'u1', 'Test');
@@ -325,6 +345,7 @@ gateway.reinitialiser();
 ```
 
 Cela:
+
 - Efface tous les utilisateurs personnalisés
 - Réinitialise les salons et conversations
 - Efface les messages
@@ -346,6 +367,7 @@ const userId = gateway.obtenirUtilisateurConnecte();
 ## 🎓 Tests
 
 Le MockGateway inclut des tests complets couvrant:
+
 - Connexion et déconnexion
 - Reconnexion avec compteur
 - Latence
@@ -356,6 +378,7 @@ Le MockGateway inclut des tests complets couvrant:
 - Intégration complète
 
 Exécuter les tests:
+
 ```bash
 npm test
 ```
