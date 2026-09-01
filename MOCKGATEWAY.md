@@ -176,7 +176,7 @@ await gateway.supprimerSalon('s1');
 const salon = await gateway.obtenirSalon('s1');
 
 // Tous les salons
-const salons = await gateway.obtenirTouLesSalons();
+const salons = await gateway.obtenirTousLesSalons();
 ```
 
 ### 8. **Gestion des Messages**

@@ -232,10 +232,8 @@ export class MockGateway {
         reconnexions: this.reconnexions,
       });
 
-      // Effectuer la reconnexion après une latence
-      await this.simulerLatence(async () => {
-        await this.simulerConnexion(utilisateurId);
-      });
+      // Effectuer la reconnexion (simulerConnexion applique déjà la latence)
+      await this.simulerConnexion(utilisateurId);
     });
   }
 
@@ -424,12 +422,21 @@ export class MockGateway {
       }
 
       if (!salon.membreIds.includes(utilisateurId)) {
+        const estInvite = salon.membresInvites.includes(utilisateurId);
+        if (salon.visibilite === 'prive' && !estInvite) {
+          this.emetEvenement('erreur', {
+            message: `Accès refusé au salon privé ${salonId}`,
+          });
+          throw new Error(`Accès refusé au salon privé ${salonId}`);
+        }
         const salonMisAJour = {
           ...salon,
           membreIds: [...salon.membreIds, utilisateurId],
+          membresInvites: estInvite
+            ? salon.membresInvites.filter((id) => id !== utilisateurId)
+            : salon.membresInvites,
         };
         this.salons.set(salonId, salonMisAJour);
-
         this.emetEvenement('utilisateur-rejoint-salon', {
           salonId,
           utilisateurId,
@@ -483,6 +490,14 @@ export class MockGateway {
       }
 
       if (salon.membreIds.includes(utilisateurId)) {
+        if (salon.hoteId === utilisateurId) {
+          this.emetEvenement('erreur', {
+            message: `L'hôte ${utilisateurId} ne peut pas quitter le salon ${salonId}`,
+          });
+          throw new Error(
+            `L'hôte ${utilisateurId} ne peut pas quitter le salon ${salonId}`
+          );
+        }
         const salonMisAJour = {
           ...salon,
           membreIds: salon.membreIds.filter((id) => id !== utilisateurId),
@@ -721,8 +736,8 @@ export class MockGateway {
     this.ecouteurs.clear();
     this.utilisateurActuelId = null;
     this.reconnexions = 0;
+    this.idCompteur = 0;
     this.etatConnexion = creerEtatConnexion('deconnecte', Date.now());
-    this.initialiserDonneesMock();
   }
 
   /**
