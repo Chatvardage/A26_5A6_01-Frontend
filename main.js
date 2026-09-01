@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, shell } = require('electron');
 const path = require('path');
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -11,11 +11,11 @@ const DEV_SERVER_PORT = '5173';
 // navigation file:// reste bien à l'intérieur du bundle (et non, par ex.,
 // file:///etc/passwd ou un autre fichier arbitraire du disque).
 const APP_INDEX_PATH = path.resolve(
-  __dirname,
-  'src',
-  'presentation',
-  'pages',
-  'index.html'
+    __dirname,
+    'src',
+    'presentation',
+    'pages',
+    'index.html'
 );
 
 // Icône personnalisée de l'app (mascotte de la maquette), utilisée à la
@@ -75,8 +75,8 @@ function isAppUrl(url) {
 function buildMenu() {
   const template = [
     ...(process.platform === 'darwin'
-      ? [{ label: app.getName(), submenu: [{ role: 'quit' }] }]
-      : []),
+        ? [{ label: app.getName(), submenu: [{ role: 'quit' }] }]
+        : []),
     {
       label: 'Fichier',
       submenu: [
@@ -89,13 +89,13 @@ function buildMenu() {
     },
     // DevTools uniquement en développement : jamais exposé en production.
     ...(isDev
-      ? [
+        ? [
           {
             label: 'Développement',
             submenu: [{ role: 'toggleDevTools' }, { role: 'reload' }],
           },
         ]
-      : []),
+        : []),
   ];
   return Menu.buildFromTemplate(template);
 }
@@ -146,12 +146,22 @@ function createWindow() {
     win.webContents.openDevTools({ mode: 'detach' });
   } else {
     // Le menu ne propose déjà plus l'accès aux DevTools en production (voir
-    // buildMenu), mais les raccourcis clavier Chromium (F12, Ctrl+Shift+I)
-    // restent actifs par défaut indépendamment du menu : on les bloque ici.
+    // buildMenu). Les raccourcis clavier Chromium restants (F12 partout,
+    // Ctrl+Shift+I/J/C sur Windows/Linux, Cmd+Option+I/J/C sur macOS) restent
+    // actifs par défaut indépendamment du menu : on réduit la surface en les
+    // interceptant ici. Ce n'est pas une vraie barrière de sécurité (rien
+    // n'empêche d'ouvrir les DevTools via --remote-debugging-port ou un
+    // build modifié) — contextIsolation/sandbox/CSP sont ce qui protège
+    // réellement ; ceci évite seulement un accès accidentel au clavier.
+    const devToolsKeys = new Set(['I', 'J', 'C']);
     win.webContents.on('before-input-event', (event, input) => {
+      // Windows/Linux : Ctrl+Shift+<touche>. macOS : Cmd+Option+<touche>
+      // (pas Cmd+Shift, qui est un raccourci différent sous Chromium).
+      const modifierPressed =
+          (input.control && input.shift) || (input.meta && input.alt);
       const isDevToolsShortcut =
-        input.key === 'F12' ||
-        (input.control && input.shift && input.key.toUpperCase() === 'I');
+          input.key === 'F12' ||
+          (modifierPressed && devToolsKeys.has(input.key.toUpperCase()));
       if (isDevToolsShortcut) {
         event.preventDefault();
       }
@@ -198,25 +208,13 @@ function createWindow() {
 
 // --- IPC : API contrôlée côté Main ------------------------------------------
 // Chaque canal est déclaré explicitement ici ; le renderer n'a jamais accès
-// à ipcRenderer directement (voir preload.js), seulement à ces méthodes.
-// Exemple minimal ping/pong pour valider que le canal contrôlé fonctionne
-// de bout en bout. La logique de chat (salons, messages, DM...) viendra
-// dans une tâche séparée et suivra le même principe (canaux nommés, jamais
-// de passthrough générique) — et devra, comme ici, valider la provenance de
-// chaque message avant d'agir dessus.
-ipcMain.on('ping', (event) => {
-  // Validation de la frame émettrice : refuse tout message venant d'un
-  // contexte qui ne serait pas notre propre fenêtre/app (ex. une frame
-  // file:// ou http:// inattendue qui aurait été chargée par erreur). Cette
-  // vérification est le complément naturel de l'allow-list de canaux : sans
-  // elle, n'importe quelle frame pourrait déclencher le handler du moment
-  // qu'elle connaît le nom du canal.
-  const senderUrl = event.senderFrame?.url;
-  if (!senderUrl || !isAppUrl(senderUrl)) {
-    return;
-  }
-  event.sender.send('pong', 'pong depuis le processus Main');
-});
+// à ipcRenderer directement (voir preload.js), seulement à ce que preload.js
+// expose sur window.electronAPI. Aucun canal pour l'instant (l'exemple
+// ping/pong utilisé pour valider ce câblage à l'issue #8 a été retiré, la
+// nouvelle UI ne l'utilise plus) : le premier canal réel viendra avec le
+// ChatGateway (salons, messages, DM...) et devra, comme le faisait ping,
+// valider la provenance de chaque message via isAppUrl(event.senderFrame?.url)
+// avant d'agir dessus.
 
 // --- Instance unique ---------------------------------------------------
 // Une appli de clavardage locale n'a pas de sens ouverte deux fois en

@@ -1,103 +1,126 @@
 <!doctype html>
 <html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; img-src 'self' data:;"
-    />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ChatVardage</title>
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <nav id="server-rail" aria-label="Serveurs">
-      <img class="app-logo" src="../../../assets/icon.png" alt="ChatVardage" />
-      <div class="rail-divider"></div>
-      <button
-        class="server-icon active"
-        title="Projet"
-        aria-label="Serveur : Projet"
-      >
-        P
-      </button>
-      <button
-        class="server-icon"
-        title="Ajouter un serveur"
-        aria-label="Ajouter un serveur"
-      >
-        +
-      </button>
-    </nav>
+<head>
+  <meta charset="UTF-8" />
+  <meta
+          http-equiv="Content-Security-Policy"
+          content="default-src 'self'; script-src 'self'; img-src 'self' data:;"
+  />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChatVardage</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<!--
+  Page de base du dashboard (post-connexion) — écrans "Rejoindre le
+  clavardage" / "Créer votre serveur" de la maquette restent des pages
+  séparées, chargées avant celle-ci.
 
-    <aside id="channel-sidebar">
-      <div class="sidebar-header" id="server-name">Nom chat</div>
-      <ul id="channel-list">
-        <li class="category">Projet</li>
-        <li>
-          <button class="active" data-channel="general"># general</button>
-        </li>
-      </ul>
-      <div id="user-panel">
-        <div class="avatar"></div>
-        <div>
-          <div class="pseudo" id="current-user-pseudo">Pseudo</div>
-          <div class="presence-label" id="current-user-presence">En ligne</div>
+  Cette page est pour l'instant une coquille statique : le contenu
+  dynamique (liste des salons, messages, présence, statut réseau) sera
+  injecté par renderer.js une fois le ChatGateway (mock puis réel)
+  branché, en respectant la séparation UI / métier / transport du README.
+  Les deux messages ci-dessous sont des exemples statiques, à retirer
+  dès que #message-list est peuplé dynamiquement.
+
+  ATTENTION chemins relatifs : ce fichier vit dans
+  src/presentation/pages/, alors que renderer.js et assets/ sont restés
+  à la racine du projet — d'où les "../../../" ci-dessous et sur le
+  <script> en bas de page. Ce couplage est fragile : si ce fichier (ou
+  renderer.js/assets/) est encore déplacé, ces chemins doivent être
+  mis à jour en même temps que APP_INDEX_PATH/APP_ICON_PATH dans
+  main.js. Si un niveau de dossier est ajouté sous presentation/pages/
+  un jour, ça casse silencieusement le chargement de l'icône et du
+  script — vérifier visuellement après tout déplacement.
+-->
+
+<nav id="server-rail" aria-label="Serveurs">
+  <img class="app-logo" src="../../../assets/icon.png" alt="ChatVardage" />
+  <div class="rail-divider"></div>
+  <button
+          class="server-icon active"
+          title="Projet"
+          aria-label="Serveur : Projet"
+  >
+    P
+  </button>
+  <button
+          class="server-icon"
+          title="Ajouter un serveur"
+          aria-label="Ajouter un serveur"
+  >
+    +
+  </button>
+</nav>
+
+<aside id="channel-sidebar">
+  <div class="sidebar-header" id="server-name">Nom chat</div>
+  <ul id="channel-list">
+    <li class="category">Projet</li>
+    <li>
+      <button class="active" data-channel="general"># general</button>
+    </li>
+  </ul>
+  <div id="user-panel">
+    <div class="avatar"></div>
+    <div>
+      <div class="pseudo" id="current-user-pseudo">Pseudo</div>
+      <div class="presence-label" id="current-user-presence">En ligne</div>
+    </div>
+  </div>
+</aside>
+
+<main id="main">
+  <header id="topbar">
+    <div class="channel-name">
+      <span id="active-channel-name"># general</span>
+    </div>
+    <div id="connection-status" data-state="connecte">
+      <span class="dot"></span>
+      <span id="connection-label">Connecté</span>
+    </div>
+  </header>
+
+  <div id="message-list" aria-live="polite">
+    <article class="message-row">
+      <div class="avatar"></div>
+      <div class="message-body">
+        <div class="message-meta">
+          <span class="author">Nom</span>
+          <span class="timestamp">2026-09-01</span>
         </div>
+        <p class="text">
+          Salut ! Le contrôle vient d'être poussé sur GitHub.
+        </p>
       </div>
-    </aside>
-
-    <main id="main">
-      <header id="topbar">
-        <div class="channel-name">
-          <span id="active-channel-name"># general</span>
+    </article>
+    <article class="message-row">
+      <div class="avatar"></div>
+      <div class="message-body">
+        <div class="message-meta">
+          <span class="author">Nom</span>
+          <span class="timestamp">2026-09-01</span>
         </div>
-        <div id="connection-status" data-state="connecte">
-          <span class="dot"></span>
-          <span id="connection-label">Connecté</span>
-        </div>
-      </header>
-
-      <div id="message-list" aria-live="polite">
-        <article class="message-row">
-          <div class="avatar"></div>
-          <div class="message-body">
-            <div class="message-meta">
-              <span class="author">Nom</span>
-              <span class="timestamp">2026-09-01</span>
-            </div>
-            <p class="text">
-              Salut ! Le contrôle vient d'être poussé sur GitHub.
-            </p>
-          </div>
-        </article>
-        <article class="message-row">
-          <div class="avatar"></div>
-          <div class="message-body">
-            <div class="message-meta">
-              <span class="author">Nom</span>
-              <span class="timestamp">2026-09-01</span>
-            </div>
-            <p class="text">Parfait, je regarde l'issue #9 ce soir.</p>
-          </div>
-        </article>
+        <p class="text">Parfait, je regarde l'issue #9 ce soir.</p>
       </div>
+    </article>
+  </div>
 
-      <div id="typing-indicator"></div>
+  <div id="typing-indicator"></div>
 
-      <div id="composer">
-        <form id="message-form">
-          <input
-            id="message-input"
-            type="text"
-            placeholder="Envoyez un message dans #general"
-            autocomplete="off"
-          />
-          <button type="submit">Envoyer</button>
-        </form>
-      </div>
-    </main>
+  <div id="composer">
+    <form id="message-form">
+      <input
+              id="message-input"
+              type="text"
+              placeholder="Envoyez un message dans #general"
+              autocomplete="off"
+      />
+      <button type="submit">Envoyer</button>
+    </form>
+  </div>
+</main>
 
-    <script src="../../../renderer.js"></script>
-  </body>
+<script src="../../../renderer.js"></script>
+</body>
 </html>
