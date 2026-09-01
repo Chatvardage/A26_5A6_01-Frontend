@@ -11,11 +11,11 @@ const DEV_SERVER_PORT = '5173';
 // navigation file:// reste bien à l'intérieur du bundle (et non, par ex.,
 // file:///etc/passwd ou un autre fichier arbitraire du disque).
 const APP_INDEX_PATH = path.resolve(
-    __dirname,
-    'src',
-    'presentation',
-    'pages',
-    'index.html'
+  __dirname,
+  'src',
+  'presentation',
+  'pages',
+  'index.html'
 );
 
 // Icône personnalisée de l'app (mascotte de la maquette), utilisée à la
@@ -75,8 +75,8 @@ function isAppUrl(url) {
 function buildMenu() {
   const template = [
     ...(process.platform === 'darwin'
-        ? [{ label: app.getName(), submenu: [{ role: 'quit' }] }]
-        : []),
+      ? [{ label: app.getName(), submenu: [{ role: 'quit' }] }]
+      : []),
     {
       label: 'Fichier',
       submenu: [
@@ -89,13 +89,13 @@ function buildMenu() {
     },
     // DevTools uniquement en développement : jamais exposé en production.
     ...(isDev
-        ? [
+      ? [
           {
             label: 'Développement',
             submenu: [{ role: 'toggleDevTools' }, { role: 'reload' }],
           },
         ]
-        : []),
+      : []),
   ];
   return Menu.buildFromTemplate(template);
 }
@@ -158,10 +158,10 @@ function createWindow() {
       // Windows/Linux : Ctrl+Shift+<touche>. macOS : Cmd+Option+<touche>
       // (pas Cmd+Shift, qui est un raccourci différent sous Chromium).
       const modifierPressed =
-          (input.control && input.shift) || (input.meta && input.alt);
+        (input.control && input.shift) || (input.meta && input.alt);
       const isDevToolsShortcut =
-          input.key === 'F12' ||
-          (modifierPressed && devToolsKeys.has(input.key.toUpperCase()));
+        input.key === 'F12' ||
+        (modifierPressed && devToolsKeys.has(input.key.toUpperCase()));
       if (isDevToolsShortcut) {
         event.preventDefault();
       }

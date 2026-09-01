@@ -1,17 +1,17 @@
 <!doctype html>
 <html lang="fr">
-<head>
-  <meta charset="UTF-8" />
-  <meta
-          http-equiv="Content-Security-Policy"
-          content="default-src 'self'; script-src 'self'; img-src 'self' data:;"
-  />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ChatVardage</title>
-  <link rel="stylesheet" href="styles.css" />
-</head>
-<body>
-<!--
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; img-src 'self' data:;"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChatVardage</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!--
   Page de base du dashboard (post-connexion) — écrans "Rejoindre le
   clavardage" / "Créer votre serveur" de la maquette restent des pages
   séparées, chargées avant celle-ci.
@@ -34,93 +34,93 @@
   script — vérifier visuellement après tout déplacement.
 -->
 
-<nav id="server-rail" aria-label="Serveurs">
-  <img class="app-logo" src="../../../assets/icon.png" alt="ChatVardage" />
-  <div class="rail-divider"></div>
-  <button
-          class="server-icon active"
-          title="Projet"
-          aria-label="Serveur : Projet"
-  >
-    P
-  </button>
-  <button
-          class="server-icon"
-          title="Ajouter un serveur"
-          aria-label="Ajouter un serveur"
-  >
-    +
-  </button>
-</nav>
+    <nav id="server-rail" aria-label="Serveurs">
+      <img class="app-logo" src="../../../assets/icon.png" alt="ChatVardage" />
+      <div class="rail-divider"></div>
+      <button
+        class="server-icon active"
+        title="Projet"
+        aria-label="Serveur : Projet"
+      >
+        P
+      </button>
+      <button
+        class="server-icon"
+        title="Ajouter un serveur"
+        aria-label="Ajouter un serveur"
+      >
+        +
+      </button>
+    </nav>
 
-<aside id="channel-sidebar">
-  <div class="sidebar-header" id="server-name">Nom chat</div>
-  <ul id="channel-list">
-    <li class="category">Projet</li>
-    <li>
-      <button class="active" data-channel="general"># general</button>
-    </li>
-  </ul>
-  <div id="user-panel">
-    <div class="avatar"></div>
-    <div>
-      <div class="pseudo" id="current-user-pseudo">Pseudo</div>
-      <div class="presence-label" id="current-user-presence">En ligne</div>
-    </div>
-  </div>
-</aside>
-
-<main id="main">
-  <header id="topbar">
-    <div class="channel-name">
-      <span id="active-channel-name"># general</span>
-    </div>
-    <div id="connection-status" data-state="connecte">
-      <span class="dot"></span>
-      <span id="connection-label">Connecté</span>
-    </div>
-  </header>
-
-  <div id="message-list" aria-live="polite">
-    <article class="message-row">
-      <div class="avatar"></div>
-      <div class="message-body">
-        <div class="message-meta">
-          <span class="author">Nom</span>
-          <span class="timestamp">2026-09-01</span>
+    <aside id="channel-sidebar">
+      <div class="sidebar-header" id="server-name">Nom chat</div>
+      <ul id="channel-list">
+        <li class="category">Projet</li>
+        <li>
+          <button class="active" data-channel="general"># general</button>
+        </li>
+      </ul>
+      <div id="user-panel">
+        <div class="avatar"></div>
+        <div>
+          <div class="pseudo" id="current-user-pseudo">Pseudo</div>
+          <div class="presence-label" id="current-user-presence">En ligne</div>
         </div>
-        <p class="text">
-          Salut ! Le contrôle vient d'être poussé sur GitHub.
-        </p>
       </div>
-    </article>
-    <article class="message-row">
-      <div class="avatar"></div>
-      <div class="message-body">
-        <div class="message-meta">
-          <span class="author">Nom</span>
-          <span class="timestamp">2026-09-01</span>
+    </aside>
+
+    <main id="main">
+      <header id="topbar">
+        <div class="channel-name">
+          <span id="active-channel-name"># general</span>
         </div>
-        <p class="text">Parfait, je regarde l'issue #9 ce soir.</p>
+        <div id="connection-status" data-state="connecte">
+          <span class="dot"></span>
+          <span id="connection-label">Connecté</span>
+        </div>
+      </header>
+
+      <div id="message-list" aria-live="polite">
+        <article class="message-row">
+          <div class="avatar"></div>
+          <div class="message-body">
+            <div class="message-meta">
+              <span class="author">Nom</span>
+              <span class="timestamp">2026-09-01</span>
+            </div>
+            <p class="text">
+              Salut ! Le contrôle vient d'être poussé sur GitHub.
+            </p>
+          </div>
+        </article>
+        <article class="message-row">
+          <div class="avatar"></div>
+          <div class="message-body">
+            <div class="message-meta">
+              <span class="author">Nom</span>
+              <span class="timestamp">2026-09-01</span>
+            </div>
+            <p class="text">Parfait, je regarde l'issue #9 ce soir.</p>
+          </div>
+        </article>
       </div>
-    </article>
-  </div>
 
-  <div id="typing-indicator"></div>
+      <div id="typing-indicator"></div>
 
-  <div id="composer">
-    <form id="message-form">
-      <input
-              id="message-input"
-              type="text"
-              placeholder="Envoyez un message dans #general"
-              autocomplete="off"
-      />
-      <button type="submit">Envoyer</button>
-    </form>
-  </div>
-</main>
+      <div id="composer">
+        <form id="message-form">
+          <input
+            id="message-input"
+            type="text"
+            placeholder="Envoyez un message dans #general"
+            autocomplete="off"
+          />
+          <button type="submit">Envoyer</button>
+        </form>
+      </div>
+    </main>
 
-<script src="../../../renderer.js"></script>
-</body>
+    <script src="../../../renderer.js"></script>
+  </body>
 </html>
