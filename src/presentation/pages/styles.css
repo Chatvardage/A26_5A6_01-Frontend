@@ -1,0 +1,323 @@
+:root {
+  --bg-app: #0a5447;
+  --bg-panel: #0d3d38;
+  --bg-panel-alt: #0e453e;
+  --bg-bubble: #5f7475;
+  --accent-start: #3ddc97;
+  --accent-end: #0d5c4a;
+  --online: #22c55e;
+  --offline: #ef4444;
+  --reconnecting: #eab308;
+  --text-primary: #eef5f2;
+  --text-muted: #9fb8b3;
+  --border: rgba(255, 255, 255, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  color: var(--text-primary);
+  background: var(--bg-panel);
+  display: flex;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* --- Rail des serveurs ------------------------------------------- */
+#server-rail {
+  width: 72px;
+  flex: 0 0 auto;
+  background: var(--bg-panel);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  gap: 10px;
+}
+
+#server-rail .app-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: block;
+}
+
+#server-rail .rail-divider {
+  width: 32px;
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.server-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--bg-panel-alt);
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    border-radius 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.server-icon:hover,
+.server-icon.active {
+  background: var(--bg-bubble);
+  border-radius: 30%;
+  color: var(--text-primary);
+}
+
+/* --- Colonne des salons -------------------------------------------- */
+#channel-sidebar {
+  width: 232px;
+  flex: 0 0 auto;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#channel-sidebar .sidebar-header {
+  padding: 18px 16px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+
+#channel-list {
+  list-style: none;
+  margin: 0;
+  padding: 14px 8px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+#channel-list .category {
+  padding: 10px 10px 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+#channel-list li button {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+#channel-list li button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+
+#channel-list li button.active {
+  background: var(--bg-bubble);
+  color: var(--text-primary);
+}
+
+#user-panel {
+  flex: 0 0 auto;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+#user-panel .avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg-bubble);
+  flex: 0 0 auto;
+}
+
+#user-panel .pseudo {
+  font-weight: 600;
+}
+
+#user-panel .presence-label {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+/* --- Zone principale (salon actif) ---------------------------------- */
+#main {
+  flex: 1;
+  background: var(--bg-app);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+#topbar {
+  height: 56px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+#topbar .channel-name {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+#connection-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+#connection-status .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--online);
+}
+
+#connection-status[data-state='hors-ligne'] .dot {
+  background: var(--offline);
+}
+
+#connection-status[data-state='reconnexion'] .dot {
+  background: var(--reconnecting);
+}
+
+#message-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+}
+
+.message-row {
+  display: flex;
+  gap: 12px;
+}
+
+.message-row .avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--bg-bubble);
+  flex: 0 0 auto;
+}
+
+.message-row .message-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.message-row .message-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.message-row .author {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.message-row .timestamp {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.message-row .text {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+
+#typing-indicator {
+  flex: 0 0 auto;
+  min-height: 20px;
+  padding: 0 24px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+#composer {
+  flex: 0 0 auto;
+  padding: 12px 24px 20px;
+}
+
+#composer form {
+  display: flex;
+  background: var(--bg-bubble);
+  border-radius: 10px;
+}
+
+#composer input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 12px 16px;
+  color: var(--text-primary);
+  font-size: 0.92rem;
+}
+
+#composer input::placeholder {
+  color: var(--text-muted);
+}
+
+#composer button {
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  padding: 0 16px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+#composer button:hover {
+  color: var(--accent-start);
+}
