@@ -18,7 +18,7 @@
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.0.0",
     "prettier": "^3.0.0",
-    "typescript": "^7.0.2",
+    "typescript": "^5.9.3",
     "vitest": "^4.1.11"
   },
   "description": "Application pour communiquer par des chats - ChatVardage",
