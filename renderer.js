@@ -1,4 +1,7 @@
-// Display runtime versions exposed by preload.js
+// Le renderer n'utilise jamais require/ipcRenderer directement : tout passe
+// par window.electronAPI, exposé de façon contrôlée par preload.js.
+
+// Affichage des versions runtime exposées par preload.js
 const nodeVer = document.getElementById('node-ver');
 const chromeVer = document.getElementById('chrome-ver');
 const electronVer = document.getElementById('electron-ver');
@@ -10,15 +13,12 @@ if (window.electronAPI) {
     electronVer.textContent = window.electronAPI.electronVersion();
 }
 
-// IPC send example
+// Exemple IPC scoped : bouton ping -> Main répond pong
 const pingBtn = document.getElementById('ping-btn');
-if (pingBtn) {
-  pingBtn.addEventListener('click', () => {
-    window.electronAPI?.send('ping', 'Ping from renderer.js');
-  });
-}
+pingBtn?.addEventListener('click', () => {
+  window.electronAPI?.ping();
+});
 
-// IPC receive example
-window.electronAPI?.on('pong', (response) => {
-  console.log('Received from main process:', response);
+window.electronAPI?.onPong((data) => {
+  console.log('Reçu du processus Main :', data);
 });
