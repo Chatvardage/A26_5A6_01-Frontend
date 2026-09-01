@@ -1,0 +1,163 @@
+﻿@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito+Sans:wght@400;600;700&display=swap');
+
+:root {
+  --bg: #0b3d30;
+  --card: #123f33;
+  --slate: #66716e;
+  --slate-hover: #78827f;
+  --mint: #3ddc97;
+  --coral: #e2725b;
+  --muted: #a9b8b3;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Nunito Sans', sans-serif;
+  background: var(--bg);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.screen-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: clamp(14px, 4vw, 22px);
+  width: 100%;
+}
+
+.login-brand {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: clamp(30px, 4.6vw, 60px);
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+.login-card {
+  background: var(--card);
+  border-radius: 20px;
+  padding: clamp(28px, 3.4vw, 52px) clamp(28px, 4vw, 56px)
+    clamp(32px, 4.6vw, 56px);
+  width: clamp(360px, 60vw, 700px); /* encore plus grand */
+  display: flex;
+  flex-direction: column;
+  gap: clamp(14px, 1.6vw, 20px);
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+.login-mascot {
+  position: absolute;
+  top: clamp(-46px, -4.5vw, -38px);
+  right: clamp(-26px, -2.5vw, -20px);
+  width: clamp(64px, 7vw, 116px);
+  height: clamp(64px, 7vw, 116px);
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.35));
+  border-radius: 18px;
+  z-index: 5;
+}
+
+.login-card label {
+  display: none;
+}
+
+.login-card-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.login-card-header span:first-child {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 700;
+  font-size: clamp(15px, 1.1vw, 19px);
+}
+.login-card-header span:last-child {
+  font-size: clamp(11px, 0.8vw, 13px);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.login-card input {
+  background: var(--slate);
+  border: none;
+  border-radius: 14px;
+  padding: clamp(13px, 1.1vw, 17px) clamp(15px, 1.2vw, 20px);
+  color: #fff;
+  font-family: 'Nunito Sans', sans-serif;
+  font-weight: 600;
+  font-size: clamp(20px, 1.1vw, 18px);
+  width: 100%;
+}
+.login-card input::placeholder {
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+}
+.login-card input:focus {
+  outline: 2px solid var(--mint);
+  outline-offset: 1px;
+}
+
+.field-message {
+  margin: 0;
+  min-height: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  padding-left: 4px;
+}
+.field-message[data-kind='error'] {
+  color: var(--coral);
+}
+.field-message[data-kind='ok'] {
+  color: var(--mint);
+}
+.field-message[data-kind='checking'] {
+  color: var(--muted);
+}
+
+.login-card button {
+  margin-top: 4px;
+  background: var(--slate);
+  border: none;
+  border-radius: 14px;
+  padding: clamp(13px, 1.1vw, 17px);
+  font-weight: 700;
+  font-family: 'Nunito Sans', sans-serif;
+  color: #fff;
+  cursor: pointer;
+  font-size: clamp(14px, 1vw, 17px);
+  transition: background 0.15s ease;
+}
+.login-card button:hover {
+  background: var(--slate-hover);
+}
+
+.login-hint {
+  font-size: clamp(15px, 0.75vw, 13px);
+  color: var(--muted);
+  text-align: center;
+  margin: 2px 0 0 0;
+}
+
+@media (max-width: 380px) {
+  .login-card {
+    border-radius: 16px;
+    gap: 10px;
+  }
+  .login-mascot {
+    top: -26px;
+    right: -12px;
+  }
+}

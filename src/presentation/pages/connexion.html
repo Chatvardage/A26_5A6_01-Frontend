@@ -1,0 +1,44 @@
+﻿<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChatVardage</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="screen-login">
+      <div class="login-brand">ChatVardage</div>
+      <form class="login-card" id="pseudo-form" novalidate>
+        <img
+          class="login-mascot"
+          src="../../../maquette/logo.png"
+          alt=""
+          aria-hidden="true"
+        />
+        <label for="pseudo-input">Pseudo local</label>
+        <div class="login-card-header">
+          <span>Nom d'utilisateur</span><span>Local</span>
+        </div>
+        <input
+          id="pseudo-input"
+          name="pseudo"
+          type="text"
+          autocomplete="off"
+          placeholder="Nom d'utilisateur"
+          maxlength="20"
+        />
+        <p
+          class="field-message"
+          id="pseudo-message"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <button type="submit" id="pseudo-submit">
+          Rejoindre le clavardage
+        </button>
+        <p class="login-hint">Unique sur cet appareil · aucun mot de passe</p>
+      </form>
+    </div>
+  </body>
+</html>
