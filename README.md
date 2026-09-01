@@ -84,22 +84,43 @@ ChatVardage <br />
 &emsp;│&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# Types et modèles utilisés par le frontend.<br />
 &emsp;│&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# Exemple : UserModel, MessageModel, ChannelModel.<br />
 &emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;└── infrastructure/<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│ # Communication avec les systèmes externes.<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│ # HTTP, WebSocket, Gateway, stockage local, etc.<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;├── gateways/<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│&emsp;│ # Point d'accès aux communications avec le backend.<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│&emsp;└── GatewayClient.ts<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# Contrat/client utilisé par le frontend pour<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# communiquer avec le Gateway.<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;└── services/<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;# Services techniques du frontend.<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;# Exemple : AuthService, StorageService, NotificationService.<br />
+&emsp;│&emsp;&emsp;&emsp;├── infrastructure/<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│   # Communication avec les systèmes externes.<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│   # HTTP, WebSocket, Gateway, stockage local, etc.<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;├── gateways/<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│   # Point d'accès aux communications avec le backend.<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;└── GatewayClient.ts<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;&emsp;# Contrat/client utilisé par le frontend pour<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;&emsp;# communiquer avec le Gateway.<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;├── persistence/<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│   # Implementation de le persistance pour le front-end.<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;└── local-storage/<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│   # Gestion du stockage local.<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;|&emsp;&emsp;├── LocalStorage.ts/<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│&emsp;   # Accès au LocalStorage.<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;|&emsp;&emsp;├── MessageStorage.ts/<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│&emsp;   # Gère la persistence des message.<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;|&emsp;&emsp;└── keys.ts/<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;&emsp;   # Stockage des clés pour le localstorage.<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;└── services/<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;&emsp;&emsp;# Services techniques du frontend.<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;&emsp;&emsp;# Exemple : AuthService, StorageService, NotificationService.<br />
 &emsp;│<br />
 &emsp;├── backend/<br />
 &emsp;│&emsp;│<br />
