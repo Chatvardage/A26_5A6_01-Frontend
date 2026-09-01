@@ -16,9 +16,9 @@ if (window.electronAPI) {
 // Exemple IPC scoped : bouton ping -> Main répond pong
 const pingBtn = document.getElementById('ping-btn');
 pingBtn?.addEventListener('click', () => {
-    window.electronAPI?.ping();
+  window.electronAPI?.ping();
 });
 
 window.electronAPI?.onPong((data) => {
-    console.log('Reçu du processus Main :', data);
+  console.log('Reçu du processus Main :', data);
 });
