@@ -7,3 +7,15 @@
 // messages via #message-form, arriveront avec le ChatGateway (mock puis
 // réel), en ajoutant les méthodes correspondantes à `electronAPI` dans
 // preload.js plutôt qu'un accès direct à ipcRenderer.
+
+window.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('message-prive-btn');
+
+    console.log('btn =', btn);
+
+    btn?.addEventListener('click', () => {
+        console.log('CLICK');
+
+        window.electronAPI.navigate('message-prive.html');
+    });
+});

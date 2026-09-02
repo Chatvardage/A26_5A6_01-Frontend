@@ -1,4 +1,4 @@
-const { contextBridge } = require('electron');
+const { contextBridge, ipcRenderer } = require("electron");
 
 // --- API preload minimale ---------------------------------------------------
 // Principe : le renderer n'a JAMAIS accès à ipcRenderer, require, process, fs,
@@ -12,4 +12,12 @@ const { contextBridge } = require('electron');
 // nouvelle UI ne l'utilise plus). Ajouter ici une méthode nommée par nouveau
 // besoin métier réel (ex. ChatGateway : envoyer un message, rejoindre un
 // salon...), jamais un send/on générique à canal arbitraire.
-contextBridge.exposeInMainWorld('electronAPI', {});
+
+contextBridge.exposeInMainWorld('electronAPI', {
+    navigate: (page) => ipcRenderer.invoke('navigate', page),
+    obtenirUtilisateurs: () => ([
+        { id: 'u1', pseudo: 'sam2007' },
+        { id: 'u2', pseudo: 'alex01' },
+        { id: 'u3', pseudo: 'lea_dev' },
+    ]),
+});

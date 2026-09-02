@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
 const path = require('path');
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -203,6 +203,8 @@ function createWindow() {
 
   win.loadFile(APP_INDEX_PATH);
 
+  win.webContents.openDevTools();
+
   return win;
 }
 
@@ -266,4 +268,14 @@ if (!gotSingleInstanceLock) {
 // setWindowOpenHandler — c'est bien webviewTag: false qui fait le travail.
 app.on('web-contents-created', (_event, contents) => {
   contents.on('will-attach-webview', (event) => event.preventDefault());
+});
+
+ipcMain.handle("navigate", async (_, page) => {
+  await mainWindow.loadFile(
+      path.join(
+          __dirname,
+          "src/presentation/pages",
+          page
+      )
+  );
 });
