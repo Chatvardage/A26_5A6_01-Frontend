@@ -762,26 +762,62 @@ describe('MockGateway', () => {
     });
 
     it('devrait accepter une invitation privée et la retirer après l’entrée', async () => {
-      type StockageInterne = {
-        salons: Map<string, Salon>;
-      };
-      const stockage = gateway as unknown as StockageInterne;
-      const salon = await gateway.obtenirSalon('s2');
-      expect(salon).toBeDefined();
-      stockage.salons.set('s2', {
-        ...salon!,
-        membresInvites: [...salon!.membresInvites, 'u2'],
-      });
+      await gateway.inviterUtilisateurAuSalon('s2', 'u2', 'u1');
+      const invitations = await gateway.obtenirInvitationsUtilisateur('u2');
+      expect(invitations.map((salon) => salon.id)).toContain('s2');
 
-      // Exerce aussi le chemin où un utilisateur est seulement invité lors
-      // des messages système de connexion et de déconnexion.
-      await gateway.simulerConnexion('u2');
-      await gateway.simulerDeconnexion();
-
-      const salonMisAJour = await gateway.ajouterUtilisateurAuSalon('s2', 'u2');
+      const salonMisAJour = await gateway.accepterInvitationSalon('s2', 'u2');
 
       expect(salonMisAJour.membreIds).toContain('u2');
       expect(salonMisAJour.membresInvites).not.toContain('u2');
+    });
+
+    it('devrait refuser une invitation sans donner accès au salon privé', async () => {
+      await gateway.inviterUtilisateurAuSalon('s2', 'u2', 'u1');
+      const salon = await gateway.refuserInvitationSalon('s2', 'u2');
+
+      expect(salon.membreIds).not.toContain('u2');
+      expect(salon.membresInvites).not.toContain('u2');
+      await expect(
+        gateway.ajouterUtilisateurAuSalon('s2', 'u2')
+      ).rejects.toThrow('Accès refusé au salon privé s2');
+    });
+
+    it("devrait empêcher un utilisateur autre que l'hôte d'inviter", async () => {
+      await expect(
+        gateway.inviterUtilisateurAuSalon('s2', 'u2', 'u3')
+      ).rejects.toThrow("Seul l'hôte peut inviter dans le salon s2");
+    });
+
+    it("devrait empêcher un utilisateur seulement invité d'écrire", async () => {
+      await gateway.inviterUtilisateurAuSalon('s2', 'u2', 'u1');
+      await expect(
+        gateway.envoyerMessage('s2', 'u2', 'Message interdit')
+      ).rejects.toThrow('Accès refusé au salon s2');
+    });
+
+    it("devrait émettre les événements d'invitation", async () => {
+      const evenements: TypeEvenement[] = [];
+      const types: TypeEvenement[] = [
+        'invitation-salon-envoyee',
+        'invitation-salon-refusee',
+        'invitation-salon-acceptee',
+      ];
+      types.forEach((type) =>
+        gateway.ecouterEvenement(type, () => evenements.push(type))
+      );
+
+      await gateway.inviterUtilisateurAuSalon('s2', 'u2', 'u1');
+      await gateway.refuserInvitationSalon('s2', 'u2');
+      await gateway.inviterUtilisateurAuSalon('s2', 'u2', 'u1');
+      await gateway.accepterInvitationSalon('s2', 'u2');
+
+      expect(evenements).toEqual([
+        'invitation-salon-envoyee',
+        'invitation-salon-refusee',
+        'invitation-salon-envoyee',
+        'invitation-salon-acceptee',
+      ]);
     });
 
     it('devrait empêcher l’hôte de quitter son propre salon', async () => {
@@ -857,6 +893,69 @@ describe('MockGateway', () => {
     it('devrait créer un salon privé lorsque la visibilité est précisée', async () => {
       const salon = await gateway.creerSalon('Secret', 'u1', 'prive');
       expect(salon.visibilite).toBe('prive');
+    });
+    
+    it("devrait refuser d'inviter un utilisateur inexistant", async () => {
+      await expect(
+        gateway.inviterUtilisateurAuSalon('s2', 'inexistant', 'u1')
+      ).rejects.toThrow('Utilisateur inexistant non trouvé');
+    });
+
+    it("devrait refuser une invitation pour un salon inexistant", async () => {
+      await expect(
+        gateway.refuserInvitationSalon('salon-inexistant', 'u2')
+      ).rejects.toThrow('Salon salon-inexistant non trouvé');
+    });
+
+    it("devrait refuser une invitation qui n'existe pas", async () => {
+      await expect(
+        gateway.refuserInvitationSalon('s2', 'u2')
+      ).rejects.toThrow('Aucune invitation au salon s2');
+    });
+
+    it("devrait empêcher d'accepter une invitation inexistante", async () => {
+      await expect(
+        gateway.accepterInvitationSalon('s2', 'u2')
+      ).rejects.toThrow('Aucune invitation au salon s2');
+    });
+
+    it("devrait refuser d'inviter dans un salon inexistant", async () => {
+      await expect(
+        gateway.inviterUtilisateurAuSalon('salon-inexistant', 'u2', 'u1')
+      ).rejects.toThrow('Salon salon-inexistant non trouvé');
+    });
+
+    it('devrait ignorer une invitation pour un utilisateur déjà membre', async () => {
+      const salonAvant = await gateway.obtenirSalon('s2');
+      const salonApres = await gateway.inviterUtilisateurAuSalon(
+        's2',
+        'u3',
+        'u1'
+      );
+
+      expect(salonApres).toBe(salonAvant);
+      expect(salonApres.membresInvites).not.toContain('u3');
+    });
+
+    it('devrait éviter de créer deux fois la même invitation', async () => {
+      await gateway.inviterUtilisateurAuSalon('s2', 'u2', 'u1');
+      const salonAvant = await gateway.obtenirSalon('s2');
+      const salonApres = await gateway.inviterUtilisateurAuSalon(
+        's2',
+        'u2',
+        'u1'
+      );
+
+      expect(salonApres).toBe(salonAvant);
+      expect(
+        salonApres.membresInvites.filter((id) => id === 'u2')
+      ).toHaveLength(1);
+    });
+
+    it("devrait empêcher d'accepter dans un salon inexistant", async () => {
+      await expect(
+        gateway.accepterInvitationSalon('salon-inexistant', 'u2')
+      ).rejects.toThrow('Salon salon-inexistant non trouvé');
     });
   });
 });

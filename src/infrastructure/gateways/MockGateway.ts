@@ -28,6 +28,9 @@ export type TypeEvenement =
   | 'utilisateur-quitte-salon'
   | 'salon-cree'
   | 'salon-supprime'
+  | 'invitation-salon-envoyee'
+  | 'invitation-salon-acceptee'
+  | 'invitation-salon-refusee'
   | 'message-recu'
   | 'message-modifie'
   | 'message-supprime'
@@ -394,6 +397,95 @@ export class MockGateway {
     });
   }
 
+  /** Invite localement un utilisateur dans un salon privé. Seul l'hôte peut inviter. */
+  async inviterUtilisateurAuSalon(
+    salonId: ConversationId,
+    utilisateurId: string,
+    hoteId: string
+  ): Promise<Salon> {
+    return this.simulerLatence(async () => {
+      const salon = this.salons.get(salonId);
+      if (!salon) throw new Error(`Salon ${salonId} non trouvé`);
+      if (salon.hoteId !== hoteId) {
+        throw new Error(`Seul l'hôte peut inviter dans le salon ${salonId}`);
+      }
+      if (!this.utilisateurs.has(utilisateurId)) {
+        throw new Error(`Utilisateur ${utilisateurId} non trouvé`);
+      }
+      if (salon.membreIds.includes(utilisateurId)) return salon;
+
+      const salonMisAJour = salon.membresInvites.includes(utilisateurId)
+        ? salon
+        : {
+            ...salon,
+            membresInvites: [...salon.membresInvites, utilisateurId],
+          };
+      this.salons.set(salonId, salonMisAJour);
+      this.emetEvenement('invitation-salon-envoyee', {
+        salonId,
+        utilisateurId,
+        hoteId,
+      });
+      return salonMisAJour;
+    });
+  }
+
+  /** Retourne les invitations en attente d'un utilisateur. */
+  async obtenirInvitationsUtilisateur(utilisateurId: string): Promise<Salon[]> {
+    return this.simulerLatence(async () =>
+      Array.from(this.salons.values()).filter((salon) =>
+        salon.membresInvites.includes(utilisateurId)
+      )
+    );
+  }
+
+  /** Accepte une invitation et ajoute l'utilisateur aux membres du salon. */
+  async accepterInvitationSalon(
+    salonId: ConversationId,
+    utilisateurId: string
+  ): Promise<Salon> {
+    const salon = this.salons.get(salonId);
+    if (!salon) throw new Error(`Salon ${salonId} non trouvé`);
+    if (!salon.membresInvites.includes(utilisateurId)) {
+      throw new Error(`Aucune invitation au salon ${salonId}`);
+    }
+    const salonMisAJour = await this.ajouterUtilisateurAuSalon(
+      salonId,
+      utilisateurId
+    );
+    this.emetEvenement('invitation-salon-acceptee', {
+      salonId,
+      utilisateurId,
+    });
+    return salonMisAJour;
+  }
+
+  /** Refuse une invitation sans donner accès au salon. */
+  async refuserInvitationSalon(
+    salonId: ConversationId,
+    utilisateurId: string
+  ): Promise<Salon> {
+    return this.simulerLatence(async () => {
+      const salon = this.salons.get(salonId);
+      if (!salon) throw new Error(`Salon ${salonId} non trouvé`);
+      if (!salon.membresInvites.includes(utilisateurId)) {
+        throw new Error(`Aucune invitation au salon ${salonId}`);
+      }
+      const salonMisAJour = {
+        ...salon,
+        membresInvites: salon.membresInvites.filter(
+          (id) => id !== utilisateurId
+        ),
+      };
+      this.salons.set(salonId, salonMisAJour);
+      this.emetEvenement('invitation-salon-refusee', {
+        salonId,
+        utilisateurId,
+      });
+      return salonMisAJour;
+    });
+  }
+
   /**
    * Ajoute un utilisateur à un salon
    * @param salonId L'identifiant du salon
@@ -568,6 +660,11 @@ export class MockGateway {
           message: `Auteur ${auteurId} non trouvé`,
         });
         throw new Error(`Auteur ${auteurId} non trouvé`);
+      }
+
+      const salon = this.salons.get(conversationId);
+      if (salon && !salon.membreIds.includes(auteurId)) {
+        throw new Error(`Accès refusé au salon ${conversationId}`);
       }
 
       const message = creerMessage(

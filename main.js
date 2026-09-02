@@ -1,5 +1,11 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
 const path = require('path');
+const { fileURLToPath } = require('url');
+const {
+  MockGatewayRuntime,
+} = require('./src/infrastructure/gateways/MockGatewayRuntime.js');
+
+const chatGateway = new MockGatewayRuntime();
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -51,7 +57,7 @@ function isAppUrl(url) {
   if (parsed.protocol === 'file:') {
     let filePath;
     try {
-      filePath = path.resolve(decodeURIComponent(parsed.pathname));
+      filePath = path.resolve(fileURLToPath(parsed));
     } catch {
       return false;
     }
@@ -207,14 +213,33 @@ function createWindow() {
 }
 
 // --- IPC : API contrôlée côté Main ------------------------------------------
-// Chaque canal est déclaré explicitement ici ; le renderer n'a jamais accès
-// à ipcRenderer directement (voir preload.js), seulement à ce que preload.js
-// expose sur window.electronAPI. Aucun canal pour l'instant (l'exemple
-// ping/pong utilisé pour valider ce câblage à l'issue #8 a été retiré, la
-// nouvelle UI ne l'utilise plus) : le premier canal réel viendra avec le
-// ChatGateway (salons, messages, DM...) et devra, comme le faisait ping,
-// valider la provenance de chaque message via isAppUrl(event.senderFrame?.url)
-// avant d'agir dessus.
+function verifierProvenance(event) {
+  if (!isAppUrl(event.senderFrame?.url ?? '')) {
+    throw new Error('Origine IPC non autorisée');
+  }
+}
+
+function exposerCanal(nom, action) {
+  ipcMain.handle(nom, (event, donnees) => {
+    verifierProvenance(event);
+    return action(donnees ?? {});
+  });
+}
+
+exposerCanal('salons:etat', ({ utilisateurId }) =>
+  chatGateway.obtenirEtat(utilisateurId)
+);
+exposerCanal('salons:creer', (donnees) => chatGateway.creerSalon(donnees));
+exposerCanal('salons:inviter', (donnees) => chatGateway.inviter(donnees));
+exposerCanal('salons:accepter-invitation', (donnees) =>
+  chatGateway.accepterInvitation(donnees)
+);
+exposerCanal('salons:refuser-invitation', (donnees) =>
+  chatGateway.refuserInvitation(donnees)
+);
+exposerCanal('salons:envoyer-message', (donnees) =>
+  chatGateway.envoyerMessage(donnees)
+);
 
 // --- Instance unique ---------------------------------------------------
 // Une appli de clavardage locale n'a pas de sens ouverte deux fois en

@@ -100,6 +100,28 @@ export interface ChatGateway {
    */
   rejoindreSalon(salonId: ConversationId): Promise<Salon>;
 
+  /** Invite un utilisateur dans un salon. Seul l'hôte peut effectuer l'action. */
+  inviterUtilisateurAuSalon(
+    salonId: ConversationId,
+    utilisateurId: string,
+    hoteId: string
+  ): Promise<Salon>;
+
+  /** Retourne les invitations de salon en attente pour un utilisateur. */
+  obtenirInvitationsUtilisateur(utilisateurId: string): Promise<Salon[]>;
+
+  /** Accepte une invitation et ajoute l'utilisateur aux membres du salon. */
+  accepterInvitationSalon(
+    salonId: ConversationId,
+    utilisateurId: string
+  ): Promise<Salon>;
+
+  /** Refuse et retire une invitation sans accorder l'accès au salon. */
+  refuserInvitationSalon(
+    salonId: ConversationId,
+    utilisateurId: string
+  ): Promise<Salon>;
+
   // --- Messages ---------------------------------------------------------------
 
   /**
