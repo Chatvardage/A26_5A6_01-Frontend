@@ -58,7 +58,9 @@ export class MockGateway {
   private presences: Map<string, Presence> = new Map();
   private salons: Map<ConversationId, Salon> = new Map();
   private conversationsPrivees: Map<ConversationId, ConversationPrivee> =
+
       new Map();
+
   private messages: Map<string, Message> = new Map();
   private ecouteurs: Map<TypeEvenement, EcouteurEvenement[]> = new Map();
   private latenceMs: number = 100; // Latence par défaut en millisecondes
@@ -116,6 +118,7 @@ export class MockGateway {
 
       this.utilisateurActuelId = utilisateurId;
       this.etatConnexion = creerEtatConnexion(
+
           'connecte',
           Date.now(),
           this.reconnexions
@@ -187,6 +190,7 @@ export class MockGateway {
 
         for (const salon of salonsUtilisateur) {
           const messageSysteme = creerMessage(
+
               `msg-${this.genererIdUnique()}`,
               salon.id,
               AUTEUR_SYSTEME,
@@ -666,11 +670,11 @@ export class MockGateway {
   async obtenirMessagesConversation(
       conversationId: ConversationId
   ): Promise<Message[]> {
-    return this.simulerLatence(async () => {
-      return Array.from(this.messages.values()).filter(
-          (msg) => msg.conversationId === conversationId
-      );
-    });
+      return this.simulerLatence(async () => {
+          return Array.from(this.messages.values()).filter(
+              (message) => message.conversationId === conversationId
+          );
+      });
   }
 
   /**

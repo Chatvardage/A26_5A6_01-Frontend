@@ -11,6 +11,7 @@ import {
   creerUtilisateur,
 } from '../../../domain/entities/Utilisateur';
 import mascotLogo from '../../../../maquette/logo.png';
+import type { ChatGateway } from '../../../infrastructure/gateways/ChatGateway';
 
 /**
  * Sous-ensemble de ChatGateway réellement nécessaire à cet écran (principe

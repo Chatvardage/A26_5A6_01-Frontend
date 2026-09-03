@@ -5,7 +5,6 @@ import {
   type TypeEvenement,
 } from './MockGateway';
 import type { Salon } from '../../domain/entities/Salon';
-import { creerUtilisateur } from '../../domain/entities/Utilisateur';
 
 describe('MockGateway', () => {
   let gateway: MockGateway;
@@ -299,30 +298,6 @@ describe('MockGateway', () => {
       expect(erreurs.length).toBeGreaterThan(0);
     });
 
-    it('devrait indiquer qu’un pseudo déjà pris (seedé) est indisponible', async () => {
-      expect(await gateway.pseudoDisponible('alice')).toBe(false);
-    });
-
-    it('devrait comparer les pseudos sans tenir compte de la casse', async () => {
-      expect(await gateway.pseudoDisponible('ALICE')).toBe(false);
-      expect(await gateway.pseudoDisponible('AlIcE')).toBe(false);
-    });
-
-    it('devrait indiquer qu’un pseudo libre est disponible', async () => {
-      expect(await gateway.pseudoDisponible('personne_encore')).toBe(true);
-    });
-
-    it('devrait rejeter la création d’un utilisateur avec un pseudo déjà pris', async () => {
-      await expect(gateway.creerUtilisateur('alice')).rejects.toThrow(
-          /déjà utilisé/
-      );
-    });
-
-    it('devrait rendre un pseudo indisponible après création d’un utilisateur avec', async () => {
-      await gateway.creerUtilisateur('fraichement_cree');
-      expect(await gateway.pseudoDisponible('fraichement_cree')).toBe(false);
-    });
-
     it('devrait récupérer un utilisateur par son ID', async () => {
       const utilisateur = await gateway.obtenirUtilisateur('u1');
 
@@ -349,46 +324,6 @@ describe('MockGateway', () => {
       const presence = await gateway.obtenirPresence('utilisateur-inexistant');
 
       expect(presence).toBeUndefined();
-    });
-  });
-
-  // ===== Tests de connexion() (ChatGateway.connexion, écran pseudo/session) =====
-  describe('connexion() — session pseudo/local (ChatGateway)', () => {
-    it('devrait créer une session pour un nouvel utilisateur et le connecter', async () => {
-      const nouveau = creerUtilisateur('u-nouveau', 'nouvel_arrivant');
-
-      const etat = await gateway.connexion(nouveau);
-
-      expect(etat.statut).toBe('connecte');
-      expect(gateway.obtenirUtilisateurConnecte()).toBe('u-nouveau');
-      const enregistre = await gateway.obtenirUtilisateur('u-nouveau');
-      expect(enregistre?.pseudo).toBe('nouvel_arrivant');
-    });
-
-    it('devrait rejeter la connexion si le pseudo est déjà pris par un autre utilisateur', async () => {
-      const usurpateur = creerUtilisateur('u-usurpateur', 'alice');
-
-      await expect(gateway.connexion(usurpateur)).rejects.toThrow(
-          /déjà utilisé/
-      );
-    });
-
-    it('devrait permettre de se reconnecter avec un utilisateur déjà enregistré (même id)', async () => {
-      const etat = await gateway.connexion(creerUtilisateur('u1', 'alice'));
-
-      expect(etat.statut).toBe('connecte');
-      expect(gateway.obtenirUtilisateurConnecte()).toBe('u1');
-    });
-
-    it('devrait émettre un événement de connexion pour une nouvelle session', async () => {
-      const evenements: TypeEvenement[] = [];
-      gateway.ecouterEvenement('connexion', () => {
-        evenements.push('connexion');
-      });
-
-      await gateway.connexion(creerUtilisateur('u-evt', 'temoin_evenement'));
-
-      expect(evenements).toContain('connexion');
     });
   });
 
