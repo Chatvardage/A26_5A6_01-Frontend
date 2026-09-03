@@ -266,6 +266,10 @@ body {
     color: var(--online);
 }
 
+.user-status.offline {
+    color: var(--offline);
+}
+
 #message-list {
     flex: 1;
 

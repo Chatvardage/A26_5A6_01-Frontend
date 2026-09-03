@@ -21,63 +21,46 @@
 
     <aside id="dm-sidebar">
       <div class="sidebar-header">Messages privés</div>
-      <div class="friends-actions">
-        <button>En ligne</button>
-        <button class="active">Tous</button>
-        <button>Demandes</button>
+      <div class="friends-actions" aria-label="Filtres des messages privés">
+        <button type="button" class="filter-button active" data-filter="all">Tous</button>
+        <button type="button" class="filter-button" data-filter="online">En ligne</button>
       </div>
-      <ul id="conversation-list">
-      </ul>
+      <ul id="conversation-list" aria-label="Liste des conversations privées"></ul>
     </aside>
 
     <main id="main">
       <header id="topbar">
         <div class="dm-user">
-          <div class="avatar"></div>
+          <div class="avatar topbar-avatar"></div>
           <div>
-            <div class="user-name">Alexandre</div>
-            <div class="user-status">En ligne</div>
+            <div class="user-name">Sélectionnez une conversation</div>
+            <div class="user-status">Aucune conversation active</div>
           </div>
         </div>
       </header>
 
       <div id="message-list" aria-live="polite">
         <article class="message-row">
-          <div class="avatar"></div>
           <div class="message-body">
-            <div class="message-meta">
-              <span class="author">Alexandre</span>
-              <span class="timestamp">13:02</span>
-            </div>
-            <p class="text">Salut, est-ce que ton interface DM est prête ?</p>
-          </div>
-        </article>
-        <article class="message-row own-message">
-          <div class="avatar offline"></div>
-          <div class="message-body">
-            <div class="message-meta">
-              <span class="author">Moi</span>
-              <span class="timestamp">13:03</span>
-            </div>
-            <p class="text">Oui, j'ai reproduit le style Discord avec notre thème.</p>
+            <p class="text">Aucune conversation sélectionnée.</p>
           </div>
         </article>
       </div>
 
-      <div id="typing-indicator">Alexandre est en train d'écrire...</div>
+      <div id="typing-indicator">Aucune activité</div>
 
       <div id="composer">
         <form id="message-form">
           <input
             id="message-input"
             type="text"
-            placeholder="Envoyer un message à @Alexandre"
+            placeholder="Écrire un message privé"
             autocomplete="off"
           />
           <button type="submit">Envoyer</button>
         </form>
       </div>
     </main>
-    <script src="javascript/message-prive.js"></script>
+    <script type="module" src="javascript/message-prive.js"></script>
   </body>
 </html>

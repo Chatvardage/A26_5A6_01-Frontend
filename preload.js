@@ -1,23 +1,14 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 // --- API preload minimale ---------------------------------------------------
-// Principe : le renderer n'a JAMAIS accès à ipcRenderer, require, process, fs,
-// etc. Il n'a accès qu'aux méthodes explicitement listées ci-dessous.
-// Contrairement à un passthrough générique (send/on avec un nom de canal
-// arbitraire), chaque canal IPC est fixé ici en dur, dans le preload — le
-// renderer ne peut pas choisir ou inventer un canal.
-//
-// Rien n'est exposé pour l'instant (l'exemple ping/pong utilisé pour valider
-// le câblage contextIsolation/preload lors de l'issue #8 a été retiré, la
-// nouvelle UI ne l'utilise plus). Ajouter ici une méthode nommée par nouveau
-// besoin métier réel (ex. ChatGateway : envoyer un message, rejoindre un
-// salon...), jamais un send/on générique à canal arbitraire.
+// Le renderer ne reçoit que des fonctions explicites. Il n'a jamais accès à
+// require, process, fs, ipcRenderer directement, ni aux classes TypeScript du
+// projet non compilées.
 
 contextBridge.exposeInMainWorld('electronAPI', {
     navigate: (page) => ipcRenderer.invoke('navigate', page),
-    obtenirUtilisateurs: () => ([
-        { id: 'u1', pseudo: 'sam2007' },
-        { id: 'u2', pseudo: 'alex01' },
-        { id: 'u3', pseudo: 'lea_dev' },
-    ]),
+    obtenirUtilisateurs: () => ipcRenderer.invoke('obtenir-utilisateurs'),
+    obtenirConversationsPrivees: () => ipcRenderer.invoke('obtenir-conversations-privees'),
+    obtenirMessagesPrive: (conversationId) => ipcRenderer.invoke('obtenir-messages-prive', conversationId),
+    envoyerMessagePrive: (conversationId, contenu) => ipcRenderer.invoke('envoyer-message-prive', conversationId, contenu),
 });

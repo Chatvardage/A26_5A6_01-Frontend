@@ -13,7 +13,10 @@ import { creerMessage, AUTEUR_SYSTEME } from '../../domain/entities/Message.js';
 import { creerSalon } from '../../domain/entities/Salon.js';
 import { creerPresence } from '../../domain/entities/Presence.js';
 import { creerEtatConnexion } from '../../domain/entities/EtatConnexion.js';
-import { creerConversationPrivee } from '../../domain/entities/ConversationPrivee.js';
+import {
+  creerConversationPrivee,
+  creerDmId,
+} from '../../domain/entities/ConversationPrivee.js';
 
 /**
  * Types d'événements pouvant être émis par le MockGateway
@@ -76,16 +79,27 @@ export class MockGateway {
    * Initialise les données de test par défaut
    */
   private initialiserDonneesMock(): void {
-    // Créer quelques utilisateurs de test
     const user1 = creerUtilisateur('u1', 'alice');
     const user2 = creerUtilisateur('u2', 'bob');
     const user3 = creerUtilisateur('u3', 'charlie');
+    const user4 = creerUtilisateur('u4', 'dana');
+    const user5 = creerUtilisateur('u5', 'eric');
+    const user6 = creerUtilisateur('u6', 'fiona');
 
     this.utilisateurs.set(user1.id, user1);
     this.utilisateurs.set(user2.id, user2);
     this.utilisateurs.set(user3.id, user3);
+    this.utilisateurs.set(user4.id, user4);
+    this.utilisateurs.set(user5.id, user5);
+    this.utilisateurs.set(user6.id, user6);
 
-    // Créer quelques salons de test
+    this.presences.set(user1.id, creerPresence(user1.id, 'en-ligne', Date.now()));
+    this.presences.set(user2.id, creerPresence(user2.id, 'hors-ligne', Date.now()));
+    this.presences.set(user3.id, creerPresence(user3.id, 'en-ligne', Date.now()));
+    this.presences.set(user4.id, creerPresence(user4.id, 'hors-ligne', Date.now()));
+    this.presences.set(user5.id, creerPresence(user5.id, 'en-ligne', Date.now()));
+    this.presences.set(user6.id, creerPresence(user6.id, 'hors-ligne', Date.now()));
+
     const salon1 = creerSalon('s1', 'Général', user1.id, 'public', [
       user1.id,
       user2.id,
@@ -97,6 +111,44 @@ export class MockGateway {
 
     this.salons.set(salon1.id, salon1);
     this.salons.set(salon2.id, salon2);
+
+    const conversationsDM = [
+      ['u1', 'u2'],
+      ['u1', 'u3'],
+      ['u1', 'u4'],
+      ['u2', 'u5'],
+      ['u3', 'u6'],
+    ];
+
+    for (const [a, b] of conversationsDM) {
+      const conversation = creerConversationPrivee(a, b);
+      this.conversationsPrivees.set(conversation.id, conversation);
+    }
+
+    const messagesDM = [
+      { conversationId: creerDmId('u1', 'u2'), auteurId: 'u1', contenu: 'Salut, on se voit ce soir ?', type: 'texte' as const },
+      { conversationId: creerDmId('u1', 'u2'), auteurId: 'u2', contenu: 'Oui, vers 20h, ça marche.', type: 'texte' as const },
+      { conversationId: creerDmId('u1', 'u3'), auteurId: 'u3', contenu: 'Tu as vu le dernier sprint ?', type: 'texte' as const },
+      { conversationId: creerDmId('u1', 'u3'), auteurId: 'u1', contenu: 'Oui, je le valide demain.', type: 'texte' as const },
+      { conversationId: creerDmId('u1', 'u4'), auteurId: 'u4', contenu: 'J’ai envoyé le document de synthèse.', type: 'texte' as const },
+      { conversationId: creerDmId('u1', 'u4'), auteurId: 'u1', contenu: 'Parfait, je le relirai tout à l’heure.', type: 'texte' as const },
+      { conversationId: creerDmId('u2', 'u5'), auteurId: 'u2', contenu: 'Le rapport est prêt pour relecture.', type: 'texte' as const },
+      { conversationId: creerDmId('u2', 'u5'), auteurId: 'u5', contenu: 'Merci, je le regarde ce midi.', type: 'texte' as const },
+      { conversationId: creerDmId('u3', 'u6'), auteurId: 'u6', contenu: 'Tu as vu le dernier correctif ?', type: 'texte' as const },
+      { conversationId: creerDmId('u3', 'u6'), auteurId: 'u3', contenu: 'Oui, il a déjà été validé.', type: 'texte' as const },
+    ];
+
+    messagesDM.forEach((message, index) => {
+      const msg = creerMessage(
+        `msg-dm-${index + 1}`,
+        message.conversationId,
+        message.auteurId,
+        message.contenu,
+        Date.now() + index * 60000,
+        message.type
+      );
+      this.messages.set(msg.id, msg);
+    });
   }
 
   /**
@@ -778,7 +830,7 @@ export class MockGateway {
    */
   private attendreLatence(): Promise<void> {
     return new Promise((resolve) => {
-      setTimeout(resolve, this.latenceMs);
+      setTimeout(resolve, Math.max(this.latenceMs, 1) + 5);
     });
   }
 

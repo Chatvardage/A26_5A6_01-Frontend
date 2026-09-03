@@ -1,7 +1,54 @@
-const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
+const fs = require('fs');
 const path = require('path');
+const Module = require('module');
+const ts = require('typescript');
+const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
+
+function registerTypeScriptLoader() {
+  if (require.extensions['.ts']) {
+    return;
+  }
+
+  require.extensions['.ts'] = (module, filename) => {
+    const source = fs.readFileSync(filename, 'utf8');
+    const transpiled = ts.transpileModule(source, {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+        esModuleInterop: true,
+      },
+    });
+
+    module._compile(transpiled.outputText, filename);
+  };
+
+  const originalResolveFilename = Module._resolveFilename;
+  Module._resolveFilename = function patchedResolveFilename(request, parent, isMain, options) {
+    try {
+      return originalResolveFilename.call(this, request, parent, isMain, options);
+    } catch (error) {
+      if (!request.endsWith('.js')) {
+        throw error;
+      }
+
+      const tsRequest = request.slice(0, -3) + '.ts';
+      try {
+        return originalResolveFilename.call(this, tsRequest, parent, isMain, options);
+      } catch {
+        throw error;
+      }
+    }
+  };
+}
+
+registerTypeScriptLoader();
+
+const { creerMockGateway } = require('./src/infrastructure/gateways/MockGateway.ts');
 
 const isDev = process.env.NODE_ENV === 'development';
+const CURRENT_USER_ID = 'u1';
+const mockGateway = creerMockGateway(10);
+let privateConversationsReady = false;
 
 // Port du serveur de dev local (ex. Vite) : mettre à jour ici s'il change,
 // plutôt que d'accepter n'importe quel port sur localhost.
@@ -98,6 +145,122 @@ function buildMenu() {
       : []),
   ];
   return Menu.buildFromTemplate(template);
+}
+
+function serializeMessage(message) {
+  return {
+    id: message.id,
+    conversationId: message.conversationId,
+    auteurId: message.auteurId,
+    contenu: message.contenu,
+    type: message.type,
+    envoi: message.envoi,
+    modification: message.modification,
+  };
+}
+
+async function initialiserConversationsPriveesMock() {
+  if (privateConversationsReady) {
+    return;
+  }
+
+  const seeds = [
+    {
+      userA: 'u1',
+      userB: 'u2',
+      messages: [
+        { auteurId: 'u1', contenu: 'Salut ! On se voit ce soir ?' },
+        { auteurId: 'u2', contenu: 'Oui, vers 20h, ça marche.' },
+      ],
+    },
+    {
+      userA: 'u1',
+      userB: 'u3',
+      messages: [
+        { auteurId: 'u3', contenu: 'Tu as vu le dernier sprint ?' },
+        { auteurId: 'u1', contenu: 'Oui, je le valide demain.' },
+      ],
+    },
+    {
+      userA: 'u2',
+      userB: 'u3',
+      messages: [
+        { auteurId: 'u2', contenu: 'Jai envoyé les notes.' },
+        { auteurId: 'u3', contenu: 'Merci, je les regarde.' },
+      ],
+    },
+  ];
+
+  for (const seed of seeds) {
+    const conversationId = [seed.userA, seed.userB].sort().join(':');
+    const conversation = await mockGateway.creerConversationPrivee(
+      seed.userA,
+      seed.userB
+    );
+    if (conversation.id !== conversationId) {
+      continue;
+    }
+
+    for (const messageSeed of seed.messages) {
+      await mockGateway.envoyerMessage(
+        conversation.id,
+        messageSeed.auteurId,
+        messageSeed.contenu
+      );
+    }
+  }
+
+  privateConversationsReady = true;
+}
+
+async function obtenirConversationsPriveesPourUI() {
+  await initialiserConversationsPriveesMock();
+
+  const utilisateurs = await mockGateway.obtenirTousLesUtilisateurs();
+  const byId = new Map(utilisateurs.map((user) => [user.id, user]));
+  const conversations = [];
+
+  for (let index = 0; index < utilisateurs.length; index += 1) {
+    for (let otherIndex = index + 1; otherIndex < utilisateurs.length; otherIndex += 1) {
+      const a = utilisateurs[index].id;
+      const b = utilisateurs[otherIndex].id;
+      const id = [a, b].sort().join(':');
+      const conversation = await mockGateway.obtenirConversationPrivee(id);
+      if (!conversation) {
+        continue;
+      }
+
+      const otherUserId = conversation.participantIds.find(
+        (participantId) => participantId !== CURRENT_USER_ID
+      );
+      const otherUser = otherUserId ? byId.get(otherUserId) : undefined;
+      const presence = otherUserId ? await mockGateway.obtenirPresence(otherUserId) : undefined;
+      const messages = (await mockGateway.obtenirMessagesConversation(conversation.id))
+        .slice()
+        .sort((first, second) => first.envoi - second.envoi)
+        .map(serializeMessage);
+
+      conversations.push({
+        id: conversation.id,
+        participantIds: [...conversation.participantIds],
+        users: conversation.participantIds.map((participantId) => ({
+          id: participantId,
+          pseudo: byId.get(participantId)?.pseudo ?? participantId,
+        })),
+        otherUser: otherUser
+          ? {
+              id: otherUser.id,
+              pseudo: otherUser.pseudo,
+              present: presence?.statut === 'en-ligne',
+            }
+          : null,
+        lastMessage: messages.at(-1) ?? null,
+        messages,
+      });
+    }
+  }
+
+  return conversations;
 }
 
 // Référence vers la fenêtre principale, utilisée par le verrou d'instance
@@ -268,6 +431,52 @@ if (!gotSingleInstanceLock) {
 // setWindowOpenHandler — c'est bien webviewTag: false qui fait le travail.
 app.on('web-contents-created', (_event, contents) => {
   contents.on('will-attach-webview', (event) => event.preventDefault());
+});
+
+ipcMain.handle('obtenir-utilisateurs', async () => {
+  const utilisateurs = await mockGateway.obtenirTousLesUtilisateurs();
+
+  const result = [];
+  for (const utilisateur of utilisateurs) {
+    const presence = await mockGateway.obtenirPresence(utilisateur.id);
+    result.push({
+      id: utilisateur.id,
+      pseudo: utilisateur.pseudo,
+      present: presence?.statut === 'en-ligne',
+    });
+  }
+
+  return result;
+});
+
+ipcMain.handle('obtenir-conversations-privees', async () => {
+  return obtenirConversationsPriveesPourUI();
+});
+
+ipcMain.handle('obtenir-messages-prive', async (_, conversationId) => {
+  if (!conversationId) {
+    return [];
+  }
+
+  const messages = await mockGateway.obtenirMessagesConversation(conversationId);
+  return messages
+    .slice()
+    .sort((first, second) => first.envoi - second.envoi)
+    .map(serializeMessage);
+});
+
+ipcMain.handle('envoyer-message-prive', async (_, conversationId, contenu) => {
+  const safeContenu = typeof contenu === 'string' ? contenu.trim() : '';
+  if (!conversationId || !safeContenu) {
+    return null;
+  }
+
+  const message = await mockGateway.envoyerMessage(
+    conversationId,
+    CURRENT_USER_ID,
+    safeContenu
+  );
+  return serializeMessage(message);
 });
 
 ipcMain.handle("navigate", async (_, page) => {
