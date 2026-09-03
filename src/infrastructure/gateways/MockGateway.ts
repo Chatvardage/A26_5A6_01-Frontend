@@ -1,226 +1,1018 @@
-import type { ConversationId } from '../../domain/entities/Conversation.ts';
-import type { Message } from '../../domain/entities/Message.ts';
-import type { Salon, Visibilite } from '../../domain/entities/Salon.ts';
-import type { ConversationPrivee } from '../../domain/entities/ConversationPrivee.ts';
-import type { Presence } from '../../domain/entities/Presence.ts';
-import type { EtatSaisie } from '../../domain/entities/EtatSaisie.ts';
-import type { EtatConnexion } from '../../domain/entities/EtatConnexion.ts';
-import type { Utilisateur } from '../../domain/entities/Utilisateur.ts';
+import type { Utilisateur } from '../../domain/entities/Utilisateur.js';
+import type { Message } from '../../domain/entities/Message.js';
+import type { Salon } from '../../domain/entities/Salon.js';
+import type { Presence } from '../../domain/entities/Presence.js';
+import type { ConversationId } from '../../domain/entities/Conversation.js';
+import type { ConversationPrivee } from '../../domain/entities/ConversationPrivee.js';
+import type { EtatConnexion } from '../../domain/entities/EtatConnexion.js';
+import {
+  creerUtilisateur,
+  validationPseudo,
+} from '../../domain/entities/Utilisateur.js';
+import { creerMessage, AUTEUR_SYSTEME } from '../../domain/entities/Message.js';
+import { creerSalon } from '../../domain/entities/Salon.js';
+import { creerPresence } from '../../domain/entities/Presence.js';
+import { creerEtatConnexion } from '../../domain/entities/EtatConnexion.js';
+import { creerConversationPrivee } from '../../domain/entities/ConversationPrivee.js';
 
 /**
- * Fonction retournée par chaque méthode d'abonnement à un événement temps réel.
- * L'appeler retire l'écouteur correspondant (équivalent d'un "unsubscribe"),
- * de la même manière que `onPong` dans preload.js retourne déjà une fonction
- * de désabonnement pour `ipcRenderer.removeListener`.
+ * Types d'événements pouvant être émis par le MockGateway
  */
-export type Desabonner = () => void;
+export type TypeEvenement =
+  | 'connexion'
+  | 'deconnexion'
+  | 'reconnexion'
+  | 'utilisateur-connecte'
+  | 'utilisateur-deconnecte'
+  | 'utilisateur-rejoint-salon'
+  | 'utilisateur-quitte-salon'
+  | 'salon-cree'
+  | 'salon-supprime'
+  | 'invitation-salon-envoyee'
+  | 'invitation-salon-acceptee'
+  | 'invitation-salon-refusee'
+  | 'message-recu'
+  | 'message-modifie'
+  | 'message-supprime'
+  | 'presence-mise-a-jour'
+  | 'erreur';
 
 /**
- * Options de pagination pour la récupération de l'historique des messages
- * d'une conversation (voir `paginerAvant` dans le domaine `Message`).
+ * Structure d'un événement
  */
-export interface OptionsPaginationMessages {
-  /** Ne retourne que les messages envoyés avant ce message (pagination "charger plus ancien"). */
-  readonly avantId?: string;
-  /** Nombre maximum de messages à retourner. */
-  readonly taillePage?: number;
+export interface Evenement {
+  readonly type: TypeEvenement;
+  readonly donnees: Record<string, unknown>;
+  readonly timestamp: number;
 }
 
 /**
- * ChatGateway — interface unique de communication avec le service de chat.
- *
- * C'est le seul point de contact entre la couche UI / logique applicative et le service de chat.
- * Aucun composant UI ne doit importer ou instancier directement une implémentation concrète
- * (ex. MockChatGateway) : il doit uniquement dépendre de ce type `ChatGateway`, obtenu par
- * injection (ex. passé en paramètre, fourni par un contexte/store).
- *
- * Pour cette itération, seule une implémentation simulée existe (MockChatGateway : salons, DM,
- * présence, "typing" et réseau simulés via timers/événements en mémoire, avec latence et
- * déconnexions paramétrables). Elle sera remplacée plus tard par une implémentation réseau réelle
- * (WebSocket/HTTP) sans qu'aucun composant UI n'ait à changer, puisqu'il ne connaît que ce contrat.
+ * Structure de rappel pour un événement
  */
-export interface ChatGateway {
-  // --- Connexion ----------------------------------------------------------
+export type EcouteurEvenement = (evenement: Evenement) => void;
+
+/**
+ * MockGateway — Simule un serveur de communication pour tester l'application
+ * Simule la connexion, les utilisateurs, les salons, les messages et les événements
+ */
+export class MockGateway {
+  private etatConnexion: EtatConnexion;
+  private utilisateurs: Map<string, Utilisateur> = new Map();
+  private presences: Map<string, Presence> = new Map();
+  private salons: Map<ConversationId, Salon> = new Map();
+  private conversationsPrivees: Map<ConversationId, ConversationPrivee> =
+    new Map();
+  private messages: Map<string, Message> = new Map();
+  private ecouteurs: Map<TypeEvenement, EcouteurEvenement[]> = new Map();
+  private latenceMs: number = 100; // Latence par défaut en millisecondes
+  private utilisateurActuelId: string | null = null;
+  private reconnexions: number = 0;
+  private idCompteur: number = 0;
+
+  constructor(latenceMs: number = 100) {
+    this.latenceMs = latenceMs;
+    this.etatConnexion = creerEtatConnexion('deconnecte', Date.now());
+    this.initialiserDonneesMock();
+  }
 
   /**
-   * Vérifie si un pseudo est disponible (non utilisé par un utilisateur déjà
-   * enregistré), avant de tenter de créer une session avec `connexion`.
-   * Comparaison insensible à la casse (« Alice » et « alice » sont le même
-   * pseudo). Permet une validation "au fil de la frappe" côté UI sans avoir
-   * à tenter une connexion complète.
-   *
+   * Initialise les données de test par défaut
+   */
+  private initialiserDonneesMock(): void {
+    // Créer quelques utilisateurs de test
+    const user1 = creerUtilisateur('u1', 'alice');
+    const user2 = creerUtilisateur('u2', 'bob');
+    const user3 = creerUtilisateur('u3', 'charlie');
+
+    this.utilisateurs.set(user1.id, user1);
+    this.utilisateurs.set(user2.id, user2);
+    this.utilisateurs.set(user3.id, user3);
+
+    // Créer quelques salons de test
+    const salon1 = creerSalon('s1', 'Général', user1.id, 'public', [
+      user1.id,
+      user2.id,
+    ]);
+    const salon2 = creerSalon('s2', 'Privé', user1.id, 'prive', [
+      user1.id,
+      user3.id,
+    ]);
+
+    this.salons.set(salon1.id, salon1);
+    this.salons.set(salon2.id, salon2);
+  }
+
+  /**
+   * Simule une connexion à l'application
+   * @param utilisateurId L'identifiant de l'utilisateur à connecter
+   * @returns Promise<void> qui se complète après la latence simulée
+   */
+  async simulerConnexion(utilisateurId: string): Promise<void> {
+    return this.simulerLatence(async () =>
+      this.simulerConnexionSansLatence(utilisateurId)
+    );
+  }
+
+  /**
+   * Logique synchrone de connexion, sans latence simulée. Extraite pour être
+   * réutilisable par `simulerReconnexion` sans payer une seconde fois
+   * `simulerLatence` (même principe que `ajouterUtilisateurAuSalonSansLatence`
+   * pour `accepterInvitationSalon`).
+   */
+  private simulerConnexionSansLatence(utilisateurId: string): void {
+    const utilisateur = this.utilisateurs.get(utilisateurId);
+    if (!utilisateur) {
+      this.emetEvenement('erreur', {
+        message: `Utilisateur ${utilisateurId} non trouvé`,
+      });
+      throw new Error(`Utilisateur ${utilisateurId} non trouvé`);
+    }
+
+    this.utilisateurActuelId = utilisateurId;
+    this.etatConnexion = creerEtatConnexion(
+      'connecte',
+      Date.now(),
+      this.reconnexions
+    );
+
+    // Mettre à jour la présence de l'utilisateur
+    const presence = creerPresence(utilisateurId, 'en-ligne', Date.now());
+    this.presences.set(utilisateurId, presence);
+
+    // Émettre un événement de connexion
+    this.emetEvenement('connexion', {
+      utilisateurId,
+      utilisateur,
+    });
+
+    // Émettre un message système dans les salons
+    const salonsUtilisateur = Array.from(this.salons.values()).filter(
+      (salon) =>
+        salon.membreIds.includes(utilisateurId) ||
+        salon.membresInvites.includes(utilisateurId)
+    );
+
+    for (const salon of salonsUtilisateur) {
+      const messageSysteme = creerMessage(
+        `msg-${this.genererIdUnique()}`,
+        salon.id,
+        AUTEUR_SYSTEME,
+        `${utilisateur.pseudo} a rejoint le salon`,
+        Date.now(),
+        'systeme'
+      );
+      this.messages.set(messageSysteme.id, messageSysteme);
+      this.emetEvenement('message-recu', { message: messageSysteme });
+    }
+
+    // Diffuser la présence de l'utilisateur
+    this.emetEvenement('presence-mise-a-jour', { presence });
+  }
+
+  /**
+   * Simule une déconnexion de l'application
+   * @returns Promise<void> qui se complète après la latence simulée
+   */
+  async simulerDeconnexion(): Promise<void> {
+    return this.simulerLatence(async () => {
+      if (!this.utilisateurActuelId) {
+        this.emetEvenement('erreur', {
+          message: 'Aucun utilisateur connecté',
+        });
+        throw new Error('Aucun utilisateur connecté');
+      }
+
+      const utilisateurId = this.utilisateurActuelId;
+      const utilisateur = this.utilisateurs.get(utilisateurId);
+
+      // Mettre à jour la présence
+      if (utilisateur) {
+        const presence = creerPresence(utilisateurId, 'hors-ligne', Date.now());
+        this.presences.set(utilisateurId, presence);
+        this.emetEvenement('presence-mise-a-jour', { presence });
+
+        // Émettre un message système dans les salons
+        const salonsUtilisateur = Array.from(this.salons.values()).filter(
+          (salon) =>
+            salon.membreIds.includes(utilisateurId) ||
+            salon.membresInvites.includes(utilisateurId)
+        );
+
+        for (const salon of salonsUtilisateur) {
+          const messageSysteme = creerMessage(
+            `msg-${this.genererIdUnique()}`,
+            salon.id,
+            AUTEUR_SYSTEME,
+            `${utilisateur.pseudo} a quitté le salon`,
+            Date.now(),
+            'systeme'
+          );
+          this.messages.set(messageSysteme.id, messageSysteme);
+          this.emetEvenement('message-recu', {
+            message: messageSysteme,
+          });
+        }
+      }
+
+      this.etatConnexion = creerEtatConnexion(
+        'deconnecte',
+        Date.now(),
+        this.reconnexions
+      );
+      this.utilisateurActuelId = null;
+
+      this.emetEvenement('deconnexion', { utilisateurId });
+    });
+  }
+
+  /**
+   * Simule une reconnexion après une déconnexion
+   * @param utilisateurId L'identifiant de l'utilisateur à reconnecter
+   * @returns Promise<void> qui se complète après la latence simulée
+   */
+  async simulerReconnexion(utilisateurId: string): Promise<void> {
+    return this.simulerLatence(async () => {
+      this.reconnexions++;
+
+      this.etatConnexion = creerEtatConnexion(
+        'reconnexion',
+        Date.now(),
+        this.reconnexions
+      );
+
+      this.emetEvenement('reconnexion', {
+        utilisateurId,
+        reconnexions: this.reconnexions,
+      });
+
+      try {
+        // Réutilise la logique de connexion sans repayer une seconde
+        // latence : simulerLatence() ci-dessus simule déjà l'unique
+        // aller-retour réseau de cette opération (même principe que
+        // accepterInvitationSalon / ajouterUtilisateurAuSalonSansLatence).
+        this.simulerConnexionSansLatence(utilisateurId);
+      } catch (erreur) {
+        // La tentative de reconnexion a échoué : ne pas laisser l'état
+        // coincé sur 'reconnexion' indéfiniment. obtenirUtilisateurConnecte()
+        // reste `null` dans ce cas (simulerConnexionSansLatence n'a pas pu
+        // définir utilisateurActuelId), donc 'deconnecte' reflète la réalité.
+        this.etatConnexion = creerEtatConnexion(
+          'deconnecte',
+          Date.now(),
+          this.reconnexions
+        );
+        throw erreur;
+      }
+    });
+  }
+
+  /**
+   * Définit la latence simulée pour toutes les opérations
+   * @param latenceMs Latence en millisecondes
+   */
+  definirLatence(latenceMs: number): void {
+    this.latenceMs = latenceMs;
+  }
+
+  /**
+   * Ajoute un nouvel écouteur d'événement
+   * @param typeEvenement Le type d'événement à écouter
+   * @param ecouteur La fonction à appeler quand l'événement est émis
+   */
+  ecouterEvenement(
+    typeEvenement: TypeEvenement,
+    ecouteur: EcouteurEvenement
+  ): void {
+    if (!this.ecouteurs.has(typeEvenement)) {
+      this.ecouteurs.set(typeEvenement, []);
+    }
+    this.ecouteurs.get(typeEvenement)!.push(ecouteur);
+  }
+
+  /**
+   * Retire un écouteur d'événement
+   * @param typeEvenement Le type d'événement
+   * @param ecouteur La fonction à retirer
+   */
+  retirerEcouteur(
+    typeEvenement: TypeEvenement,
+    ecouteur: EcouteurEvenement
+  ): void {
+    if (this.ecouteurs.has(typeEvenement)) {
+      const ecouteurs = this.ecouteurs.get(typeEvenement)!;
+      const index = ecouteurs.indexOf(ecouteur);
+      if (index > -1) {
+        ecouteurs.splice(index, 1);
+      }
+    }
+  }
+
+  /**
+   * Vérifie si un pseudo est disponible (aucun utilisateur enregistré ne le
+   * porte déjà), en comparaison insensible à la casse. Simule une latence
+   * réseau comme les autres opérations du gateway. Implémente
+   * `ChatGateway.pseudoDisponible` (voir aussi le TODO historique sur
+   * `validationPseudo` dans `Utilisateur.ts`, qui ne fait volontairement
+   * que la validation de FORMAT — l'unicité dépend d'un registre, donc de
+   * la couche gateway, pas du domaine pur).
    * @param pseudo Le pseudo à vérifier.
-   * @returns `true` si le pseudo est disponible, `false` s'il est déjà pris.
+   * @returns Promise<boolean> `true` si disponible, `false` si déjà pris.
    */
-  pseudoDisponible(pseudo: string): Promise<boolean>;
+  async pseudoDisponible(pseudo: string): Promise<boolean> {
+    return this.simulerLatence(async () => {
+      const pseudoNormalise = pseudo.trim().toLowerCase();
+      const dejaPris = Array.from(this.utilisateurs.values()).some(
+        (u) => u.pseudo.toLowerCase() === pseudoNormalise
+      );
+      return !dejaPris;
+    });
+  }
 
   /**
-   * Établit la connexion au service de chat pour l'utilisateur donné (crée la session locale).
-   * Une implémentation réseau ferait ici la poignée de main avec le serveur ; le mock simule un
-   * délai et peut simuler un échec/une reconnexion.
-   *
-   * @param utilisateur L'utilisateur qui se connecte (pseudo déjà validé/choisi).
-   * @returns L'état de connexion résultant (ex. `{ statut: 'connecte', ... }`).
+   * Crée un nouvel utilisateur
+   * @param pseudo Le pseudo de l'utilisateur
+   * @returns Promise<Utilisateur> L'utilisateur créé
    */
-  connexion(utilisateur: Utilisateur): Promise<EtatConnexion>;
+  async creerUtilisateur(pseudo: string): Promise<Utilisateur> {
+    return this.simulerLatence(async () => {
+      if (!validationPseudo(pseudo)) {
+        this.emetEvenement('erreur', {
+          message: `Pseudo invalide : ${pseudo}`,
+        });
+        throw new Error(`Pseudo invalide : ${pseudo}`);
+      }
+
+      // Unicité (voir pseudoDisponible) : on ne s'appuie pas uniquement sur
+      // la vérification préalable côté UI — le gateway reste la source de
+      // vérité, au cas où deux créations concurrentes arriveraient ici.
+      const disponible = await this.pseudoDisponible(pseudo);
+      if (!disponible) {
+        this.emetEvenement('erreur', {
+          message: `Pseudo déjà utilisé : ${pseudo}`,
+        });
+        throw new Error(`Pseudo déjà utilisé : ${pseudo}`);
+      }
+
+      const utilisateur = creerUtilisateur(
+        `u${this.genererIdUnique()}`,
+        pseudo
+      );
+      this.utilisateurs.set(utilisateur.id, utilisateur);
+
+      this.emetEvenement('utilisateur-connecte', { utilisateur });
+
+      return utilisateur;
+    });
+  }
 
   /**
-   * Ferme la connexion au service de chat et libère les abonnements actifs.
-   *
-   * @returns L'état de connexion résultant (ex. `{ statut: 'deconnecte', ... }`).
+   * Établit la connexion pour un utilisateur et crée sa session locale.
+   * Implémente `ChatGateway.connexion`. S'appuie sur les primitives déjà
+   * existantes du MockGateway : enregistre l'utilisateur s'il est nouveau
+   * (en revérifiant l'unicité du pseudo, défense en profondeur — voir
+   * `creerUtilisateur`), puis délègue à `simulerConnexion` pour l'état de
+   * connexion, la présence et les événements.
+   * @param utilisateur L'utilisateur qui se connecte (pseudo déjà validé côté UI).
+   * @returns Promise<EtatConnexion> L'état de connexion résultant.
+   * @throws Si le pseudo est déjà utilisé par un autre utilisateur enregistré.
    */
-  deconnexion(): Promise<void>;
+  async connexion(utilisateur: Utilisateur): Promise<EtatConnexion> {
+    const dejaEnregistre = this.utilisateurs.has(utilisateur.id);
+
+    if (!dejaEnregistre) {
+      const disponible = await this.pseudoDisponible(utilisateur.pseudo);
+      if (!disponible) {
+        this.emetEvenement('erreur', {
+          message: `Pseudo déjà utilisé : ${utilisateur.pseudo}`,
+        });
+        throw new Error(`Pseudo déjà utilisé : ${utilisateur.pseudo}`);
+      }
+      this.utilisateurs.set(utilisateur.id, utilisateur);
+    }
+
+    await this.simulerConnexion(utilisateur.id);
+    return this.etatConnexion;
+  }
 
   /**
-   * Retourne l'état de connexion courant (connecté / déconnecté / reconnexion),
-   * pour l'affichage immédiat sans attendre un événement `onEtatConnexion`.
-   *
-   * @returns L'état de connexion courant (ex. `{ statut: 'connecte', ... }`).
+   * Récupère un utilisateur par son ID
+   * @param utilisateurId L'identifiant de l'utilisateur
+   * @returns Promise<Utilisateur | undefined> L'utilisateur ou undefined
    */
-  obtenirEtatConnexion(): EtatConnexion;
-
-  // --- Salons ---------------------------------------------------------------
+  async obtenirUtilisateur(
+    utilisateurId: string
+  ): Promise<Utilisateur | undefined> {
+    return this.simulerLatence(async () => {
+      return this.utilisateurs.get(utilisateurId);
+    });
+  }
 
   /**
-   * Retourne la liste des salons visibles par l'utilisateur courant
-   * (salons publics, et salons privés dont il est déjà membre).
-   *
-   * @returns La liste des salons visibles par l'utilisateur courant.
+   * Récupère tous les utilisateurs
+   * @returns Promise<Utilisateur[]> Liste de tous les utilisateurs
    */
-  obtenirSalons(): Promise<Salon[]>;
+  async obtenirTousLesUtilisateurs(): Promise<Utilisateur[]> {
+    return this.simulerLatence(async () => {
+      return Array.from(this.utilisateurs.values());
+    });
+  }
 
   /**
-   * Crée un nouveau salon dont l'utilisateur courant devient l'hôte.
-   *
-   * @param nom Nom du salon à créer.
-   * @param visibilite Visibilité du salon ('public' par défaut, ou 'prive').
-   *
-   * @returns Le salon créé, avec son identifiant unique.
+   * Récupère la présence d'un utilisateur
+   * @param utilisateurId L'identifiant de l'utilisateur
+   * @returns Promise<Presence | undefined> La présence de l'utilisateur
    */
-  creerSalon(nom: string, visibilite?: Visibilite): Promise<Salon>;
+  async obtenirPresence(utilisateurId: string): Promise<Presence | undefined> {
+    return this.simulerLatence(async () => {
+      return this.presences.get(utilisateurId);
+    });
+  }
 
   /**
-   * Fait rejoindre l'utilisateur courant à un salon existant.
-   * Pour un salon privé, l'utilisateur doit avoir été invité au préalable (voir `onSalon`
-   * pour être notifié d'une invitation reçue).
-   *
-   * @param salonId Identifiant du salon à rejoindre.
-   * @throws Rejette la promesse si le salon n'existe pas, ou si le salon est privé et que
-   * l'utilisateur n'y est pas invité.
-   *
-   * @returns Le salon rejoint, avec ses informations à jour (membres, messages, etc.).
+   * Crée un nouveau salon de discussion
+   * @param nom Nom du salon
+   * @param hoteId Identifiant de l'hôte
+   * @param visibilite Visibilité du salon ('public' ou 'prive')
+   * @returns Promise<Salon> Le salon créé
    */
-  rejoindreSalon(salonId: ConversationId): Promise<Salon>;
+  async creerSalon(
+    nom: string,
+    hoteId: string,
+    visibilite: 'public' | 'prive' = 'public'
+  ): Promise<Salon> {
+    return this.simulerLatence(async () => {
+      const utilisateur = this.utilisateurs.get(hoteId);
+      if (!utilisateur) {
+        this.emetEvenement('erreur', {
+          message: `Hôte ${hoteId} non trouvé`,
+        });
+        throw new Error(`Hôte ${hoteId} non trouvé`);
+      }
 
-  // --- Messages ---------------------------------------------------------------
+      const salon = creerSalon(
+        `s${this.genererIdUnique()}`,
+        nom,
+        hoteId,
+        visibilite
+      );
+      this.salons.set(salon.id, salon);
+
+      this.emetEvenement('salon-cree', { salon });
+
+      return salon;
+    });
+  }
 
   /**
-   * Envoie un message texte dans une conversation (salon ou DM).
-   * L'auteur est déduit de la session courante (voir `connect`) ; l'horodatage est
-   * généré par le gateway.
-   *
-   * @param conversationId Identifiant de la conversation (salon ou DM) dans laquelle envoyer le message.
-   * @param contenu Contenu texte du message à envoyer.
-   *
-   * @returns Le message envoyé, avec son identifiant unique et son horodatage.
+   * Récupère un salon par son ID
+   * @param salonId L'identifiant du salon
+   * @returns Promise<Salon | undefined> Le salon ou undefined
    */
-  envoyerMessage(
+  async obtenirSalon(salonId: ConversationId): Promise<Salon | undefined> {
+    return this.simulerLatence(async () => {
+      return this.salons.get(salonId);
+    });
+  }
+
+  /**
+   * Récupère tous les salons
+   * @returns Promise<Salon[]> Liste de tous les salons
+   */
+  async obtenirTousLesSalons(): Promise<Salon[]> {
+    return this.simulerLatence(async () => {
+      return Array.from(this.salons.values());
+    });
+  }
+
+  /** Invite localement un utilisateur dans un salon privé. Seul l'hôte peut inviter. */
+  async inviterUtilisateurAuSalon(
+    salonId: ConversationId,
+    utilisateurId: string,
+    hoteId: string
+  ): Promise<Salon> {
+    return this.simulerLatence(async () => {
+      const salon = this.salons.get(salonId);
+      if (!salon) throw new Error(`Salon ${salonId} non trouvé`);
+      if (salon.visibilite === 'public') {
+        throw new Error(
+          `Les invitations sont désactivées pour le salon public ${salonId}`
+        );
+      }
+      if (salon.hoteId !== hoteId) {
+        throw new Error(`Seul l'hôte peut inviter dans le salon ${salonId}`);
+      }
+      if (!this.utilisateurs.has(utilisateurId)) {
+        throw new Error(`Utilisateur ${utilisateurId} non trouvé`);
+      }
+      if (salon.membreIds.includes(utilisateurId)) return salon;
+
+      const salonMisAJour = salon.membresInvites.includes(utilisateurId)
+        ? salon
+        : {
+          ...salon,
+          membresInvites: [...salon.membresInvites, utilisateurId],
+        };
+      this.salons.set(salonId, salonMisAJour);
+      this.emetEvenement('invitation-salon-envoyee', {
+        salonId,
+        utilisateurId,
+        hoteId,
+      });
+      return salonMisAJour;
+    });
+  }
+
+  /** Retourne les invitations en attente d'un utilisateur. */
+  async obtenirInvitationsUtilisateur(utilisateurId: string): Promise<Salon[]> {
+    return this.simulerLatence(async () =>
+      Array.from(this.salons.values()).filter((salon) =>
+        salon.membresInvites.includes(utilisateurId)
+      )
+    );
+  }
+
+  /** Accepte une invitation et ajoute l'utilisateur aux membres du salon. */
+  async accepterInvitationSalon(
+    salonId: ConversationId,
+    utilisateurId: string
+  ): Promise<Salon> {
+    return this.simulerLatence(async () => {
+      const salon = this.salons.get(salonId);
+      if (!salon) throw new Error(`Salon ${salonId} non trouvé`);
+      if (!salon.membresInvites.includes(utilisateurId)) {
+        throw new Error(`Aucune invitation au salon ${salonId}`);
+      }
+      // Réutilise la logique d'ajout sans repayer une seconde latence :
+      // simulerLatence() ci-dessus simule déjà l'unique aller-retour réseau
+      // de cette opération.
+      const salonMisAJour = this.ajouterUtilisateurAuSalonSansLatence(
+        salonId,
+        utilisateurId
+      );
+      this.emetEvenement('invitation-salon-acceptee', {
+        salonId,
+        utilisateurId,
+      });
+      return salonMisAJour;
+    });
+  }
+
+  /** Refuse une invitation sans donner accès au salon. */
+  async refuserInvitationSalon(
+    salonId: ConversationId,
+    utilisateurId: string
+  ): Promise<Salon> {
+    return this.simulerLatence(async () => {
+      const salon = this.salons.get(salonId);
+      if (!salon) throw new Error(`Salon ${salonId} non trouvé`);
+      if (!salon.membresInvites.includes(utilisateurId)) {
+        throw new Error(`Aucune invitation au salon ${salonId}`);
+      }
+      const salonMisAJour = {
+        ...salon,
+        membresInvites: salon.membresInvites.filter(
+          (id) => id !== utilisateurId
+        ),
+      };
+      this.salons.set(salonId, salonMisAJour);
+      this.emetEvenement('invitation-salon-refusee', {
+        salonId,
+        utilisateurId,
+      });
+      return salonMisAJour;
+    });
+  }
+
+  /**
+   * Ajoute un utilisateur à un salon
+   * @param salonId L'identifiant du salon
+   * @param utilisateurId L'identifiant de l'utilisateur
+   * @returns Promise<Salon> Le salon mis à jour
+   */
+  async ajouterUtilisateurAuSalon(
+    salonId: ConversationId,
+    utilisateurId: string
+  ): Promise<Salon> {
+    return this.simulerLatence(async () =>
+      this.ajouterUtilisateurAuSalonSansLatence(salonId, utilisateurId)
+    );
+  }
+
+  /**
+   * Logique synchrone d'ajout d'un utilisateur à un salon, sans latence simulée.
+   * Extraite de `ajouterUtilisateurAuSalon` pour être réutilisable par
+   * `accepterInvitationSalon` sans payer une seconde fois `simulerLatence`
+   * (chaque méthode publique ne doit simuler qu'un seul aller-retour réseau).
+   */
+  private ajouterUtilisateurAuSalonSansLatence(
+    salonId: ConversationId,
+    utilisateurId: string
+  ): Salon {
+    const salon = this.salons.get(salonId);
+    if (!salon) {
+      this.emetEvenement('erreur', {
+        message: `Salon ${salonId} non trouvé`,
+      });
+      throw new Error(`Salon ${salonId} non trouvé`);
+    }
+
+    const utilisateur = this.utilisateurs.get(utilisateurId);
+    if (!utilisateur) {
+      this.emetEvenement('erreur', {
+        message: `Utilisateur ${utilisateurId} non trouvé`,
+      });
+      throw new Error(`Utilisateur ${utilisateurId} non trouvé`);
+    }
+
+    if (!salon.membreIds.includes(utilisateurId)) {
+      const estInvite = salon.membresInvites.includes(utilisateurId);
+      if (salon.visibilite === 'prive' && !estInvite) {
+        this.emetEvenement('erreur', {
+          message: `Accès refusé au salon privé ${salonId}`,
+        });
+        throw new Error(`Accès refusé au salon privé ${salonId}`);
+      }
+      const salonMisAJour = {
+        ...salon,
+        membreIds: [...salon.membreIds, utilisateurId],
+        membresInvites: estInvite
+          ? salon.membresInvites.filter((id) => id !== utilisateurId)
+          : salon.membresInvites,
+      };
+      this.salons.set(salonId, salonMisAJour);
+      this.emetEvenement('utilisateur-rejoint-salon', {
+        salonId,
+        utilisateurId,
+        utilisateur,
+      });
+
+      // Créer un message système
+      const messageSysteme = creerMessage(
+        `msg-${this.genererIdUnique()}`,
+        salonId,
+        AUTEUR_SYSTEME,
+        `${utilisateur.pseudo} a rejoint le salon`,
+        Date.now(),
+        'systeme'
+      );
+      this.messages.set(messageSysteme.id, messageSysteme);
+      this.emetEvenement('message-recu', { message: messageSysteme });
+
+      return salonMisAJour;
+    }
+
+    return salon;
+  }
+
+  /**
+   * Retire un utilisateur d'un salon
+   * @param salonId L'identifiant du salon
+   * @param utilisateurId L'identifiant de l'utilisateur
+   * @returns Promise<Salon> Le salon mis à jour
+   */
+  async retirerUtilisateurDuSalon(
+    salonId: ConversationId,
+    utilisateurId: string
+  ): Promise<Salon> {
+    return this.simulerLatence(async () => {
+      const salon = this.salons.get(salonId);
+      if (!salon) {
+        this.emetEvenement('erreur', {
+          message: `Salon ${salonId} non trouvé`,
+        });
+        throw new Error(`Salon ${salonId} non trouvé`);
+      }
+
+      const utilisateur = this.utilisateurs.get(utilisateurId);
+      if (!utilisateur) {
+        this.emetEvenement('erreur', {
+          message: `Utilisateur ${utilisateurId} non trouvé`,
+        });
+        throw new Error(`Utilisateur ${utilisateurId} non trouvé`);
+      }
+
+      if (salon.membreIds.includes(utilisateurId)) {
+        if (salon.hoteId === utilisateurId) {
+          this.emetEvenement('erreur', {
+            message: `L'hôte ${utilisateurId} ne peut pas quitter le salon ${salonId}`,
+          });
+          throw new Error(
+            `L'hôte ${utilisateurId} ne peut pas quitter le salon ${salonId}`
+          );
+        }
+        const salonMisAJour = {
+          ...salon,
+          membreIds: salon.membreIds.filter((id) => id !== utilisateurId),
+        };
+        this.salons.set(salonId, salonMisAJour);
+
+        this.emetEvenement('utilisateur-quitte-salon', {
+          salonId,
+          utilisateurId,
+          utilisateur,
+        });
+
+        // Créer un message système
+        const messageSysteme = creerMessage(
+          `msg-${this.genererIdUnique()}`,
+          salonId,
+          AUTEUR_SYSTEME,
+          `${utilisateur.pseudo} a quitté le salon`,
+          Date.now(),
+          'systeme'
+        );
+        this.messages.set(messageSysteme.id, messageSysteme);
+        this.emetEvenement('message-recu', { message: messageSysteme });
+
+        return salonMisAJour;
+      }
+
+      return salon;
+    });
+  }
+
+  /**
+   * Supprime un salon
+   * @param salonId L'identifiant du salon
+   * @returns Promise<void>
+   */
+  async supprimerSalon(salonId: ConversationId): Promise<void> {
+    return this.simulerLatence(async () => {
+      const salon = this.salons.get(salonId);
+      if (!salon) {
+        this.emetEvenement('erreur', {
+          message: `Salon ${salonId} non trouvé`,
+        });
+        throw new Error(`Salon ${salonId} non trouvé`);
+      }
+
+      this.salons.delete(salonId);
+      this.emetEvenement('salon-supprime', { salonId });
+    });
+  }
+
+  /**
+   * Envoie un message dans une conversation
+   * @param conversationId L'identifiant de la conversation
+   * @param auteurId L'identifiant de l'auteur
+   * @param contenu Le contenu du message
+   * @returns Promise<Message> Le message envoyé
+   */
+  async envoyerMessage(
     conversationId: ConversationId,
+    auteurId: string,
     contenu: string
-  ): Promise<Message>;
+  ): Promise<Message> {
+    return this.simulerLatence(async () => {
+      const auteur = this.utilisateurs.get(auteurId);
+      if (!auteur) {
+        this.emetEvenement('erreur', {
+          message: `Auteur ${auteurId} non trouvé`,
+        });
+        throw new Error(`Auteur ${auteurId} non trouvé`);
+      }
+
+      const salon = this.salons.get(conversationId);
+      const conversationPrivee = this.conversationsPrivees.get(conversationId);
+
+      if (salon) {
+        if (!salon.membreIds.includes(auteurId)) {
+          throw new Error(`Accès refusé au salon ${conversationId}`);
+        }
+      } else if (conversationPrivee) {
+        if (!conversationPrivee.participantIds.includes(auteurId)) {
+          throw new Error(`Accès refusé à la conversation ${conversationId}`);
+        }
+      } else {
+        throw new Error(`Conversation ${conversationId} introuvable`);
+      }
+
+      const message = creerMessage(
+        `msg-${this.genererIdUnique()}`,
+        conversationId,
+        auteurId,
+        contenu,
+        Date.now(),
+        'texte'
+      );
+
+      this.messages.set(message.id, message);
+      this.emetEvenement('message-recu', { message });
+
+      return message;
+    });
+  }
 
   /**
-   * Récupère une page de l'historique des messages d'une conversation, du plus ancien
-   * au plus récent (voir `OptionsPaginationMessages` pour la pagination "charger plus ancien").
-   *
-   * @param conversationId Identifiant de la conversation (salon ou DM) dont on veut l'historique.
-   * @param options Options de pagination (voir `OptionsPaginationMessages`).
-   *
-   * @returns La liste des messages récupérés, triés du plus ancien au plus récent.
+   * Récupère un message par son ID
+   * @param messageId L'identifiant du message
+   * @returns Promise<Message | undefined> Le message ou undefined
    */
-  obtenirMessages(
-    conversationId: ConversationId,
-    options?: OptionsPaginationMessages
-  ): Promise<Message[]>;
-
-  // --- Messages privés (DM) ------------------------------------------------------
+  async obtenirMessage(messageId: string): Promise<Message | undefined> {
+    return this.simulerLatence(async () => {
+      return this.messages.get(messageId);
+    });
+  }
 
   /**
-   * Ouvre la conversation privée avec un autre utilisateur, ou retourne celle déjà
-   * existante entre les deux utilisateurs (voir `creerDmId`, symétrique aux deux participants).
-   *
-   * @param autreUtilisateurId Identifiant de l'autre utilisateur avec lequel ouvrir la conversation privée.
-   *
-   * @returns La conversation privée ouverte ou existante, avec ses informations à jour (membres, messages, etc.).
+   * Récupère tous les messages d'une conversation
+   * @param conversationId L'identifiant de la conversation
+   * @returns Promise<Message[]> Liste des messages
    */
-  ouvrirConversationPrivee(
-    autreUtilisateurId: string
-  ): Promise<ConversationPrivee>;
-
-  // --- Présence et indicateur de saisie ------------------------------------------
+  async obtenirMessagesConversation(
+    conversationId: ConversationId
+  ): Promise<Message[]> {
+    return this.simulerLatence(async () => {
+      return Array.from(this.messages.values()).filter(
+        (message) => message.conversationId === conversationId
+      );
+    });
+  }
 
   /**
-   * Signale que l'utilisateur courant est (ou n'est plus) en train d'écrire dans une
-   * conversation. Le gateway se charge de faire expirer l'état côté abonnés (voir
-   * `DELAI_EXPIRATION_MS` dans le domaine `EtatSaisie`) si aucune actualisation ne suit.
-   *
-   * @param conversationId Identifiant de la conversation (salon ou DM) dans laquelle l'utilisateur est en train d'écrire.
-   * @param enTrainDEcrire `true` si l'utilisateur est en train d'écrire, `false` sinon.
-   *
-   * @returns Une promesse résolue lorsque l'état de saisie a été mis à jour côté serveur.
+   * Modifie un message
+   * @param messageId L'identifiant du message
+   * @param contenuNouveau Le nouveau contenu
+   * @returns Promise<Message> Le message modifié
    */
-  fixerSaisie(
-    conversationId: ConversationId,
-    enTrainDEcrire: boolean
-  ): Promise<void>;
+  async modifierMessage(
+    messageId: string,
+    contenuNouveau: string
+  ): Promise<Message> {
+    return this.simulerLatence(async () => {
+      const message = this.messages.get(messageId);
+      if (!message) {
+        this.emetEvenement('erreur', {
+          message: `Message ${messageId} non trouvé`,
+        });
+        throw new Error(`Message ${messageId} non trouvé`);
+      }
 
-  // --- Événements temps réel ----------------------------------------------------
-  // Un canal nommé par événement métier (jamais de `on(nomEvenement, cb)` générique),
-  // même principe que les canaux IPC fixes de preload.js. Chaque abonnement retourne
-  // une fonction de désabonnement à appeler (ex. dans un cleanup de composant/hook).
+      const messageModifie = {
+        ...message,
+        contenu: contenuNouveau,
+        modification: Date.now(),
+      };
 
-  /**
-   * Un nouveau message a été reçu dans une conversation (salon ou DM) suivie par l'utilisateur.
-   *
-   * @param callback Fonction appelée à chaque nouveau message reçu, avec le message en paramètre.
-   *
-   * @returns Une fonction de désabonnement à appeler pour arrêter d'écouter les nouveaux messages.
-   */
-  lorsMessage(callback: (message: Message) => void): Desabonner;
+      this.messages.set(messageId, messageModifie);
+      this.emetEvenement('message-modifie', { message: messageModifie });
 
-  /**
-   * La présence (connecté / déconnecté) d'un utilisateur a changé.
-   *
-   * @param callback Fonction appelée à chaque changement de présence, avec la présence en paramètre.
-   *
-   * @returns Une fonction de désabonnement à appeler pour arrêter d'écouter les changements de présence.
-   */
-  onPresence(callback: (presence: Presence) => void): Desabonner;
+      return messageModifie;
+    });
+  }
 
   /**
-   * L'état de saisie (en train d'écrire / inactif) d'un utilisateur a changé dans une conversation suivie par l'utilisateur.
-   *
-   * @param callback Fonction appelée à chaque changement d'état de saisie, avec l'état de saisie en paramètre.
-   *
-   * @returns Une fonction de désabonnement à appeler pour arrêter d'écouter les changements d'état de saisie.
+   * Supprime un message
+   * @param messageId L'identifiant du message
+   * @returns Promise<void>
    */
-  onSaisie(callback: (etat: EtatSaisie) => void): Desabonner;
+  async supprimerMessage(messageId: string): Promise<void> {
+    return this.simulerLatence(async () => {
+      const message = this.messages.get(messageId);
+      if (!message) {
+        this.emetEvenement('erreur', {
+          message: `Message ${messageId} non trouvé`,
+        });
+        throw new Error(`Message ${messageId} non trouvé`);
+      }
+
+      this.messages.delete(messageId);
+      this.emetEvenement('message-supprime', { messageId });
+    });
+  }
 
   /**
-   * L'état de connexion (connecté / déconnecté / reconnexion) a changé.
-   *
-   * @param callback Fonction appelée à chaque changement d'état de connexion, avec l'état de connexion en paramètre.
-   *
-   * @returns Une fonction de désabonnement à appeler pour arrêter d'écouter les changements d'état de connexion.
+   * Crée une conversation privée entre deux utilisateurs
+   * @param utilisateurAId L'identifiant du premier utilisateur
+   * @param utilisateurBId L'identifiant du deuxième utilisateur
+   * @returns Promise<ConversationPrivee> La conversation privée créée
    */
-  onEtatConnexion(callback: (etat: EtatConnexion) => void): Desabonner;
+  async creerConversationPrivee(
+    utilisateurAId: string,
+    utilisateurBId: string
+  ): Promise<ConversationPrivee> {
+    return this.simulerLatence(async () => {
+      const userA = this.utilisateurs.get(utilisateurAId);
+      const userB = this.utilisateurs.get(utilisateurBId);
+
+      if (!userA || !userB) {
+        this.emetEvenement('erreur', {
+          message: "Un des utilisateurs n'a pas été trouvé",
+        });
+        throw new Error("Un des utilisateurs n'a pas été trouvé");
+      }
+
+      const conversation = creerConversationPrivee(
+        utilisateurAId,
+        utilisateurBId
+      );
+      this.conversationsPrivees.set(conversation.id, conversation);
+
+      return conversation;
+    });
+  }
 
   /**
-   * Un salon a été créé, modifié ou supprimé, ou l'utilisateur a été invité à un salon privé.
-   *
-   * @param callback Fonction appelée à chaque changement de salon, avec le salon en paramètre.
-   *
-   * @returns Une fonction de désabonnement à appeler pour arrêter d'écouter les changements de salon.
+   * Récupère une conversation privée par son ID
+   * @param conversationId L'identifiant de la conversation
+   * @returns Promise<ConversationPrivee | undefined> La conversation ou undefined
    */
-  onSalon(callback: (salon: Salon) => void): Desabonner;
+  async obtenirConversationPrivee(
+    conversationId: ConversationId
+  ): Promise<ConversationPrivee | undefined> {
+    return this.simulerLatence(async () => {
+      return this.conversationsPrivees.get(conversationId);
+    });
+  }
+
+  /**
+   * Obtient l'état de connexion actuel
+   * @returns EtatConnexion L'état de connexion
+   */
+  obtenirEtatConnexion(): EtatConnexion {
+    return this.etatConnexion;
+  }
+
+  /**
+   * Obtient l'utilisateur actuellement connecté
+   * @returns string | null L'identifiant de l'utilisateur ou null
+   */
+  obtenirUtilisateurConnecte(): string | null {
+    return this.utilisateurActuelId;
+  }
+
+  /**
+   * Réinitialise le MockGateway à son état initial
+   */
+  reinitialiser(): void {
+    this.utilisateurs.clear();
+    this.presences.clear();
+    this.salons.clear();
+    this.conversationsPrivees.clear();
+    this.messages.clear();
+    this.ecouteurs.clear();
+    this.utilisateurActuelId = null;
+    this.reconnexions = 0;
+    this.idCompteur = 0;
+    this.etatConnexion = creerEtatConnexion('deconnecte', Date.now());
+  }
+
+  /**
+   * Émet un événement à tous les écouteurs enregistrés
+   * @param type Le type d'événement
+   * @param donnees Les données de l'événement
+   */
+  private emetEvenement(
+    type: TypeEvenement,
+    donnees: Record<string, unknown>
+  ): void {
+    const evenement: Evenement = {
+      type,
+      donnees,
+      timestamp: Date.now(),
+    };
+
+    if (this.ecouteurs.has(type)) {
+      this.ecouteurs.get(type)!.forEach((ecouteur) => {
+        ecouteur(evenement);
+      });
+    }
+  }
+
+  /**
+   * Simule une latence réseau
+   * @param operation La fonction asynchrone à exécuter
+   * @returns Promise<T> Le résultat de l'opération
+   */
+  private async simulerLatence<T>(operation: () => Promise<T>): Promise<T> {
+    await this.attendreLatence();
+    return operation();
+  }
+
+  /**
+   * Attend la latence définie
+   * @returns Promise<void>
+   */
+  private attendreLatence(): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, this.latenceMs);
+    });
+  }
+
+  /**
+   * Génère un identifiant unique
+   * @returns string Un identifiant unique
+   */
+  private genererIdUnique(): string {
+    return String(this.idCompteur++);
+  }
+}
+
+/**
+ * Crée une instance du MockGateway avec une latence par défaut
+ * @param latenceMs Latence en millisecondes
+ * @returns MockGateway Une instance du MockGateway
+ */
+export function creerMockGateway(latenceMs: number = 100): MockGateway {
+  return new MockGateway(latenceMs);
 }

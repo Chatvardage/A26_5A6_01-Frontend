@@ -31,16 +31,28 @@ export interface OptionsPaginationMessages {
  *
  * C'est le seul point de contact entre la couche UI / logique applicative et le service de chat.
  * Aucun composant UI ne doit importer ou instancier directement une implémentation concrète
- * (ex. MockGateway) : il doit uniquement dépendre de ce type `ChatGateway`, obtenu par
+ * (ex. MockChatGateway) : il doit uniquement dépendre de ce type `ChatGateway`, obtenu par
  * injection (ex. passé en paramètre, fourni par un contexte/store).
  *
- * Pour cette itération, seule une implémentation simulée existe (MockGateway : salons, DM,
+ * Pour cette itération, seule une implémentation simulée existe (MockChatGateway : salons, DM,
  * présence, "typing" et réseau simulés via timers/événements en mémoire, avec latence et
  * déconnexions paramétrables). Elle sera remplacée plus tard par une implémentation réseau réelle
  * (WebSocket/HTTP) sans qu'aucun composant UI n'ait à changer, puisqu'il ne connaît que ce contrat.
  */
 export interface ChatGateway {
   // --- Connexion ----------------------------------------------------------
+
+  /**
+   * Vérifie si un pseudo est disponible (non utilisé par un utilisateur déjà
+   * enregistré), avant de tenter de créer une session avec `connexion`.
+   * Comparaison insensible à la casse (« Alice » et « alice » sont le même
+   * pseudo). Permet une validation "au fil de la frappe" côté UI sans avoir
+   * à tenter une connexion complète.
+   *
+   * @param pseudo Le pseudo à vérifier.
+   * @returns `true` si le pseudo est disponible, `false` s'il est déjà pris.
+   */
+  pseudoDisponible(pseudo: string): Promise<boolean>;
 
   /**
    * Établit la connexion au service de chat pour l'utilisateur donné (crée la session locale).
@@ -99,28 +111,6 @@ export interface ChatGateway {
    * @returns Le salon rejoint, avec ses informations à jour (membres, messages, etc.).
    */
   rejoindreSalon(salonId: ConversationId): Promise<Salon>;
-
-  /** Invite un utilisateur dans un salon. Seul l'hôte peut effectuer l'action. */
-  inviterUtilisateurAuSalon(
-    salonId: ConversationId,
-    utilisateurId: string,
-    hoteId: string
-  ): Promise<Salon>;
-
-  /** Retourne les invitations de salon en attente pour un utilisateur. */
-  obtenirInvitationsUtilisateur(utilisateurId: string): Promise<Salon[]>;
-
-  /** Accepte une invitation et ajoute l'utilisateur aux membres du salon. */
-  accepterInvitationSalon(
-    salonId: ConversationId,
-    utilisateurId: string
-  ): Promise<Salon>;
-
-  /** Refuse et retire une invitation sans accorder l'accès au salon. */
-  refuserInvitationSalon(
-    salonId: ConversationId,
-    utilisateurId: string
-  ): Promise<Salon>;
 
   // --- Messages ---------------------------------------------------------------
 
