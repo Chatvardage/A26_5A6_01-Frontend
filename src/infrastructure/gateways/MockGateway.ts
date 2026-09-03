@@ -455,7 +455,10 @@ export class MockGateway {
       if (!salon.membresInvites.includes(utilisateurId)) {
         throw new Error(`Aucune invitation au salon ${salonId}`);
       }
-      const salonMisAJour = await this.ajouterUtilisateurAuSalon(
+      // Réutilise la logique d'ajout sans repayer une seconde latence :
+      // simulerLatence() ci-dessus simule déjà l'unique aller-retour réseau
+      // de cette opération.
+      const salonMisAJour = this.ajouterUtilisateurAuSalonSansLatence(
         salonId,
         utilisateurId
       );
@@ -503,62 +506,75 @@ export class MockGateway {
     salonId: ConversationId,
     utilisateurId: string
   ): Promise<Salon> {
-    return this.simulerLatence(async () => {
-      const salon = this.salons.get(salonId);
-      if (!salon) {
+    return this.simulerLatence(async () =>
+      this.ajouterUtilisateurAuSalonSansLatence(salonId, utilisateurId)
+    );
+  }
+
+  /**
+   * Logique synchrone d'ajout d'un utilisateur à un salon, sans latence simulée.
+   * Extraite de `ajouterUtilisateurAuSalon` pour être réutilisable par
+   * `accepterInvitationSalon` sans payer une seconde fois `simulerLatence`
+   * (chaque méthode publique ne doit simuler qu'un seul aller-retour réseau).
+   */
+  private ajouterUtilisateurAuSalonSansLatence(
+    salonId: ConversationId,
+    utilisateurId: string
+  ): Salon {
+    const salon = this.salons.get(salonId);
+    if (!salon) {
+      this.emetEvenement('erreur', {
+        message: `Salon ${salonId} non trouvé`,
+      });
+      throw new Error(`Salon ${salonId} non trouvé`);
+    }
+
+    const utilisateur = this.utilisateurs.get(utilisateurId);
+    if (!utilisateur) {
+      this.emetEvenement('erreur', {
+        message: `Utilisateur ${utilisateurId} non trouvé`,
+      });
+      throw new Error(`Utilisateur ${utilisateurId} non trouvé`);
+    }
+
+    if (!salon.membreIds.includes(utilisateurId)) {
+      const estInvite = salon.membresInvites.includes(utilisateurId);
+      if (salon.visibilite === 'prive' && !estInvite) {
         this.emetEvenement('erreur', {
-          message: `Salon ${salonId} non trouvé`,
+          message: `Accès refusé au salon privé ${salonId}`,
         });
-        throw new Error(`Salon ${salonId} non trouvé`);
+        throw new Error(`Accès refusé au salon privé ${salonId}`);
       }
+      const salonMisAJour = {
+        ...salon,
+        membreIds: [...salon.membreIds, utilisateurId],
+        membresInvites: estInvite
+          ? salon.membresInvites.filter((id) => id !== utilisateurId)
+          : salon.membresInvites,
+      };
+      this.salons.set(salonId, salonMisAJour);
+      this.emetEvenement('utilisateur-rejoint-salon', {
+        salonId,
+        utilisateurId,
+        utilisateur,
+      });
 
-      const utilisateur = this.utilisateurs.get(utilisateurId);
-      if (!utilisateur) {
-        this.emetEvenement('erreur', {
-          message: `Utilisateur ${utilisateurId} non trouvé`,
-        });
-        throw new Error(`Utilisateur ${utilisateurId} non trouvé`);
-      }
+      // Créer un message système
+      const messageSysteme = creerMessage(
+        `msg-${this.genererIdUnique()}`,
+        salonId,
+        AUTEUR_SYSTEME,
+        `${utilisateur.pseudo} a rejoint le salon`,
+        Date.now(),
+        'systeme'
+      );
+      this.messages.set(messageSysteme.id, messageSysteme);
+      this.emetEvenement('message-recu', { message: messageSysteme });
 
-      if (!salon.membreIds.includes(utilisateurId)) {
-        const estInvite = salon.membresInvites.includes(utilisateurId);
-        if (salon.visibilite === 'prive' && !estInvite) {
-          this.emetEvenement('erreur', {
-            message: `Accès refusé au salon privé ${salonId}`,
-          });
-          throw new Error(`Accès refusé au salon privé ${salonId}`);
-        }
-        const salonMisAJour = {
-          ...salon,
-          membreIds: [...salon.membreIds, utilisateurId],
-          membresInvites: estInvite
-            ? salon.membresInvites.filter((id) => id !== utilisateurId)
-            : salon.membresInvites,
-        };
-        this.salons.set(salonId, salonMisAJour);
-        this.emetEvenement('utilisateur-rejoint-salon', {
-          salonId,
-          utilisateurId,
-          utilisateur,
-        });
+      return salonMisAJour;
+    }
 
-        // Créer un message système
-        const messageSysteme = creerMessage(
-          `msg-${this.genererIdUnique()}`,
-          salonId,
-          AUTEUR_SYSTEME,
-          `${utilisateur.pseudo} a rejoint le salon`,
-          Date.now(),
-          'systeme'
-        );
-        this.messages.set(messageSysteme.id, messageSysteme);
-        this.emetEvenement('message-recu', { message: messageSysteme });
-
-        return salonMisAJour;
-      }
-
-      return salon;
-    });
+    return salon;
   }
 
   /**

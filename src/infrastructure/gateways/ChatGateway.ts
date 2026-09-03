@@ -31,10 +31,10 @@ export interface OptionsPaginationMessages {
  *
  * C'est le seul point de contact entre la couche UI / logique applicative et le service de chat.
  * Aucun composant UI ne doit importer ou instancier directement une implémentation concrète
- * (ex. MockChatGateway) : il doit uniquement dépendre de ce type `ChatGateway`, obtenu par
+ * (ex. MockGateway) : il doit uniquement dépendre de ce type `ChatGateway`, obtenu par
  * injection (ex. passé en paramètre, fourni par un contexte/store).
  *
- * Pour cette itération, seule une implémentation simulée existe (MockChatGateway : salons, DM,
+ * Pour cette itération, seule une implémentation simulée existe (MockGateway : salons, DM,
  * présence, "typing" et réseau simulés via timers/événements en mémoire, avec latence et
  * déconnexions paramétrables). Elle sera remplacée plus tard par une implémentation réseau réelle
  * (WebSocket/HTTP) sans qu'aucun composant UI n'ait à changer, puisqu'il ne connaît que ce contrat.

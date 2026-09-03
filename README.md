@@ -279,7 +279,7 @@ Le renderer communique avec le processus Main **uniquement** via `window.chatAPI
 
 ### Anti-XSS côté affichage
 
-Les messages affichés dans le renderer sont insérés via `textContent` (jamais `innerHTML`) — voir `renderer.js`. Le texte d'un autre utilisateur ne peut donc jamais être interprété comme du HTML/JS.
+Le renderer ne construit jamais de HTML sous forme de chaîne : tous les éléments sont créés via `document.createElement`/`createElementNS` et tout contenu dynamique (pseudo, contenu de message, nom de salon, etc.) est assigné via `textContent`, jamais `innerHTML` (voir la fabrique `creerEl()` dans `renderer.js`). Le texte d'un autre utilisateur ne peut donc jamais être interprété comme du HTML/JS, puisqu'il n'existe structurellement aucun point du code qui reparse une chaîne en HTML.
 
 ### Exécuter les tests unitaires
 
