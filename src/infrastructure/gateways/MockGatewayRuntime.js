@@ -18,7 +18,8 @@ class MockGatewayRuntime {
         nom: 'général',
         visibilite: 'public',
         hoteId: 'u1',
-        membreIds: ['u1', 'u2'],
+        // Salon public : tous les utilisateurs en sont membres d'office.
+        membreIds: ['u1', 'u2', 'u3'],
         membresInvites: [],
         messages: [
           {
@@ -77,12 +78,18 @@ class MockGatewayRuntime {
     this.verifierUtilisateur(utilisateurId);
     const nomNettoye = typeof nom === 'string' ? nom.trim().slice(0, 40) : '';
     if (!nomNettoye) throw new Error('Le nom du salon est obligatoire');
+    const visibilite = prive ? 'prive' : 'public';
     const salon = {
       id: `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       nom: nomNettoye,
-      visibilite: prive ? 'prive' : 'public',
+      visibilite,
       hoteId: utilisateurId,
-      membreIds: [utilisateurId],
+      // Un salon public n'a pas d'invitations : tous les utilisateurs en
+      // sont membres dès sa création.
+      membreIds:
+        visibilite === 'public'
+          ? this.utilisateurs.map((item) => item.id)
+          : [utilisateurId],
       membresInvites: [],
       messages: [],
     };
@@ -94,6 +101,11 @@ class MockGatewayRuntime {
     this.verifierUtilisateur(utilisateurId);
     this.verifierUtilisateur(hoteId);
     const salon = this.trouverSalon(salonId);
+    if (salon.visibilite === 'public') {
+      throw new Error(
+        'Les invitations sont désactivées pour les salons publics : tous les utilisateurs y sont déjà membres'
+      );
+    }
     if (salon.hoteId !== hoteId) throw new Error("Seul l'hôte peut inviter");
     if (salon.membreIds.includes(utilisateurId)) return structuredClone(salon);
     if (!salon.membresInvites.includes(utilisateurId)) {
@@ -134,9 +146,14 @@ class MockGatewayRuntime {
     if (!salon.membreIds.includes(utilisateurId)) {
       throw new Error('Accès refusé à ce salon');
     }
-    const texte = typeof contenu === 'string' ? contenu.trim().slice(0, 2000) : '';
+    const texte =
+      typeof contenu === 'string' ? contenu.trim().slice(0, 2000) : '';
     if (!texte) throw new Error('Le message est vide');
-    const message = { auteurId: utilisateurId, contenu: texte, date: Date.now() };
+    const message = {
+      auteurId: utilisateurId,
+      contenu: texte,
+      date: Date.now(),
+    };
     salon.messages.push(message);
     return structuredClone(message);
   }

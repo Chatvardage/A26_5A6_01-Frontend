@@ -154,6 +154,11 @@ button {
   color: var(--text-primary);
 }
 
+.icone-cadenas {
+  vertical-align: -1px;
+  margin-right: 2px;
+}
+
 #channel-list li button.active {
   background: var(--bg-bubble);
   color: var(--text-primary);
@@ -356,6 +361,31 @@ button {
   font-size: 0.92rem;
   line-height: 1.4;
   word-wrap: break-word;
+}
+
+.message-row.own {
+  flex-direction: row-reverse;
+}
+
+.message-row.own .message-body {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.message-row.own .message-meta {
+  flex-direction: row-reverse;
+}
+
+.message-row.own .text {
+  background: var(--accent-end);
+  padding: 8px 12px;
+  border-radius: 12px 12px 2px 12px;
+}
+
+.message-row:not(.own) .text {
+  background: var(--bg-bubble);
+  padding: 8px 12px;
+  border-radius: 12px 12px 12px 2px;
 }
 
 #typing-indicator {

@@ -406,6 +406,11 @@ export class MockGateway {
     return this.simulerLatence(async () => {
       const salon = this.salons.get(salonId);
       if (!salon) throw new Error(`Salon ${salonId} non trouvé`);
+      if (salon.visibilite === 'public') {
+        throw new Error(
+          `Les invitations sont désactivées pour le salon public ${salonId}`
+        );
+      }
       if (salon.hoteId !== hoteId) {
         throw new Error(`Seul l'hôte peut inviter dans le salon ${salonId}`);
       }
@@ -444,20 +449,22 @@ export class MockGateway {
     salonId: ConversationId,
     utilisateurId: string
   ): Promise<Salon> {
-    const salon = this.salons.get(salonId);
-    if (!salon) throw new Error(`Salon ${salonId} non trouvé`);
-    if (!salon.membresInvites.includes(utilisateurId)) {
-      throw new Error(`Aucune invitation au salon ${salonId}`);
-    }
-    const salonMisAJour = await this.ajouterUtilisateurAuSalon(
-      salonId,
-      utilisateurId
-    );
-    this.emetEvenement('invitation-salon-acceptee', {
-      salonId,
-      utilisateurId,
+    return this.simulerLatence(async () => {
+      const salon = this.salons.get(salonId);
+      if (!salon) throw new Error(`Salon ${salonId} non trouvé`);
+      if (!salon.membresInvites.includes(utilisateurId)) {
+        throw new Error(`Aucune invitation au salon ${salonId}`);
+      }
+      const salonMisAJour = await this.ajouterUtilisateurAuSalon(
+        salonId,
+        utilisateurId
+      );
+      this.emetEvenement('invitation-salon-acceptee', {
+        salonId,
+        utilisateurId,
+      });
+      return salonMisAJour;
     });
-    return salonMisAJour;
   }
 
   /** Refuse une invitation sans donner accès au salon. */
@@ -663,8 +670,18 @@ export class MockGateway {
       }
 
       const salon = this.salons.get(conversationId);
-      if (salon && !salon.membreIds.includes(auteurId)) {
-        throw new Error(`Accès refusé au salon ${conversationId}`);
+      const conversationPrivee = this.conversationsPrivees.get(conversationId);
+
+      if (salon) {
+        if (!salon.membreIds.includes(auteurId)) {
+          throw new Error(`Accès refusé au salon ${conversationId}`);
+        }
+      } else if (conversationPrivee) {
+        if (!conversationPrivee.participantIds.includes(auteurId)) {
+          throw new Error(`Accès refusé à la conversation ${conversationId}`);
+        }
+      } else {
+        throw new Error(`Conversation ${conversationId} introuvable`);
       }
 
       const message = creerMessage(
