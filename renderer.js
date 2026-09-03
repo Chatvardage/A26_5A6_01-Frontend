@@ -458,14 +458,8 @@ async function initialiser() {
 
 initialiser();
 
-window.addEventListener('DOMContentLoaded', () => {
-  const btn = document.getElementById('message-prive-btn');
+const btn = document.getElementById('message-prive-btn');
 
-  console.log('btn =', btn);
-
-  btn?.addEventListener('click', () => {
-    console.log('CLICK');
-
-    window.electronAPI.navigate('message-prive.html');
-  });
+btn?.addEventListener('click', () => {
+  window.electronAPI.navigate('message-prive.html');
 });

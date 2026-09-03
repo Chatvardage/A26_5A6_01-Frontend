@@ -287,3 +287,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     await initialiserUtilisateurCourant();
     await refreshConversations();
 });
+
+const serverIconBtn = document.querySelectorAll('.server-icon');
+
+serverIconBtn.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    window.electronAPI.navigate('index.html');
+  });
+});
