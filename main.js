@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, Notification, shell, ipcMain } = require('electron');
 const path = require('path');
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -104,6 +104,47 @@ function buildMenu() {
 // unique (second-instance) et par 'activate' pour savoir si une fenêtre
 // existe déjà plutôt que de se fier uniquement à getAllWindows().
 let mainWindow = null;
+let activeConversationId = null;
+
+function isTrustedIpcEvent(event) {
+  return isAppUrl(event.senderFrame?.url ?? '');
+}
+
+function cleanText(value, maxLength) {
+  return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
+}
+
+function showMessageNotification(message) {
+  if (
+    !Notification.isSupported() ||
+    !mainWindow ||
+    mainWindow.isDestroyed() ||
+    mainWindow.isFocused()
+  ) {
+    return false;
+  }
+
+  const conversationId = cleanText(message?.conversationId, 120);
+  const body = cleanText(message?.contenu, 180);
+  if (!conversationId || !body || conversationId === activeConversationId) {
+    return false;
+  }
+
+  const notification = new Notification({
+    title: 'Nouveau message',
+    body,
+    icon: APP_ICON_PATH,
+  });
+
+  notification.on('click', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+  notification.show();
+  return true;
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -207,14 +248,20 @@ function createWindow() {
 }
 
 // --- IPC : API contrôlée côté Main ------------------------------------------
-// Chaque canal est déclaré explicitement ici ; le renderer n'a jamais accès
-// à ipcRenderer directement (voir preload.js), seulement à ce que preload.js
-// expose sur window.electronAPI. Aucun canal pour l'instant (l'exemple
-// ping/pong utilisé pour valider ce câblage à l'issue #8 a été retiré, la
-// nouvelle UI ne l'utilise plus) : le premier canal réel viendra avec le
-// ChatGateway (salons, messages, DM...) et devra, comme le faisait ping,
-// valider la provenance de chaque message via isAppUrl(event.senderFrame?.url)
-// avant d'agir dessus.
+ipcMain.handle('notification:set-active-conversation', (event, conversationId) => {
+  if (!isTrustedIpcEvent(event)) {
+    return false;
+  }
+  activeConversationId = cleanText(conversationId, 120) || null;
+  return true;
+});
+
+ipcMain.handle('notification:message-received', (event, message) => {
+  if (!isTrustedIpcEvent(event)) {
+    return { shown: false };
+  }
+  return { shown: showMessageNotification(message) };
+});
 
 // --- Instance unique ---------------------------------------------------
 // Une appli de clavardage locale n'a pas de sens ouverte deux fois en
@@ -267,3 +314,4 @@ if (!gotSingleInstanceLock) {
 app.on('web-contents-created', (_event, contents) => {
   contents.on('will-attach-webview', (event) => event.preventDefault());
 });
+

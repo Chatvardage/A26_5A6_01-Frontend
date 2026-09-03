@@ -1,4 +1,4 @@
-const { contextBridge } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
 
 // --- API preload minimale ---------------------------------------------------
 // Principe : le renderer n'a JAMAIS accès à ipcRenderer, require, process, fs,
@@ -13,3 +13,10 @@ const { contextBridge } = require('electron');
 // besoin métier réel (ex. ChatGateway : envoyer un message, rejoindre un
 // salon...), jamais un send/on générique à canal arbitraire.
 contextBridge.exposeInMainWorld('electronAPI', {});
+
+contextBridge.exposeInMainWorld('notifications', {
+  setActiveConversation: (conversationId) =>
+    ipcRenderer.invoke('notification:set-active-conversation', conversationId),
+  messageReceived: (message) =>
+    ipcRenderer.invoke('notification:message-received', message),
+});
