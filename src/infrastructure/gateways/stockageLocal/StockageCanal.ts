@@ -1,5 +1,5 @@
-import {ClefsStockageLocal,} from "./ClefsStockageLocal"
-import {enregistrerDansStockage, recupererDuStockage,} from  "./StockageLocal"
+import { ClefsStockageLocal } from './ClefsStockageLocal';
+import { enregistrerDansStockage, recupererDuStockage } from './StockageLocal';
 
 export interface Canal {
   idCanal: string;
@@ -24,7 +24,9 @@ export function enregistrerCanal(canal: Canal): void {
 
 // recupere canaux accessible par un utilisateur
 export function recupererCanauxParUtilisateur(idUtilisateur: string): Canal[] {
-  return recupererDuStockage<Canal[]>(ClefsStockageLocal.canaux, []).filter((canal) => canal.idUtilisateur.includes(idUtilisateur));
+  return recupererDuStockage<Canal[]>(ClefsStockageLocal.canaux, []).filter(
+    (canal) => canal.idUtilisateur.includes(idUtilisateur)
+  );
 }
 
 // recupere un canal par son id
@@ -33,12 +35,15 @@ export function recupererCanal(idCanal: string): Canal | undefined {
 }
 
 // recupere tous les canaux
-export function recupererCanaux(): Canal [] {
-  return recupererDuStockage<Canal[]>(ClefsStockageLocal.canaux, [])
+export function recupererCanaux(): Canal[] {
+  return recupererDuStockage<Canal[]>(ClefsStockageLocal.canaux, []);
 }
 
 //ajouter utilisateur à un canal
-export function ajouterUtilisateurDansCanal(idCanal: string, idUtilisateur: string): void {
+export function ajouterUtilisateurDansCanal(
+  idCanal: string,
+  idUtilisateur: string
+): void {
   const canal = recupererCanal(idCanal);
   if (!canal) {
     console.error(`Canal introuvable : "${idCanal}"`);
@@ -52,14 +57,19 @@ export function ajouterUtilisateurDansCanal(idCanal: string, idUtilisateur: stri
 }
 
 //retirer utilisateur à un canal
-export function retirerUtilisateurDuCanal(idCanal: string, idUtilisateur: string): void {
+export function retirerUtilisateurDuCanal(
+  idCanal: string,
+  idUtilisateur: string
+): void {
   const canal = recupererCanal(idCanal);
   if (!canal) {
     console.error(`Canal introuvable : "${idCanal}"`);
     return;
   }
 
-  canal.idUtilisateur = canal.idUtilisateur.filter((id) => id !== idUtilisateur);
+  canal.idUtilisateur = canal.idUtilisateur.filter(
+    (id) => id !== idUtilisateur
+  );
   enregistrerCanal(canal);
 }
 

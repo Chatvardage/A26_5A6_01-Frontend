@@ -86,12 +86,12 @@ ChatVardage <br />
 &emsp;│&emsp;&emsp;&emsp;│<br />
 &emsp;│&emsp;&emsp;&emsp;├── infrastructure/<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│   # Communication avec les systèmes externes.<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│   # HTTP, WebSocket, Gateway, stockage local, etc.<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│ # Communication avec les systèmes externes.<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│ # HTTP, WebSocket, Gateway, stockage local, etc.<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;├── gateways/<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│   # Point d'accès aux communications avec le backend.<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│ # Point d'accès aux communications avec le backend.<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;└── GatewayClient.ts<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;&emsp;# Contrat/client utilisé par le frontend pour<br />
@@ -99,23 +99,23 @@ ChatVardage <br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;├── persistence/<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│   # Implementation de le persistance pour le front-end.<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│ # Implementation de le persistance pour le front-end.<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;└── local-storage/<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│   # Gestion du stockage local.<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│ # Gestion du stockage local.<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;|&emsp;&emsp;├── LocalStorage.ts/<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│&emsp;   # Accès au LocalStorage.<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│&emsp; # Accès au LocalStorage.<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;|&emsp;&emsp;├── MessageStorage.ts/<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│&emsp;   # Gère la persistence des message.<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│&emsp; # Gère la persistence des message.<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;|&emsp;&emsp;└── keys.ts/<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;&emsp;   # Stockage des clés pour le localstorage.<br />
+&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;&emsp; # Stockage des clés pour le localstorage.<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│<br />
 &emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;└── services/<br />
@@ -279,7 +279,7 @@ Le renderer communique avec le processus Main **uniquement** via `window.chatAPI
 
 ### Anti-XSS côté affichage
 
-Les messages affichés dans le renderer sont insérés via `textContent` (jamais `innerHTML`) — voir `renderer.js`. Le texte d'un autre utilisateur ne peut donc jamais être interprété comme du HTML/JS.
+Le renderer ne construit jamais de HTML sous forme de chaîne : tous les éléments sont créés via `document.createElement`/`createElementNS` et tout contenu dynamique (pseudo, contenu de message, nom de salon, etc.) est assigné via `textContent`, jamais `innerHTML` (voir la fabrique `creerEl()` dans `renderer.js`). Le texte d'un autre utilisateur ne peut donc jamais être interprété comme du HTML/JS, puisqu'il n'existe structurellement aucun point du code qui reparse une chaîne en HTML.
 
 ### Exécuter les tests unitaires
 

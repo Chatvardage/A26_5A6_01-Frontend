@@ -6,23 +6,21 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Contrairement à un passthrough générique (send/on avec un nom de canal
 // arbitraire), chaque canal IPC est fixé ici en dur, dans le preload — le
 // renderer ne peut pas choisir ou inventer un canal.
-
+//
+// Rien n'est exposé pour l'instant (l'exemple ping/pong utilisé pour valider
+// le câblage contextIsolation/preload lors de l'issue #8 a été retiré, la
+// nouvelle UI ne l'utilise plus). Ajouter ici une méthode nommée par nouveau
+// besoin métier réel (ex. ChatGateway : envoyer un message, rejoindre un
+// salon...), jamais un send/on générique à canal arbitraire.
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Infos de runtime (lecture seule, aucun accès Node au-delà de ça).
-  nodeVersion: () => process.versions.node,
-  chromeVersion: () => process.versions.chrome,
-  electronVersion: () => process.versions.electron,
-
-  // Exemple d'IPC scoped : un seul canal fixe dans chaque sens, déclaré en
-  // dur ici. Le renderer ne peut pas choisir/inventer un nom de canal
-  // (contrairement à un passthrough générique send(channel, data)).
-  ping: () => ipcRenderer.send('ping'),
-  onPong: (callback) => {
-    const listener = (_event, data) => callback(data);
-    ipcRenderer.on('pong', listener);
-    return () => ipcRenderer.removeListener('pong', listener);
-  },
-
-  // Ajouter ici une méthode nommée par nouveau besoin métier (ex: plus tard
-  // pour le ChatGateway), jamais un send/on générique à canal arbitraire.
+  obtenirEtatSalons: (utilisateurId) =>
+    ipcRenderer.invoke('salons:etat', { utilisateurId }),
+  creerSalon: (donnees) => ipcRenderer.invoke('salons:creer', donnees),
+  inviterAuSalon: (donnees) => ipcRenderer.invoke('salons:inviter', donnees),
+  accepterInvitation: (donnees) =>
+    ipcRenderer.invoke('salons:accepter-invitation', donnees),
+  refuserInvitation: (donnees) =>
+    ipcRenderer.invoke('salons:refuser-invitation', donnees),
+  envoyerMessageSalon: (donnees) =>
+    ipcRenderer.invoke('salons:envoyer-message', donnees),
 });

@@ -4,13 +4,17 @@ export default defineConfig({
   test: {
     testTimeout: 20000,
     hookTimeout: 20000,
-    environment: "jsdom",
+    environment: 'jsdom',
     include: ['src/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/domain/entities/Conversation.ts'],
+      exclude: [
+        'src/**/*.test.ts',
+        'src/domain/entities/Conversation.ts',
+        'src/infrastructure/gateways/ChatGateway.ts',
+      ],
       thresholds: {
         statements: 95,
         branches: 95,

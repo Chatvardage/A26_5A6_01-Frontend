@@ -30,8 +30,5 @@
     "electron"
   ],
   "author": "Eva-afk",
-  "license": "ISC",
-  "allowScripts": {
-    "electron@30.5.1": true
-  }
+  "license": "ISC"
 }

@@ -1,5 +1,5 @@
-import {ClefsStockageLocal,} from "./ClefsStockageLocal"
-import {enregistrerDansStockage, recupererDuStockage,} from  "./StockageLocal"
+import { ClefsStockageLocal } from './ClefsStockageLocal';
+import { enregistrerDansStockage, recupererDuStockage } from './StockageLocal';
 
 export interface Message {
   idMessage: string;
@@ -12,25 +12,29 @@ export interface Message {
 function obtenirDateFormatee(): string {
   const maintenant = new Date();
 
-  const jj = String(maintenant.getDate()).padStart(2, "0");
-  const mm = String(maintenant.getMonth() + 1).padStart(2, "0");
+  const jj = String(maintenant.getDate()).padStart(2, '0');
+  const mm = String(maintenant.getMonth() + 1).padStart(2, '0');
   const aa = String(maintenant.getFullYear()).slice(-2);
-  const HH = String(maintenant.getHours()).padStart(2, "0");
-  const MM = String(maintenant.getMinutes()).padStart(2, "0");
-  const SS = String(maintenant.getSeconds()).padStart(2, "0");
+  const HH = String(maintenant.getHours()).padStart(2, '0');
+  const MM = String(maintenant.getMinutes()).padStart(2, '0');
+  const SS = String(maintenant.getSeconds()).padStart(2, '0');
 
   return `${jj}/${mm}/${aa} ${HH}:${MM}:${SS}`;
 }
 
 //enrergistre un message
-export function enregistrerMessage(message: Omit<Message, "date"> & { date?: string }): void {
+export function enregistrerMessage(
+  message: Omit<Message, 'date'> & { date?: string }
+): void {
   const messageAvecDate: Message = {
     ...message,
     date: message.date ?? obtenirDateFormatee(),
   };
 
   const messages = recupererMessages(messageAvecDate.idCanal);
-  const index = messages.findIndex((m) => m.idMessage === messageAvecDate.idMessage);
+  const index = messages.findIndex(
+    (m) => m.idMessage === messageAvecDate.idMessage
+  );
 
   if (index !== -1) {
     messages[index] = messageAvecDate;
@@ -38,15 +42,18 @@ export function enregistrerMessage(message: Omit<Message, "date"> & { date?: str
     messages.push(messageAvecDate);
   }
 
-  enregistrerDansStockage(ClefsStockageLocal.messages(messageAvecDate.idCanal), messages);
+  enregistrerDansStockage(
+    ClefsStockageLocal.messages(messageAvecDate.idCanal),
+    messages
+  );
 }
 
 //convertit une date en Timestamp
 function convertirDateEnTimestamp(date: string): number {
   // Format attendu : jj/mm/aa HH:MM:SS
-  const [partieDate, partieHeure] = date.split(" ");
-  const [jj, mm, aa] = partieDate.split("/").map(Number);
-  const [HH, MM, SS] = partieHeure.split(":").map(Number);
+  const [partieDate, partieHeure] = date.split(' ');
+  const [jj, mm, aa] = partieDate.split('/').map(Number);
+  const [HH, MM, SS] = partieHeure.split(':').map(Number);
 
   const anneeComplete = 2000 + aa; // suppose 20XX
 
@@ -55,16 +62,21 @@ function convertirDateEnTimestamp(date: string): number {
 
 //recupere les message d'un certain canal
 export function recupererMessages(idCanal: string): Message[] {
-  const messages = recupererDuStockage<Message[]>(ClefsStockageLocal.messages(idCanal), []);
+  const messages = recupererDuStockage<Message[]>(
+    ClefsStockageLocal.messages(idCanal),
+    []
+  );
 
   return messages.sort(
-    (a, b) => convertirDateEnTimestamp(a.date) - convertirDateEnTimestamp(b.date)
+    (a, b) =>
+      convertirDateEnTimestamp(a.date) - convertirDateEnTimestamp(b.date)
   );
 }
 
 //retire un message d'un certain canal
 export function retirerMessage(idCanal: string, idMessage: string): void {
-  const messages = recupererMessages(idCanal).filter((m) => m.idMessage !== idMessage);
+  const messages = recupererMessages(idCanal).filter(
+    (m) => m.idMessage !== idMessage
+  );
   enregistrerDansStockage(ClefsStockageLocal.messages(idCanal), messages);
 }
-
