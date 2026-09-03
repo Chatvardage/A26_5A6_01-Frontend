@@ -11,12 +11,14 @@
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,html,css,md,txt}\""
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "@vitest/coverage-v8": "^4.1.11",
     "electron": "^44.0.0",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.0.0",
+    "jsdom": "^29.1.1",
     "prettier": "^3.0.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"
