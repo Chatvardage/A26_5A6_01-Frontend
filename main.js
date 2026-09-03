@@ -204,7 +204,6 @@ function createWindow() {
   });
 
   win.loadFile(APP_INDEX_PATH);
-  win.webContents.openDevTools();
 
   return win;
 }

@@ -27,8 +27,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   obtenirUtilisateurs: () => ipcRenderer.invoke('utilisateurs:lister'),
   obtenirConversationsPrivees: (utilisateurId) =>
     ipcRenderer.invoke('obtenir-conversations-privees', { utilisateurId }),
-  obtenirMessagesPrive: (conversationId) =>
-    ipcRenderer.invoke('obtenir-messages-prive', conversationId),
   envoyerMessagePrive: (conversationId, contenu, utilisateurId) =>
     ipcRenderer.invoke(
       'envoyer-message-prive',

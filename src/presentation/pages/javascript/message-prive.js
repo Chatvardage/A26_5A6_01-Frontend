@@ -9,7 +9,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     const typingIndicator = document.getElementById('typing-indicator');
     const filterButtons = document.querySelectorAll('.filter-button');
     const currentUserSelect = document.getElementById('current-user-select');
-    const currentUserPresence = document.getElementById('current-user-presence');
 
     const state = {
         conversations: [],
@@ -72,7 +71,6 @@ window.addEventListener('DOMContentLoaded', async () => {
         currentUserSelect.addEventListener('change', async (event) => {
         sessionStorage.setItem('currentUserId', event.target.value);
         state.currentUserId = event.target.value;
-        console.log('Utilisateur courant changé :', state.currentUserId);
         await refreshConversations();
       });
         const selectedUserId = sessionStorage.getItem('currentUserId');
@@ -82,10 +80,6 @@ window.addEventListener('DOMContentLoaded', async () => {
             'u1';
         if (currentUserSelect) {
             currentUserSelect.value = state.currentUserId;
-        }
-        if (currentUserPresence) {
-            const currentUser = utilisateurs.find((u) => u.id === state.currentUserId);
-            currentUserPresence.textContent = currentUser?.present ? 'En ligne' : 'Hors ligne';
         }
     }
 
@@ -97,7 +91,6 @@ window.addEventListener('DOMContentLoaded', async () => {
         }
 
         const filtered = getFilteredConversations();
-        console.log(filtered);
         listElement.innerHTML = '';
 
         filtered.forEach((conversation) => {
