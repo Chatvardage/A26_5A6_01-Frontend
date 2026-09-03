@@ -1,4 +1,8 @@
 // UI uniquement : toutes les opérations passent par l'API sécurisée du preload.
+if (!window.electronAPI) {
+  throw new Error('window.electronAPI est indisponible : preload.js n’est pas chargé');
+}
+
 let utilisateurActuelId = 'u1';
 let salonActifId = null;
 let etat = { utilisateurs: [], salons: [], invitations: [] };
@@ -130,6 +134,7 @@ async function actualiser() {
     }
     afficherTout();
   } catch (erreur) {
+    console.error('[actualiser] ERREUR:', erreur);
     notifier(messageErreur(erreur), true);
   }
 }
@@ -221,6 +226,9 @@ function afficherTout() {
   afficherMessages();
   afficherActions();
 }
+
+// --- Initialisation au démarrage -----
+actualiser();
 
 el.creer.addEventListener('click', () => {
   const champNom = creerEl('input', { attrs: { maxlength: '40' } });
@@ -425,21 +433,20 @@ el.utilisateur.addEventListener('change', async (event) => {
   await actualiser();
 });
 
-actualiser();
 // Le renderer n'utilise jamais require/ipcRenderer directement : tout passe
 // par window.electronAPI, exposé de façon contrôlée par preload.js.
 //
-const notifications = window.notifications;
+const serviceNotifications = window.notifications;
 
 function updateActiveConversation(conversationId) {
-	if (typeof notifications?.setActiveConversation === 'function') {
-		notifications.setActiveConversation(conversationId ?? null);
+  if (typeof serviceNotifications?.setActiveConversation === 'function') {
+    serviceNotifications.setActiveConversation(conversationId ?? null);
 	}
 }
 
 function notifyForReceivedMessage(message) {
-	if (typeof notifications?.messageReceived === 'function' && message) {
-		notifications.messageReceived(message);
+  if (typeof serviceNotifications?.messageReceived === 'function' && message) {
+    serviceNotifications.messageReceived(message);
 	}
 }
 

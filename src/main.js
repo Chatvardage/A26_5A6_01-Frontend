@@ -1,11 +1,13 @@
 // Gestion des salons (canaux)
-const ChannelManager = (() => {
-  let channels = []; // Liste complète des canaux
-  let currentServerId = null; // ID du serveur actif
-  let activeChannelId = null; // ID du canal actuel
+(() => {
+  const serveurs = window.serveurs ?? [];
+  const utilisateurActuel = window.utilisateurActuel ?? { nom: 'utilisateur' };
+  let salons = []; // Liste complète des salons
+  let serveurActifId = null; // ID du serveur actif
+  let salonActifId = null; // ID du salon actuel
   
   // Structure des serveurs publics disponibles
-  const publicServers = [
+  const serveursPublics = [
     { id: 'general', name: '#général', type: 'public' },
     { id: 'random', name: '#random', type: 'public' },
     { id: 'help', name: '#aide', type: 'public' }
@@ -14,66 +16,66 @@ const ChannelManager = (() => {
   /**
    * Liste tous les salons publics disponibles
    */
-  function listPublicChannels() {
-    return publicServers.filter(c => c.type === 'public').map(c => ({
-      id: c.id,
-      name: c.name,
-      topic: `C'est le salon ${c.name.toUpperCase()} du serveur !`
+  function listerSalonsPublics() {
+    return serveursPublics.filter(salon => salon.type === 'public').map(salon => ({
+      id: salon.id,
+      name: salon.name,
+      topic: `C'est le salon ${salon.name.toUpperCase()} du serveur !`
     }));
   }
 
   /**
    * Crée un nouveau salon dans le serveur actif
    */
-  function createChannel(serverId, channelName, topic = '') {
-    const server = servers.find(s => s.id === serverId);
+  function creerSalon(serveurId, nomSalon, sujet = '') {
+    const serveur = serveurs.find(serveur => serveur.id === serveurId);
     
-    if (!server || !server.allowChannels) {
+    if (!serveur || !serveur.allowChannels) {
       console.log('Erreur : Ce serveur ne permet pas de créer des canaux');
       return null;
     }
 
     // Vérifie si le nom existe déjà
-    if (channels.some(c => c.name === channelName)) {
-      console.log(`Erreur : Un canal nommé ${channelName} existe déjà`);
+    if (salons.some(salon => salon.name === nomSalon)) {
+      console.log(`Erreur : Un salon nommé ${nomSalon} existe déjà`);
       return null;
     }
 
-    const newChannel = {
-      id: `channel_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      name: channelName,
-      topic: topic || `Salon créé par ${currentUser.name}`,
-      serverId,
+    const nouveauSalon = {
+      id: `salon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      name: nomSalon,
+      topic: sujet || `Salon créé par ${utilisateurActuel.nom}`,
+      serverId: serveurId,
       type: 'text',
       joinedAt: new Date().toISOString(),
       unreadCount: 0
     };
 
-    channels.push(newChannel);
-    console.log(`Canaux créé avec succès : ${newChannel.name}`);
+    salons.push(nouveauSalon);
+    console.log(`Salon créé avec succès : ${nouveauSalon.name}`);
     
     // Met à jour la liste des canaux dans l'UI
-    updateChannelList(serverId);
+    actualiserListeSalons(serveurId);
     
-    return newChannel;
+    return nouveauSalon;
   }
 
   /**
    * Rejoint un salon public
    */
-  function joinPublicChannel(channelName) {
-    const channel = publicServers.find(c => c.name === channelName);
+  function rejoindreSalonPublic(nomSalon) {
+    const salon = serveursPublics.find(salonPublic => salonPublic.name === nomSalon);
     
-    if (!channel) {
-      console.log(`Erreur : Le salon ${channelName} n'existe pas`);
+    if (!salon) {
+      console.log(`Erreur : Le salon ${nomSalon} n'existe pas`);
       return null;
     }
 
     // Créer une entrée dans notre liste de canaux
-    const joinedChannel = {
-      id: `public_${channel.id}`,
-      name: channel.name,
-      topic: `Salon public : ${channel.name.toUpperCase()}`,
+    const salonRejoint = {
+      id: `public_${salon.id}`,
+      name: salon.name,
+      topic: `Salon public : ${salon.name.toUpperCase()}`,
       serverId: 'general', // Les salons publics sont dans le serveur général
       type: 'text',
       joinedAt: new Date().toISOString(),
@@ -81,39 +83,39 @@ const ChannelManager = (() => {
       unreadCount: 0
     };
 
-    channels.push(joinedChannel);
+    salons.push(salonRejoint);
     
     // Met à jour la liste des canaux
-    updateChannelList('general');
+    actualiserListeSalons('general');
     
-    console.log(`Rejoint le salon : ${channel.name}`);
+    console.log(`Salon rejoint : ${salon.name}`);
     
-    return joinedChannel;
+    return salonRejoint;
   }
 
   /**
    * Quitte un salon
    */
-  function leaveChannel(channelId) {
-    const index = channels.findIndex(c => c.id === channelId);
+  function quitterSalon(salonId) {
+    const index = salons.findIndex(salon => salon.id === salonId);
     
     if (index === -1) {
-      console.log(`Le canal ${channelId} n'existe pas`);
+      console.log(`Le salon ${salonId} n'existe pas`);
       return false;
     }
 
-    const channel = channels[index];
-    channels.splice(index, 1);
+    const salon = salons[index];
+    salons.splice(index, 1);
     
     // Si c'était le canal actif, on passe au précédent
-    if (activeChannelId === channelId) {
-      setActiveChannel(channels[channels.length - 1]?.id || null);
+    if (salonActifId === salonId) {
+      definirSalonActif(salons[salons.length - 1]?.id || null);
     }
     
-    console.log(`Quitté le salon : ${channel.name}`);
+    console.log(`Salon quitté : ${salon.name}`);
     
     // Met à jour la liste des canaux dans l'UI
-    updateChannelList(channel.serverId);
+    actualiserListeSalons(salon.serverId);
     
     return true;
   }
@@ -121,26 +123,26 @@ const ChannelManager = (() => {
   /**
    * Sélectionne un canal (changement de canal)
    */
-  function selectChannel(channelId) {
-    const channel = channels.find(c => c.id === channelId);
+  function selectionnerSalon(salonId) {
+    const salon = salons.find(salonCourant => salonCourant.id === salonId);
     
-    if (!channel) {
-      console.log(`Le canal ${channelId} n'est pas dans votre liste`);
+    if (!salon) {
+      console.log(`Le salon ${salonId} n'est pas dans votre liste`);
       return false;
     }
 
-    activeChannelId = channelId;
-    currentServerId = channel.serverId;
+    salonActifId = salonId;
+    serveurActifId = salon.serverId;
     
     // Émet l'événement pour que Vue.js met à jour l'UI
     window.dispatchEvent(new CustomEvent('channel:selected', {
       detail: { 
-        channel,
-        channels: getChannelsByServer(channel.serverId)
+        channel: salon,
+        channels: obtenirSalonsDuServeur(salon.serverId)
       }
     }));
     
-    console.log(`Sélection du salon : ${channel.name}`);
+    console.log(`Salon sélectionné : ${salon.name}`);
     
     return true;
   }
@@ -148,37 +150,37 @@ const ChannelManager = (() => {
   /**
    * Obtient tous les canaux du serveur actif
    */
-  function getChannelsByServer(serverId) {
-    return channels.filter(c => c.serverId === serverId).map(c => ({
-      id: c.id,
-      name: c.name,
-      topic: c.topic,
-      unreadCount: c.unreadCount,
-      type: c.type
+  function obtenirSalonsDuServeur(serveurId) {
+    return salons.filter(salon => salon.serverId === serveurId).map(salon => ({
+      id: salon.id,
+      name: salon.name,
+      topic: salon.topic,
+      unreadCount: salon.unreadCount,
+      type: salon.type
     }));
   }
 
   /**
    * Obtient le canal actuel
    */
-  function getCurrentChannel() {
-    return channels.find(c => c.id === activeChannelId) || null;
+  function obtenirSalonActif() {
+    return salons.find(salon => salon.id === salonActifId) || null;
   }
 
   /**
    * Met à jour la liste des canaux pour un serveur donné
    */
-  function updateChannelList(serverId) {
+  function actualiserListeSalons(serveurId) {
     const container = document.getElementById('channel-list');
     if (!container) return;
 
-    const channelsToDisplay = getChannelsByServer(serverId);
+    const salonsAAfficher = obtenirSalonsDuServeur(serveurId);
     
     // Émet l'événement pour synchroniser la liste dans Vue.js
     window.dispatchEvent(new CustomEvent('channels:update', {
       detail: { 
-        channels: channelsToDisplay,
-        active: getCurrentChannel()
+        channels: salonsAAfficher,
+        active: obtenirSalonActif()
       }
     }));
   }
@@ -186,34 +188,34 @@ const ChannelManager = (() => {
   /**
    * Définit le canal actif (interne)
    */
-  function setActiveChannel(channelId) {
-    activeChannelId = channelId;
+  function definirSalonActif(salonId) {
+    salonActifId = salonId;
     
     window.dispatchEvent(new CustomEvent('channel:selected', {
-      detail: { channel: getCurrentChannel() }
+      detail: { channel: obtenirSalonActif() }
     }));
   }
 
   /**
    * Récupère le serveur actif
    */
-  function getActiveServer() {
-    return servers.find(s => s.id === currentServerId) || null;
+  function obtenirServeurActif() {
+    return serveurs.find(serveur => serveur.id === serveurActifId) || null;
   }
 
   // Expose les fonctions globalement pour utilisation depuis main.js
   window.ChannelManager = {
-    listPublicChannels,
-    createChannel,
-    joinPublicChannel,
-    leaveChannel,
-    selectChannel,
-    getChannelsByServer,
-    getCurrentChannel,
-    updateChannelList,
-    getActiveServer,
-    get channels() { return [...channels]; },
-    set channel(id) { setActiveChannel(id); }
+    listerSalonsPublics,
+    creerSalon,
+    rejoindreSalonPublic,
+    quitterSalon,
+    selectionnerSalon,
+    obtenirSalonsDuServeur,
+    obtenirSalonActif,
+    actualiserListeSalons,
+    obtenirServeurActif,
+    get salons() { return [...salons]; },
+    set salon(id) { definirSalonActif(id); }
   };
 
 })();

@@ -7,13 +7,6 @@ const { contextBridge, ipcRenderer } = require('electron');
 // arbitraire), chaque canal IPC est fixé ici en dur, dans le preload — le
 // renderer ne peut pas choisir ou inventer un canal.
 //
-// Rien n'est exposé pour l'instant (l'exemple ping/pong utilisé pour valider
-// le câblage contextIsolation/preload lors de l'issue #8 a été retiré, la
-// nouvelle UI ne l'utilise plus). Ajouter ici une méthode nommée par nouveau
-// besoin métier réel (ex. ChatGateway : envoyer un message, rejoindre un
-// salon...), jamais un send/on générique à canal arbitraire.
-contextBridge.exposeInMainWorld('electronAPI', {});
-
 contextBridge.exposeInMainWorld('notifications', {
   setActiveConversation: (conversationId) =>
     ipcRenderer.invoke('notification:set-active-conversation', conversationId),
@@ -34,5 +27,4 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('salons:refuser-invitation', donnees),
   envoyerMessageSalon: (donnees) =>
     ipcRenderer.invoke('salons:envoyer-message', donnees),
-
 });
