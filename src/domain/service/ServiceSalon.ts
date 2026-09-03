@@ -11,7 +11,7 @@ import type { Utilisateur } from '../entities/Utilisateur';
  */
 type DonneesEvenement = Record<string, unknown>;
 
-class ChannelEvents {
+export class ChannelEvents {
   public static readonly ChannelCreated = 'channel:created';
   public static readonly ChannelJoined = 'channel:joined';
   public static readonly ChannelLeft = 'channel:left';
@@ -83,10 +83,10 @@ export class ServiceChannel {
    */
   private _initDefaultChannels(): void {
     const salonsParDefaut: Salon[] = [
-      creerSalon('#general', 'Général - Discussions libres', this.user.id),
-      creerSalon('#announcements', 'Annonces - Informations importantes', this.user.id),
-      creerSalon('#help', 'Aide - Questions et réponses', this.user.id),
-      creerSalon('#random', 'Hasard - Conversations détendues', this.user.id),
+      creerSalon('salon-general', '#général', this.user.id),
+      creerSalon('salon-annonces', '#annonces', this.user.id),
+      creerSalon('salon-aide', '#aide', this.user.id),
+      creerSalon('salon-hasard', '#hasard', this.user.id),
     ];
 
     this.salons = salonsParDefaut;

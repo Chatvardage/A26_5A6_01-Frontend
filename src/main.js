@@ -9,7 +9,7 @@
   // Structure des serveurs publics disponibles
   const serveursPublics = [
     { id: 'general', name: '#général', type: 'public' },
-    { id: 'random', name: '#random', type: 'public' },
+    { id: 'hasard', name: '#hasard', type: 'public' },
     { id: 'help', name: '#aide', type: 'public' }
   ];
 

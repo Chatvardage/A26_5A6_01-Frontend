@@ -139,6 +139,27 @@ async function actualiser() {
   }
 }
 
+function programmerMessageTest() {
+  setTimeout(async () => {
+    const salonId = 's2';
+    const utilisateurId = utilisateurActuelId === 'u2' ? 'u3' : 'u2';
+    const nomExpediteur = utilisateurId === 'u2' ? 'Bob' : 'Charlie';
+
+    try {
+      const message = await window.electronAPI.envoyerMessageSalon({
+        salonId,
+        utilisateurId,
+        contenu: `Bonjour ! Ceci est un message de test envoyé par ${nomExpediteur}.`,
+      });
+      salonActifId = salonId;
+      await actualiser();
+      notifyForReceivedMessage({ ...message, conversationId: salonId });
+    } catch (erreur) {
+      console.error('[programmerMessageTest] ERREUR:', erreur);
+    }
+  }, 3000);
+}
+
 function afficherSalons() {
   el.salons.replaceChildren(
     creerEl('li', { classe: 'category', texte: 'Salons' })
@@ -228,7 +249,7 @@ function afficherTout() {
 }
 
 // --- Initialisation au démarrage -----
-actualiser();
+actualiser().then(programmerMessageTest);
 
 el.creer.addEventListener('click', () => {
   const champNom = creerEl('input', { attrs: { maxlength: '40' } });

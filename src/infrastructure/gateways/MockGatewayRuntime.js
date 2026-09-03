@@ -34,7 +34,7 @@ class MockGatewayRuntime {
         nom: 'équipe privée',
         visibilite: 'prive',
         hoteId: 'u1',
-        membreIds: ['u1', 'u3'],
+        membreIds: ['u1', 'u2', 'u3'],
         membresInvites: [],
         messages: [],
       },
