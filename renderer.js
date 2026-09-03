@@ -432,7 +432,8 @@ el.formulaire.addEventListener('submit', async (event) => {
 
 el.utilisateur.addEventListener('change', async (event) => {
   utilisateurActuelId = event.target.value;
-  await actualiser();
+sessionStorage.setItem('currentUserId', utilisateurActuelId);
+await actualiser();
 });
 
 async function initialiserUtilisateurCourant() {
@@ -443,6 +444,7 @@ async function initialiserUtilisateurCourant() {
     utilisateurs[0]?.id ??
     '';
   el.utilisateur.value = utilisateurActuelId;
+  sessionStorage.setItem('currentUserId', utilisateurActuelId);
 }
 
 async function initialiser() {

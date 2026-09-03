@@ -8,6 +8,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     const topbarAvatar = document.querySelector('.topbar-avatar');
     const typingIndicator = document.getElementById('typing-indicator');
     const filterButtons = document.querySelectorAll('.filter-button');
+    const currentUserSelect = document.getElementById('current-user-select');
+    const currentUserPresence = document.getElementById('current-user-presence');
 
     const state = {
         conversations: [],
@@ -53,8 +55,41 @@ window.addEventListener('DOMContentLoaded', async () => {
         }
 
         renderConversationList();
-        renderActiveConversation();
+        await renderActiveConversation();
     }
+
+    async function initialiserUtilisateurCourant() {
+        const utilisateurs = await window.electronAPI.obtenirUtilisateurs();
+        if (currentUserSelect) {
+            currentUserSelect.innerHTML = '';
+            utilisateurs.forEach((user) => {
+                const option = document.createElement('option');
+                option.value = user.id;
+                option.textContent = user.pseudo;
+                currentUserSelect.appendChild(option);
+            });
+        }
+        currentUserSelect.addEventListener('change', async (event) => {
+        sessionStorage.setItem('currentUserId', event.target.value);
+        state.currentUserId = event.target.value;
+        console.log('Utilisateur courant changé :', state.currentUserId);
+        await refreshConversations();
+      });
+        const selectedUserId = sessionStorage.getItem('currentUserId');
+        state.currentUserId =
+            utilisateurs.find((u) => u.id === selectedUserId)?.id ??
+            utilisateurs[0]?.id ??
+            'u1';
+        if (currentUserSelect) {
+            currentUserSelect.value = state.currentUserId;
+        }
+        if (currentUserPresence) {
+            const currentUser = utilisateurs.find((u) => u.id === state.currentUserId);
+            currentUserPresence.textContent = currentUser?.present ? 'En ligne' : 'Hors ligne';
+        }
+    }
+
+
 
     function renderConversationList() {
         if (!listElement) {
@@ -62,6 +97,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         }
 
         const filtered = getFilteredConversations();
+        console.log(filtered);
         listElement.innerHTML = '';
 
         filtered.forEach((conversation) => {
@@ -244,17 +280,10 @@ window.addEventListener('DOMContentLoaded', async () => {
                 state.currentUserId
             );
             messageInput.value = '';
-            const utilisateurs = await window.electronAPI.obtenirUtilisateurs();
-            const currentUserSelect = document.getElementById('current-user-select');
-            const selectedUserId = currentUserSelect?.value;
-            state.currentUserId =
-                utilisateurs.find((u) => u.id === selectedUserId)?.id ??
-                utilisateurs[0]?.id ??
-                'u1';
-
             await refreshConversations();
         });
     }
 
+    await initialiserUtilisateurCourant();
     await refreshConversations();
 });
