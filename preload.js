@@ -6,23 +6,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Contrairement à un passthrough générique (send/on avec un nom de canal
 // arbitraire), chaque canal IPC est fixé ici en dur, dans le preload — le
 // renderer ne peut pas choisir ou inventer un canal.
-
+//
+// allerAuTableauDeBord : utilisée par la page de connexion (LoginPage.tsx)
+// une fois la session locale établie, pour demander au processus main de
+// naviguer vers le dashboard (voir main.js, canal 'navigation:tableau-de-bord').
+// Prochaine méthode à ajouter ici : le ChatGateway réel (salons, messages,
+// DM...), sur le même principe d'un canal nommé par besoin métier.
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Infos de runtime (lecture seule, aucun accès Node au-delà de ça).
-  nodeVersion: () => process.versions.node,
-  chromeVersion: () => process.versions.chrome,
-  electronVersion: () => process.versions.electron,
-
-  // Exemple d'IPC scoped : un seul canal fixe dans chaque sens, déclaré en
-  // dur ici. Le renderer ne peut pas choisir/inventer un nom de canal
-  // (contrairement à un passthrough générique send(channel, data)).
-  ping: () => ipcRenderer.send('ping'),
-  onPong: (callback) => {
-    const listener = (_event, data) => callback(data);
-    ipcRenderer.on('pong', listener);
-    return () => ipcRenderer.removeListener('pong', listener);
-  },
-
-  // Ajouter ici une méthode nommée par nouveau besoin métier (ex: plus tard
-  // pour le ChatGateway), jamais un send/on générique à canal arbitraire.
+  allerAuTableauDeBord: () => ipcRenderer.invoke('navigation:tableau-de-bord'),
 });
