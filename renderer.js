@@ -26,19 +26,6 @@ const el = {
 const salonActif = () => etat.salons.find((salon) => salon.id === salonActifId);
 const utilisateur = (id) => etat.utilisateurs.find((item) => item.id === id);
 
-// Aucun HTML n'est jamais construit sous forme de chaîne dans ce fichier :
-// tout est créé via document.createElement / textContent, donc il n'y a
-// structurellement rien à échapper — pas d'innerHTML, pas de risque de XSS
-// stocké si un futur champ est ajouté à un des gabarits ci-dessous.
-
-/**
- * Crée un élément DOM avec ses attributs, son contenu texte et ses enfants.
- * Petite fabrique pour éviter la répétition de document.createElement / for
- * loops dans chaque gabarit, sans jamais passer par innerHTML.
- *
- * @param {string} tag
- * @param {{classe?: string, texte?: string, attrs?: Record<string,string>, dataset?: Record<string,string>, enfants?: (Node|null|undefined)[]}} [options]
- */
 function creerEl(tag, options = {}) {
   const { classe, texte, attrs, dataset, enfants } = options;
   const element = document.createElement(tag);
@@ -62,11 +49,6 @@ function creerEl(tag, options = {}) {
   return element;
 }
 
-// Icône de cadenas en SVG : l'emoji 🔒 ne s'affiche pas de façon fiable dans
-// Electron selon les polices installées sur le système (tofu box). Un SVG
-// inline s'affiche toujours, quelle que soit la plateforme. Construite via
-// createElementNS (jamais de chaîne HTML) ; un nœud DOM ne pouvant vivre
-// qu'à un seul endroit à la fois, on en fabrique un nouveau à chaque appel.
 function creerIconeCadenas() {
   const NS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(NS, 'svg');
@@ -86,7 +68,6 @@ function creerIconeCadenas() {
   return svg;
 }
 
-/** Remplit un élément avec l'icône (salon privé) ou "#" (salon public) suivi du nom. */
 function remplirLabelSalon(element, salon) {
   if (salon.visibilite === 'prive') {
     element.replaceChildren(
@@ -109,17 +90,35 @@ function messageErreur(erreur) {
   return erreur instanceof Error ? erreur.message : String(erreur);
 }
 
-/**
- * Ouvre la boîte de dialogue générique avec un titre et un contenu.
- * @param {string} titre
- * @param {Node|Node[]} contenu Un nœud DOM déjà construit, ou une liste de nœuds frères.
- */
 function ouvrirDialogue(titre, contenu) {
   el.titreDialogue.textContent = titre;
   el.contenuDialogue.replaceChildren(
     ...(Array.isArray(contenu) ? contenu : [contenu])
   );
   el.dialogue.showModal();
+}
+
+/**
+ * Ajoute l'utilisateur courant à la liste déroulante de test s'il n'y
+ * figure pas déjà (ex. un nouvel utilisateur créé via l'écran de
+ * connexion, absent des <option> statiques du HTML), et synchronise la
+ * sélection affichée.
+ */
+function synchroniserSelecteurUtilisateur() {
+  if (!el.utilisateur) return;
+  const dejaPresent = Array.from(el.utilisateur.options).some(
+    (option) => option.value === utilisateurActuelId
+  );
+  if (!dejaPresent) {
+    const info = utilisateur(utilisateurActuelId);
+    el.utilisateur.appendChild(
+      creerEl('option', {
+        texte: info?.pseudo ?? utilisateurActuelId,
+        attrs: { value: utilisateurActuelId },
+      })
+    );
+  }
+  el.utilisateur.value = utilisateurActuelId;
 }
 
 async function actualiser() {
@@ -206,7 +205,6 @@ function afficherMessages() {
 
 function afficherActions() {
   const salon = salonActif();
-  // Un salon public n'a pas d'invitations : tout le monde en est déjà membre.
   el.inviter.hidden =
     !salon ||
     salon.hoteId !== utilisateurActuelId ||
@@ -217,6 +215,7 @@ function afficherActions() {
 }
 
 function afficherTout() {
+  synchroniserSelecteurUtilisateur();
   afficherSalons();
   afficherMessages();
   afficherActions();
@@ -317,7 +316,7 @@ el.invitations.addEventListener('click', () => {
       'Mes invitations',
       creerEl('p', {
         classe: 'empty-state',
-        texte: 'Tu n’as aucune invitation en attente.',
+        texte: 'Tu n\u2019as aucune invitation en attente.',
       })
     );
     return;
@@ -425,4 +424,23 @@ el.utilisateur.addEventListener('change', async (event) => {
   await actualiser();
 });
 
-actualiser();
+/**
+ * Démarre le dashboard avec l'utilisateur réellement connecté via l'écran
+ * de connexion (voir main.js, canal 'session:utilisateur-connecte'), au
+ * lieu du 'u1' codé en dur. Repli silencieux sur 'u1' si ce canal échoue ou
+ * ne retourne rien (ex. dashboard ouvert directement, sans passer par la
+ * page de connexion — utile en développement).
+ */
+async function initialiserUtilisateurCourant() {
+  try {
+    const id = await window.electronAPI.obtenirUtilisateurConnecte();
+    if (id) {
+      utilisateurActuelId = id;
+    }
+  } catch {
+    // Repli sur 'u1' (valeur initiale) si le canal échoue.
+  }
+  await actualiser();
+}
+
+initialiserUtilisateurCourant();

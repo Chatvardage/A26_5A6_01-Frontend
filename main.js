@@ -1,4 +1,3 @@
-const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
 const {
   app,
   BrowserWindow,
@@ -31,11 +30,11 @@ const DEV_LOGIN_URL = `http://localhost:${DEV_SERVER_PORT}/`;
 // navigation file:// reste bien à l'intérieur du bundle (et non, par ex.,
 // file:///etc/passwd ou un autre fichier arbitraire du disque).
 const APP_INDEX_PATH = path.resolve(
-    __dirname,
-    'src',
-    'presentation',
-    'pages',
-    'index.html'
+  __dirname,
+  'src',
+  'presentation',
+  'pages',
+  'index.html'
 );
 
 // Chemin absolu de la page de connexion buildée par Vite (voir
@@ -89,8 +88,8 @@ function isAppUrl(url) {
 function buildMenu() {
   const template = [
     ...(process.platform === 'darwin'
-        ? [{ label: app.getName(), submenu: [{ role: 'quit' }] }]
-        : []),
+      ? [{ label: app.getName(), submenu: [{ role: 'quit' }] }]
+      : []),
     {
       label: 'Fichier',
       submenu: [
@@ -103,13 +102,13 @@ function buildMenu() {
     },
     // DevTools uniquement en développement : jamais exposé en production.
     ...(isDev
-        ? [
-          {
-            label: 'Développement',
-            submenu: [{ role: 'toggleDevTools' }, { role: 'reload' }],
-          },
-        ]
-        : []),
+      ? [
+        {
+          label: 'Développement',
+          submenu: [{ role: 'toggleDevTools' }, { role: 'reload' }],
+        },
+      ]
+      : []),
   ];
   return Menu.buildFromTemplate(template);
 }
@@ -193,27 +192,27 @@ function createWindow() {
 // affecter le dashboard, qui a sa propre politique si besoin.
 function configurerCsp() {
   const cspDev =
-      "default-src 'self'; " +
-      "script-src 'self' 'unsafe-inline'; " +
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-      'font-src https://fonts.gstatic.com; ' +
-      "img-src 'self' data:; " +
-      `connect-src 'self' http://localhost:${DEV_SERVER_PORT} ws://localhost:${DEV_SERVER_PORT};`;
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline'; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    'font-src https://fonts.gstatic.com; ' +
+    "img-src 'self' data:; " +
+    `connect-src 'self' http://localhost:${DEV_SERVER_PORT} ws://localhost:${DEV_SERVER_PORT};`;
 
   const cspProd =
-      "default-src 'self'; " +
-      "script-src 'self'; " +
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-      'font-src https://fonts.gstatic.com; ' +
-      "img-src 'self' data:;";
+    "default-src 'self'; " +
+    "script-src 'self'; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    'font-src https://fonts.gstatic.com; ' +
+    "img-src 'self' data:;";
 
   const devOrigin = `http://localhost:${DEV_SERVER_PORT}/`;
   const prodLoginPrefix = `file://${APP_LOGIN_PATH.replace(/\\/g, '/')}`;
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const isLoginPageRequest = isDev
-        ? details.url.startsWith(devOrigin)
-        : details.url.startsWith(prodLoginPrefix);
+      ? details.url.startsWith(devOrigin)
+      : details.url.startsWith(prodLoginPrefix);
 
     if (!isLoginPageRequest) {
       callback({ responseHeaders: details.responseHeaders });
@@ -232,15 +231,13 @@ function configurerCsp() {
 // --- IPC : API contrôlée côté Main ------------------------------------------
 // Chaque canal est déclaré explicitement ici ; le renderer n'a jamais accès
 // à ipcRenderer directement (voir preload.js), seulement à ces méthodes.
-//
+let mainWindow = null;
+
 // 'navigation:tableau-de-bord' : appelé par la page de connexion une fois la
 // session locale établie (voir LoginPage.tsx). On revalide la provenance de
 // l'appel via isAppUrl(event.senderFrame.url) avant d'agir dessus — un appel
 // IPC provenant d'une page non reconnue est silencieusement ignoré plutôt
-// que d'entraîner une navigation. Le premier canal métier réel (ChatGateway :
-// salons, messages, DM...) suivra le même principe.
-let mainWindow = null;
-
+// que d'entraîner une navigation.
 ipcMain.handle('navigation:tableau-de-bord', (event) => {
   const url = event.senderFrame?.url ?? '';
   if (!isAppUrl(url)) {
@@ -250,6 +247,7 @@ ipcMain.handle('navigation:tableau-de-bord', (event) => {
     mainWindow.loadFile(APP_INDEX_PATH);
   }
 });
+
 function verifierProvenance(event) {
   if (!isAppUrl(event.senderFrame?.url ?? '')) {
     throw new Error('Origine IPC non autorisée');
@@ -263,6 +261,25 @@ function exposerCanal(nom, action) {
   });
 }
 
+// --- Session (écran de connexion) -------------------------------------------
+// chatGateway est une INSTANCE UNIQUE, partagée par la page de connexion et
+// le dashboard (contrairement à une instance par renderer, qui perdrait
+// l'utilisateur créé dès la navigation vers le dashboard — voir l'incident
+// "connecté en tant qu'alice par défaut"). C'est pour ça que ces canaux
+// vivent ici, dans le même fichier que les canaux 'salons:*'.
+exposerCanal('session:pseudo-disponible', ({ pseudo }) =>
+  chatGateway.pseudoDisponible(pseudo)
+);
+exposerCanal('session:connexion', (utilisateur) =>
+  chatGateway.connexion(utilisateur)
+);
+// Utilisé par le dashboard au démarrage pour savoir qui vient de se
+// connecter, au lieu de coder un utilisateur en dur (voir renderer.js).
+exposerCanal('session:utilisateur-connecte', () =>
+  chatGateway.obtenirUtilisateurConnecte()
+);
+
+// --- Salons ------------------------------------------------------------
 exposerCanal('salons:etat', ({ utilisateurId }) =>
   chatGateway.obtenirEtat(utilisateurId)
 );

@@ -22,9 +22,7 @@ import type { ChatGateway } from '../../../infrastructure/gateways/ChatGateway';
  * hors scope de cet écran.
  */
 export type GatewaySession = Pick<
-  ChatGateway,
-  'pseudoDisponible' | 'connexion'
->;
+  ChatGateway, 'pseudoDisponible' | 'connexion'>;
 
 interface LoginPageProps {
   gateway: GatewaySession;

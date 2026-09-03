@@ -39,6 +39,11 @@ class MockGatewayRuntime {
         messages: [],
       },
     ];
+    // Identifiant de l'utilisateur connecté via l'écran de connexion (voir
+    // connexion()) ; utilisé par le dashboard pour savoir "qui je suis" au
+    // lieu de coder un utilisateur en dur (voir main.js, canal
+    // 'session:utilisateur-connecte').
+    this.utilisateurConnecteId = null;
   }
 
   verifierUtilisateur(utilisateurId) {
@@ -51,6 +56,53 @@ class MockGatewayRuntime {
     const salon = this.salons.find((item) => item.id === salonId);
     if (!salon) throw new Error('Salon introuvable');
     return salon;
+  }
+
+  /**
+   * Vérifie si un pseudo est disponible (aucun utilisateur enregistré ne le
+   * porte déjà), comparaison insensible à la casse. Utilisé par l'écran de
+   * connexion pour la validation "au fil de la frappe" (voir LoginPage.tsx).
+   */
+  pseudoDisponible(pseudo) {
+    const normalise = String(pseudo ?? '')
+      .trim()
+      .toLowerCase();
+    return !this.utilisateurs.some(
+      (item) => item.pseudo.toLowerCase() === normalise
+    );
+  }
+
+  /**
+   * Établit la connexion pour un utilisateur et crée sa session locale.
+   * Enregistre l'utilisateur s'il est nouveau (en revérifiant l'unicité du
+   * pseudo, défense en profondeur au cas où l'UI aurait laissé passer un
+   * pseudo déjà pris entre la vérification et la soumission), puis marque
+   * cet utilisateur comme "connecté" pour le dashboard (voir
+   * obtenirUtilisateurConnecte).
+   *
+   * @param {{id: string, pseudo: string}} utilisateur
+   * @returns {{statut: string, reconnexions: number}}
+   */
+  connexion({ id, pseudo }) {
+    const dejaEnregistre = this.utilisateurs.some((item) => item.id === id);
+    if (!dejaEnregistre) {
+      if (!this.pseudoDisponible(pseudo)) {
+        throw new Error(`Le pseudo "${pseudo}" est déjà utilisé.`);
+      }
+      this.utilisateurs.push({ id, pseudo });
+    }
+    this.utilisateurConnecteId = id;
+    return { statut: 'connecte', reconnexions: 0 };
+  }
+
+  /**
+   * Retourne l'identifiant de l'utilisateur connecté via l'écran de
+   * connexion, ou null si personne ne s'est encore connecté par ce biais
+   * (ex. dashboard ouvert directement en développement, sans passer par la
+   * page de connexion).
+   */
+  obtenirUtilisateurConnecte() {
+    return this.utilisateurConnecteId;
   }
 
   obtenirEtat(utilisateurId) {
@@ -143,6 +195,16 @@ class MockGatewayRuntime {
   envoyerMessage({ salonId, utilisateurId, contenu }) {
     this.verifierUtilisateur(utilisateurId);
     const salon = this.trouverSalon(salonId);
+    // Un salon public accepte implicitement tout le monde comme membre :
+    // sans ça, un utilisateur créé après la seed initiale (alice/bob/
+    // charlie) peut VOIR le salon (obtenirEtat ne vérifie que la
+    // visibilité), mais ne peut jamais y écrire, puisque membreIds reste
+    // figé à sa liste de création. On "rejoint" donc le salon au premier
+    // message plutôt que d'exiger une étape d'adhésion séparée qui
+    // n'existe pas encore dans cette UI.
+    if (salon.visibilite === 'public' && !salon.membreIds.includes(utilisateurId)) {
+      salon.membreIds.push(utilisateurId);
+    }
     if (!salon.membreIds.includes(utilisateurId)) {
       throw new Error('Accès refusé à ce salon');
     }
