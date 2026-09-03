@@ -1,0 +1,42 @@
+name: Discord Notifications
+
+on:
+  push:
+    branches:
+      - develop
+
+  pull_request:
+    branches:
+      - develop
+    types:
+      - opened
+      - closed
+      - reopened
+
+jobs:
+  notify-discord:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Notification Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            MESSAGE="🚀 Nouveau push sur develop !
+
+            👤 Auteur: ${{ github.actor }}
+            📁 Repository: ${{ github.repository }}
+            💬 Commit: ${{ github.event.head_commit.message }}
+            🔗 ${{ github.event.head_commit.url }}"
+          else
+            MESSAGE="🔀 Pull Request
+
+            📌 Titre: ${{ github.event.pull_request.title }}
+            👤 Auteur: ${{ github.actor }}
+            🔗 ${{ github.event.pull_request.html_url }}"
+          fi
+
+          curl -H "Content-Type: application/json" \
+            -d "$(jq -n --arg content "$MESSAGE" '{content: $content}')" \
+            "$DISCORD_WEBHOOK"
