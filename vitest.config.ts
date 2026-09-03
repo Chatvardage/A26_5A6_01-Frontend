@@ -7,8 +7,11 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html'],
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/domain/entities/Conversation.ts',
-        'src/infrastructure/gateways/ChatGateway.ts', 'src/**/*.d.ts'],
+      exclude: [
+        'src/**/*.test.ts',
+        'src/domain/entities/Conversation.ts',
+        'src/infrastructure/gateways/ChatGateway.ts',
+      ],
       thresholds: {
         statements: 95,
         branches: 95,

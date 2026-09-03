@@ -1,3 +1,4 @@
+const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
 const {
   app,
   BrowserWindow,
@@ -7,6 +8,12 @@ const {
   session,
 } = require('electron');
 const path = require('path');
+const { fileURLToPath } = require('url');
+const {
+  MockGatewayRuntime,
+} = require('./src/infrastructure/gateways/MockGatewayRuntime.js');
+
+const chatGateway = new MockGatewayRuntime();
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -58,7 +65,7 @@ function isAppUrl(url) {
   if (parsed.protocol === 'file:') {
     let filePath;
     try {
-      filePath = path.resolve(decodeURIComponent(parsed.pathname));
+      filePath = path.resolve(fileURLToPath(parsed));
     } catch {
       return false;
     }
@@ -243,6 +250,33 @@ ipcMain.handle('navigation:tableau-de-bord', (event) => {
     mainWindow.loadFile(APP_INDEX_PATH);
   }
 });
+function verifierProvenance(event) {
+  if (!isAppUrl(event.senderFrame?.url ?? '')) {
+    throw new Error('Origine IPC non autorisée');
+  }
+}
+
+function exposerCanal(nom, action) {
+  ipcMain.handle(nom, (event, donnees) => {
+    verifierProvenance(event);
+    return action(donnees ?? {});
+  });
+}
+
+exposerCanal('salons:etat', ({ utilisateurId }) =>
+  chatGateway.obtenirEtat(utilisateurId)
+);
+exposerCanal('salons:creer', (donnees) => chatGateway.creerSalon(donnees));
+exposerCanal('salons:inviter', (donnees) => chatGateway.inviter(donnees));
+exposerCanal('salons:accepter-invitation', (donnees) =>
+  chatGateway.accepterInvitation(donnees)
+);
+exposerCanal('salons:refuser-invitation', (donnees) =>
+  chatGateway.refuserInvitation(donnees)
+);
+exposerCanal('salons:envoyer-message', (donnees) =>
+  chatGateway.envoyerMessage(donnees)
+);
 
 // --- Instance unique ---------------------------------------------------
 // Une appli de clavardage locale n'a pas de sens ouverte deux fois en
