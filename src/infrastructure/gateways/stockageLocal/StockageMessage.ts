@@ -52,11 +52,13 @@ export function enregistrerMessage(
 function convertirDateEnTimestamp(date: string): number {
   // Format attendu : jj/mm/aa HH:MM:SS
   const [partieDate, partieHeure] = date.split(' ');
+  if (!partieDate || !partieHeure) return 0;
+
   const [jj, mm, aa] = partieDate.split('/').map(Number);
   const [HH, MM, SS] = partieHeure.split(':').map(Number);
+  if ([jj, mm, aa, HH, MM, SS].some((n) => Number.isNaN(n))) return 0;
 
   const anneeComplete = 2000 + aa; // suppose 20XX
-
   return new Date(anneeComplete, mm - 1, jj, HH, MM, SS).getTime();
 }
 
