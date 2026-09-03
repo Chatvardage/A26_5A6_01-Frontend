@@ -104,13 +104,15 @@ describe('MockGateway', () => {
 
   // ===== Déconnexion =====
   describe('simulerDeconnexion', () => {
-    it("ne devrait rien faire de plus qu'émettre une erreur si personne n'est connecté", async () => {
+    it("devrait rejeter et émettre une erreur si personne n'est connecté", async () => {
       const erreurs: string[] = [];
       gateway.ecouterEvenement('erreur', (evt) =>
         erreurs.push(evt.donnees.message as string)
       );
 
-      await gateway.simulerDeconnexion();
+      await expect(gateway.simulerDeconnexion()).rejects.toThrow(
+        'Aucun utilisateur connecté'
+      );
 
       expect(erreurs).toContain('Aucun utilisateur connecté');
       expect(gateway.obtenirEtatConnexion().statut).toBe('deconnecte');
@@ -199,11 +201,31 @@ describe('MockGateway', () => {
       await gateway.simulerReconnexion('u1');
 
       expect(gateway.obtenirEtatConnexion().reconnexions).toBe(1);
+      expect(gateway.obtenirEtatConnexion().statut).toBe('connecte');
       expect(gateway.obtenirUtilisateurConnecte()).toBe('u1');
       expect(evenements).toContain('reconnexion');
 
       await gateway.simulerReconnexion('u1');
       expect(gateway.obtenirEtatConnexion().reconnexions).toBe(2);
+    });
+
+    it("devrait rejeter et revenir à l'état déconnecté si l'utilisateur à reconnecter n'existe pas", async () => {
+      const erreurs: string[] = [];
+      gateway.ecouterEvenement('erreur', (evt) =>
+        erreurs.push(evt.donnees.message as string)
+      );
+
+      await expect(gateway.simulerReconnexion('fantome')).rejects.toThrow(
+        'Utilisateur fantome non trouvé'
+      );
+
+      // L'état ne doit pas rester coincé sur 'reconnexion' : l'utilisateur
+      // n'a jamais été connecté, donc l'état doit refléter 'deconnecte'.
+      expect(gateway.obtenirEtatConnexion().statut).toBe('deconnecte');
+      expect(gateway.obtenirUtilisateurConnecte()).toBeNull();
+      expect(erreurs).toContain('Utilisateur fantome non trouvé');
+      // Le compteur de tentatives est tout de même incrémenté.
+      expect(gateway.obtenirEtatConnexion().reconnexions).toBe(1);
     });
   });
 

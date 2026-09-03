@@ -108,55 +108,65 @@ export class MockGateway {
    * @returns Promise<void> qui se complète après la latence simulée
    */
   async simulerConnexion(utilisateurId: string): Promise<void> {
-    return this.simulerLatence(async () => {
-      const utilisateur = this.utilisateurs.get(utilisateurId);
-      if (!utilisateur) {
-        this.emetEvenement('erreur', {
-          message: `Utilisateur ${utilisateurId} non trouvé`,
-        });
-        throw new Error(`Utilisateur ${utilisateurId} non trouvé`);
-      }
+    return this.simulerLatence(async () =>
+      this.simulerConnexionSansLatence(utilisateurId)
+    );
+  }
 
-      this.utilisateurActuelId = utilisateurId;
-      this.etatConnexion = creerEtatConnexion(
-        'connecte',
-        Date.now(),
-        this.reconnexions
-      );
-
-      // Mettre à jour la présence de l'utilisateur
-      const presence = creerPresence(utilisateurId, 'en-ligne', Date.now());
-      this.presences.set(utilisateurId, presence);
-
-      // Émettre un événement de connexion
-      this.emetEvenement('connexion', {
-        utilisateurId,
-        utilisateur,
+  /**
+   * Logique synchrone de connexion, sans latence simulée. Extraite pour être
+   * réutilisable par `simulerReconnexion` sans payer une seconde fois
+   * `simulerLatence` (même principe que `ajouterUtilisateurAuSalonSansLatence`
+   * pour `accepterInvitationSalon`).
+   */
+  private simulerConnexionSansLatence(utilisateurId: string): void {
+    const utilisateur = this.utilisateurs.get(utilisateurId);
+    if (!utilisateur) {
+      this.emetEvenement('erreur', {
+        message: `Utilisateur ${utilisateurId} non trouvé`,
       });
+      throw new Error(`Utilisateur ${utilisateurId} non trouvé`);
+    }
 
-      // Émettre un message système dans les salons
-      const salonsUtilisateur = Array.from(this.salons.values()).filter(
-        (salon) =>
-          salon.membreIds.includes(utilisateurId) ||
-          salon.membresInvites.includes(utilisateurId)
-      );
+    this.utilisateurActuelId = utilisateurId;
+    this.etatConnexion = creerEtatConnexion(
+      'connecte',
+      Date.now(),
+      this.reconnexions
+    );
 
-      for (const salon of salonsUtilisateur) {
-        const messageSysteme = creerMessage(
-          `msg-${this.genererIdUnique()}`,
-          salon.id,
-          AUTEUR_SYSTEME,
-          `${utilisateur.pseudo} a rejoint le salon`,
-          Date.now(),
-          'systeme'
-        );
-        this.messages.set(messageSysteme.id, messageSysteme);
-        this.emetEvenement('message-recu', { message: messageSysteme });
-      }
+    // Mettre à jour la présence de l'utilisateur
+    const presence = creerPresence(utilisateurId, 'en-ligne', Date.now());
+    this.presences.set(utilisateurId, presence);
 
-      // Diffuser la présence de l'utilisateur
-      this.emetEvenement('presence-mise-a-jour', { presence });
+    // Émettre un événement de connexion
+    this.emetEvenement('connexion', {
+      utilisateurId,
+      utilisateur,
     });
+
+    // Émettre un message système dans les salons
+    const salonsUtilisateur = Array.from(this.salons.values()).filter(
+      (salon) =>
+        salon.membreIds.includes(utilisateurId) ||
+        salon.membresInvites.includes(utilisateurId)
+    );
+
+    for (const salon of salonsUtilisateur) {
+      const messageSysteme = creerMessage(
+        `msg-${this.genererIdUnique()}`,
+        salon.id,
+        AUTEUR_SYSTEME,
+        `${utilisateur.pseudo} a rejoint le salon`,
+        Date.now(),
+        'systeme'
+      );
+      this.messages.set(messageSysteme.id, messageSysteme);
+      this.emetEvenement('message-recu', { message: messageSysteme });
+    }
+
+    // Diffuser la présence de l'utilisateur
+    this.emetEvenement('presence-mise-a-jour', { presence });
   }
 
   /**
@@ -169,7 +179,7 @@ export class MockGateway {
         this.emetEvenement('erreur', {
           message: 'Aucun utilisateur connecté',
         });
-        return;
+        throw new Error('Aucun utilisateur connecté');
       }
 
       const utilisateurId = this.utilisateurActuelId;
@@ -235,8 +245,24 @@ export class MockGateway {
         reconnexions: this.reconnexions,
       });
 
-      // Effectuer la reconnexion (simulerConnexion applique déjà la latence)
-      await this.simulerConnexion(utilisateurId);
+      try {
+        // Réutilise la logique de connexion sans repayer une seconde
+        // latence : simulerLatence() ci-dessus simule déjà l'unique
+        // aller-retour réseau de cette opération (même principe que
+        // accepterInvitationSalon / ajouterUtilisateurAuSalonSansLatence).
+        this.simulerConnexionSansLatence(utilisateurId);
+      } catch (erreur) {
+        // La tentative de reconnexion a échoué : ne pas laisser l'état
+        // coincé sur 'reconnexion' indéfiniment. obtenirUtilisateurConnecte()
+        // reste `null` dans ce cas (simulerConnexionSansLatence n'a pas pu
+        // définir utilisateurActuelId), donc 'deconnecte' reflète la réalité.
+        this.etatConnexion = creerEtatConnexion(
+          'deconnecte',
+          Date.now(),
+          this.reconnexions
+        );
+        throw erreur;
+      }
     });
   }
 
