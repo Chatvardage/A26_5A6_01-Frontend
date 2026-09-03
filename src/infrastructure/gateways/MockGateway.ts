@@ -138,13 +138,15 @@ export class MockGateway {
       { conversationId: creerDmId('u3', 'u6'), auteurId: 'u3', contenu: 'Oui, il a déjà été validé.', type: 'texte' as const },
     ];
 
+    const baseTimestamp = Date.now() - messagesDM.length * 60000;
+
     messagesDM.forEach((message, index) => {
       const msg = creerMessage(
         `msg-dm-${index + 1}`,
         message.conversationId,
         message.auteurId,
         message.contenu,
-        Date.now() + index * 60000,
+        baseTimestamp + index * 60000,
         message.type
       );
       this.messages.set(msg.id, msg);

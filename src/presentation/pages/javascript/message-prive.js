@@ -119,7 +119,9 @@ window.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        const messages = conversation.messages ?? [];
+        const messages = [...(conversation.messages ?? [])].sort(
+            (a, b) => (a.envoi ?? 0) - (b.envoi ?? 0)
+        );
         const otherUser = conversation.otherUser;
 
         if (topbarName) {
