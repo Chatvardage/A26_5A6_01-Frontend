@@ -1,5 +1,11 @@
 const { app, BrowserWindow, Menu, Notification, shell, ipcMain } = require('electron');
 const path = require('path');
+const { fileURLToPath } = require('url');
+const {
+  MockGatewayRuntime,
+} = require('./src/infrastructure/gateways/MockGatewayRuntime.js');
+
+const chatGateway = new MockGatewayRuntime();
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -51,7 +57,7 @@ function isAppUrl(url) {
   if (parsed.protocol === 'file:') {
     let filePath;
     try {
-      filePath = path.resolve(decodeURIComponent(parsed.pathname));
+      filePath = path.resolve(fileURLToPath(parsed));
     } catch {
       return false;
     }

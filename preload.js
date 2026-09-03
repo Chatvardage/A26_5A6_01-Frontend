@@ -19,4 +19,20 @@ contextBridge.exposeInMainWorld('notifications', {
     ipcRenderer.invoke('notification:set-active-conversation', conversationId),
   messageReceived: (message) =>
     ipcRenderer.invoke('notification:message-received', message),
+  messageRead: (messageId) =>
+    ipcRenderer.invoke('notification:message-read', messageId)
+});
+
+contextBridge.exposeInMainWorld('electronAPI', {
+  obtenirEtatSalons: (utilisateurId) =>
+    ipcRenderer.invoke('salons:etat', { utilisateurId }),
+  creerSalon: (donnees) => ipcRenderer.invoke('salons:creer', donnees),
+  inviterAuSalon: (donnees) => ipcRenderer.invoke('salons:inviter', donnees),
+  accepterInvitation: (donnees) =>
+    ipcRenderer.invoke('salons:accepter-invitation', donnees),
+  refuserInvitation: (donnees) =>
+    ipcRenderer.invoke('salons:refuser-invitation', donnees),
+  envoyerMessageSalon: (donnees) =>
+    ipcRenderer.invoke('salons:envoyer-message', donnees),
+
 });
