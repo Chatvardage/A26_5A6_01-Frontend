@@ -152,6 +152,10 @@ function showMessageNotification(message) {
   return true;
 }
 
+function messageErreur(erreur) {
+  return erreur instanceof Error ? erreur.message : String(erreur);
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: DEFAULT_WINDOW_WIDTH,
@@ -267,6 +271,73 @@ ipcMain.handle('notification:message-received', (event, message) => {
     return { shown: false };
   }
   return { shown: showMessageNotification(message) };
+});
+
+// --- Salons et messages (ChatGateway) ----------------------------------------
+ipcMain.handle('salons:etat', (event, params) => {
+  if (!isTrustedIpcEvent(event)) {
+    throw new Error('Accès refusé');
+  }
+  try {
+    return chatGateway.obtenirEtat(params.utilisateurId);
+  } catch (erreur) {
+    throw new Error(messageErreur(erreur));
+  }
+});
+
+ipcMain.handle('salons:creer', (event, donnees) => {
+  if (!isTrustedIpcEvent(event)) {
+    throw new Error('Accès refusé');
+  }
+  try {
+    return chatGateway.creerSalon(donnees);
+  } catch (erreur) {
+    throw new Error(messageErreur(erreur));
+  }
+});
+
+ipcMain.handle('salons:inviter', (event, donnees) => {
+  if (!isTrustedIpcEvent(event)) {
+    throw new Error('Accès refusé');
+  }
+  try {
+    return chatGateway.inviter(donnees);
+  } catch (erreur) {
+    throw new Error(messageErreur(erreur));
+  }
+});
+
+ipcMain.handle('salons:accepter-invitation', (event, donnees) => {
+  if (!isTrustedIpcEvent(event)) {
+    throw new Error('Accès refusé');
+  }
+  try {
+    return chatGateway.accepterInvitation(donnees);
+  } catch (erreur) {
+    throw new Error(messageErreur(erreur));
+  }
+});
+
+ipcMain.handle('salons:refuser-invitation', (event, donnees) => {
+  if (!isTrustedIpcEvent(event)) {
+    throw new Error('Accès refusé');
+  }
+  try {
+    return chatGateway.refuserInvitation(donnees);
+  } catch (erreur) {
+    throw new Error(messageErreur(erreur));
+  }
+});
+
+ipcMain.handle('salons:envoyer-message', (event, donnees) => {
+  if (!isTrustedIpcEvent(event)) {
+    throw new Error('Accès refusé');
+  }
+  try {
+    return chatGateway.envoyerMessage(donnees);
+  } catch (erreur) {
+    throw new Error(messageErreur(erreur));
+  }
 });
 
 // --- Instance unique ---------------------------------------------------
