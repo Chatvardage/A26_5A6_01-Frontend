@@ -31,6 +31,9 @@ export type TypeEvenement =
   | 'utilisateur-quitte-salon'
   | 'salon-cree'
   | 'salon-supprime'
+  | 'invitation-salon-envoyee'
+  | 'invitation-salon-acceptee'
+  | 'invitation-salon-refusee'
   | 'message-recu'
   | 'message-modifie'
   | 'message-supprime'
@@ -79,11 +82,11 @@ export class MockGateway {
    * Initialise les données de test par défaut
    */
   private initialiserDonneesMock(): void {
-    const user1 = creerUtilisateur('u1', 'alice');
-    const user2 = creerUtilisateur('u2', 'bob');
-    const user3 = creerUtilisateur('u3', 'charlie');
-    const user4 = creerUtilisateur('u4', 'dana');
-    const user5 = creerUtilisateur('u5', 'eric');
+    const user1 = creerUtilisateur('u1', 'sam');
+    const user2 = creerUtilisateur('u2', 'ariane');
+    const user3 = creerUtilisateur('u3', 'eva');
+    const user4 = creerUtilisateur('u4', 'logan');
+    const user5 = creerUtilisateur('u5', 'lili-rose');
     const user6 = creerUtilisateur('u6', 'fiona');
 
     this.utilisateurs.set(user1.id, user1);
@@ -159,55 +162,65 @@ export class MockGateway {
    * @returns Promise<void> qui se complète après la latence simulée
    */
   async simulerConnexion(utilisateurId: string): Promise<void> {
-    return this.simulerLatence(async () => {
-      const utilisateur = this.utilisateurs.get(utilisateurId);
-      if (!utilisateur) {
-        this.emetEvenement('erreur', {
-          message: `Utilisateur ${utilisateurId} non trouvé`,
-        });
-        throw new Error(`Utilisateur ${utilisateurId} non trouvé`);
-      }
+    return this.simulerLatence(async () =>
+      this.simulerConnexionSansLatence(utilisateurId)
+    );
+  }
 
-      this.utilisateurActuelId = utilisateurId;
-      this.etatConnexion = creerEtatConnexion(
-        'connecte',
-        Date.now(),
-        this.reconnexions
-      );
-
-      // Mettre à jour la présence de l'utilisateur
-      const presence = creerPresence(utilisateurId, 'en-ligne', Date.now());
-      this.presences.set(utilisateurId, presence);
-
-      // Émettre un événement de connexion
-      this.emetEvenement('connexion', {
-        utilisateurId,
-        utilisateur,
+  /**
+   * Logique synchrone de connexion, sans latence simulée. Extraite pour être
+   * réutilisable par `simulerReconnexion` sans payer une seconde fois
+   * `simulerLatence` (même principe que `ajouterUtilisateurAuSalonSansLatence`
+   * pour `accepterInvitationSalon`).
+   */
+  private simulerConnexionSansLatence(utilisateurId: string): void {
+    const utilisateur = this.utilisateurs.get(utilisateurId);
+    if (!utilisateur) {
+      this.emetEvenement('erreur', {
+        message: `Utilisateur ${utilisateurId} non trouvé`,
       });
+      throw new Error(`Utilisateur ${utilisateurId} non trouvé`);
+    }
 
-      // Émettre un message système dans les salons
-      const salonsUtilisateur = Array.from(this.salons.values()).filter(
-        (salon) =>
-          salon.membreIds.includes(utilisateurId) ||
-          salon.membresInvites.includes(utilisateurId)
-      );
+    this.utilisateurActuelId = utilisateurId;
+    this.etatConnexion = creerEtatConnexion(
+      'connecte',
+      Date.now(),
+      this.reconnexions
+    );
 
-      for (const salon of salonsUtilisateur) {
-        const messageSysteme = creerMessage(
-          `msg-${this.genererIdUnique()}`,
-          salon.id,
-          AUTEUR_SYSTEME,
-          `${utilisateur.pseudo} a rejoint le salon`,
-          Date.now(),
-          'systeme'
-        );
-        this.messages.set(messageSysteme.id, messageSysteme);
-        this.emetEvenement('message-recu', { message: messageSysteme });
-      }
+    // Mettre à jour la présence de l'utilisateur
+    const presence = creerPresence(utilisateurId, 'en-ligne', Date.now());
+    this.presences.set(utilisateurId, presence);
 
-      // Diffuser la présence de l'utilisateur
-      this.emetEvenement('presence-mise-a-jour', { presence });
+    // Émettre un événement de connexion
+    this.emetEvenement('connexion', {
+      utilisateurId,
+      utilisateur,
     });
+
+    // Émettre un message système dans les salons
+    const salonsUtilisateur = Array.from(this.salons.values()).filter(
+      (salon) =>
+        salon.membreIds.includes(utilisateurId) ||
+        salon.membresInvites.includes(utilisateurId)
+    );
+
+    for (const salon of salonsUtilisateur) {
+      const messageSysteme = creerMessage(
+        `msg-${this.genererIdUnique()}`,
+        salon.id,
+        AUTEUR_SYSTEME,
+        `${utilisateur.pseudo} a rejoint le salon`,
+        Date.now(),
+        'systeme'
+      );
+      this.messages.set(messageSysteme.id, messageSysteme);
+      this.emetEvenement('message-recu', { message: messageSysteme });
+    }
+
+    // Diffuser la présence de l'utilisateur
+    this.emetEvenement('presence-mise-a-jour', { presence });
   }
 
   /**
@@ -220,7 +233,7 @@ export class MockGateway {
         this.emetEvenement('erreur', {
           message: 'Aucun utilisateur connecté',
         });
-        return;
+        throw new Error('Aucun utilisateur connecté');
       }
 
       const utilisateurId = this.utilisateurActuelId;
@@ -286,8 +299,24 @@ export class MockGateway {
         reconnexions: this.reconnexions,
       });
 
-      // Effectuer la reconnexion (simulerConnexion applique déjà la latence)
-      await this.simulerConnexion(utilisateurId);
+      try {
+        // Réutilise la logique de connexion sans repayer une seconde
+        // latence : simulerLatence() ci-dessus simule déjà l'unique
+        // aller-retour réseau de cette opération (même principe que
+        // accepterInvitationSalon / ajouterUtilisateurAuSalonSansLatence).
+        this.simulerConnexionSansLatence(utilisateurId);
+      } catch (erreur) {
+        // La tentative de reconnexion a échoué : ne pas laisser l'état
+        // coincé sur 'reconnexion' indéfiniment. obtenirUtilisateurConnecte()
+        // reste `null` dans ce cas (simulerConnexionSansLatence n'a pas pu
+        // définir utilisateurActuelId), donc 'deconnecte' reflète la réalité.
+        this.etatConnexion = creerEtatConnexion(
+          'deconnecte',
+          Date.now(),
+          this.reconnexions
+        );
+        throw erreur;
+      }
     });
   }
 
@@ -448,6 +477,105 @@ export class MockGateway {
     });
   }
 
+  /** Invite localement un utilisateur dans un salon privé. Seul l'hôte peut inviter. */
+  async inviterUtilisateurAuSalon(
+    salonId: ConversationId,
+    utilisateurId: string,
+    hoteId: string
+  ): Promise<Salon> {
+    return this.simulerLatence(async () => {
+      const salon = this.salons.get(salonId);
+      if (!salon) throw new Error(`Salon ${salonId} non trouvé`);
+      if (salon.visibilite === 'public') {
+        throw new Error(
+          `Les invitations sont désactivées pour le salon public ${salonId}`
+        );
+      }
+      if (salon.hoteId !== hoteId) {
+        throw new Error(`Seul l'hôte peut inviter dans le salon ${salonId}`);
+      }
+      if (!this.utilisateurs.has(utilisateurId)) {
+        throw new Error(`Utilisateur ${utilisateurId} non trouvé`);
+      }
+      if (salon.membreIds.includes(utilisateurId)) return salon;
+
+      const salonMisAJour = salon.membresInvites.includes(utilisateurId)
+        ? salon
+        : {
+            ...salon,
+            membresInvites: [...salon.membresInvites, utilisateurId],
+          };
+      this.salons.set(salonId, salonMisAJour);
+      this.emetEvenement('invitation-salon-envoyee', {
+        salonId,
+        utilisateurId,
+        hoteId,
+      });
+      return salonMisAJour;
+    });
+  }
+
+  /** Retourne les invitations en attente d'un utilisateur. */
+  async obtenirInvitationsUtilisateur(utilisateurId: string): Promise<Salon[]> {
+    return this.simulerLatence(async () =>
+      Array.from(this.salons.values()).filter((salon) =>
+        salon.membresInvites.includes(utilisateurId)
+      )
+    );
+  }
+
+  /** Accepte une invitation et ajoute l'utilisateur aux membres du salon. */
+  async accepterInvitationSalon(
+    salonId: ConversationId,
+    utilisateurId: string
+  ): Promise<Salon> {
+    return this.simulerLatence(async () => {
+      const salon = this.salons.get(salonId);
+      if (!salon) throw new Error(`Salon ${salonId} non trouvé`);
+      if (!salon.membresInvites.includes(utilisateurId)) {
+        throw new Error(`Aucune invitation au salon ${salonId}`);
+      }
+      // Réutilise la logique d'ajout sans repayer une seconde latence :
+      // simulerLatence() ci-dessus simule déjà l'unique aller-retour réseau
+      // de cette opération.
+      const salonMisAJour = this.ajouterUtilisateurAuSalonSansLatence(
+        salonId,
+        utilisateurId
+      );
+      this.emetEvenement('invitation-salon-acceptee', {
+        salonId,
+        utilisateurId,
+      });
+      return salonMisAJour;
+    });
+  }
+
+  /** Refuse une invitation sans donner accès au salon. */
+  async refuserInvitationSalon(
+    salonId: ConversationId,
+    utilisateurId: string
+  ): Promise<Salon> {
+    return this.simulerLatence(async () => {
+      const salon = this.salons.get(salonId);
+      if (!salon) throw new Error(`Salon ${salonId} non trouvé`);
+      if (!salon.membresInvites.includes(utilisateurId)) {
+        throw new Error(`Aucune invitation au salon ${salonId}`);
+      }
+      const salonMisAJour = {
+        ...salon,
+        membresInvites: salon.membresInvites.filter(
+          (id) => id !== utilisateurId
+        ),
+      };
+      this.salons.set(salonId, salonMisAJour);
+      this.emetEvenement('invitation-salon-refusee', {
+        salonId,
+        utilisateurId,
+      });
+      return salonMisAJour;
+    });
+  }
+
   /**
    * Ajoute un utilisateur à un salon
    * @param salonId L'identifiant du salon
@@ -458,62 +586,75 @@ export class MockGateway {
     salonId: ConversationId,
     utilisateurId: string
   ): Promise<Salon> {
-    return this.simulerLatence(async () => {
-      const salon = this.salons.get(salonId);
-      if (!salon) {
+    return this.simulerLatence(async () =>
+      this.ajouterUtilisateurAuSalonSansLatence(salonId, utilisateurId)
+    );
+  }
+
+  /**
+   * Logique synchrone d'ajout d'un utilisateur à un salon, sans latence simulée.
+   * Extraite de `ajouterUtilisateurAuSalon` pour être réutilisable par
+   * `accepterInvitationSalon` sans payer une seconde fois `simulerLatence`
+   * (chaque méthode publique ne doit simuler qu'un seul aller-retour réseau).
+   */
+  private ajouterUtilisateurAuSalonSansLatence(
+    salonId: ConversationId,
+    utilisateurId: string
+  ): Salon {
+    const salon = this.salons.get(salonId);
+    if (!salon) {
+      this.emetEvenement('erreur', {
+        message: `Salon ${salonId} non trouvé`,
+      });
+      throw new Error(`Salon ${salonId} non trouvé`);
+    }
+
+    const utilisateur = this.utilisateurs.get(utilisateurId);
+    if (!utilisateur) {
+      this.emetEvenement('erreur', {
+        message: `Utilisateur ${utilisateurId} non trouvé`,
+      });
+      throw new Error(`Utilisateur ${utilisateurId} non trouvé`);
+    }
+
+    if (!salon.membreIds.includes(utilisateurId)) {
+      const estInvite = salon.membresInvites.includes(utilisateurId);
+      if (salon.visibilite === 'prive' && !estInvite) {
         this.emetEvenement('erreur', {
-          message: `Salon ${salonId} non trouvé`,
+          message: `Accès refusé au salon privé ${salonId}`,
         });
-        throw new Error(`Salon ${salonId} non trouvé`);
+        throw new Error(`Accès refusé au salon privé ${salonId}`);
       }
+      const salonMisAJour = {
+        ...salon,
+        membreIds: [...salon.membreIds, utilisateurId],
+        membresInvites: estInvite
+          ? salon.membresInvites.filter((id) => id !== utilisateurId)
+          : salon.membresInvites,
+      };
+      this.salons.set(salonId, salonMisAJour);
+      this.emetEvenement('utilisateur-rejoint-salon', {
+        salonId,
+        utilisateurId,
+        utilisateur,
+      });
 
-      const utilisateur = this.utilisateurs.get(utilisateurId);
-      if (!utilisateur) {
-        this.emetEvenement('erreur', {
-          message: `Utilisateur ${utilisateurId} non trouvé`,
-        });
-        throw new Error(`Utilisateur ${utilisateurId} non trouvé`);
-      }
+      // Créer un message système
+      const messageSysteme = creerMessage(
+        `msg-${this.genererIdUnique()}`,
+        salonId,
+        AUTEUR_SYSTEME,
+        `${utilisateur.pseudo} a rejoint le salon`,
+        Date.now(),
+        'systeme'
+      );
+      this.messages.set(messageSysteme.id, messageSysteme);
+      this.emetEvenement('message-recu', { message: messageSysteme });
 
-      if (!salon.membreIds.includes(utilisateurId)) {
-        const estInvite = salon.membresInvites.includes(utilisateurId);
-        if (salon.visibilite === 'prive' && !estInvite) {
-          this.emetEvenement('erreur', {
-            message: `Accès refusé au salon privé ${salonId}`,
-          });
-          throw new Error(`Accès refusé au salon privé ${salonId}`);
-        }
-        const salonMisAJour = {
-          ...salon,
-          membreIds: [...salon.membreIds, utilisateurId],
-          membresInvites: estInvite
-            ? salon.membresInvites.filter((id) => id !== utilisateurId)
-            : salon.membresInvites,
-        };
-        this.salons.set(salonId, salonMisAJour);
-        this.emetEvenement('utilisateur-rejoint-salon', {
-          salonId,
-          utilisateurId,
-          utilisateur,
-        });
+      return salonMisAJour;
+    }
 
-        // Créer un message système
-        const messageSysteme = creerMessage(
-          `msg-${this.genererIdUnique()}`,
-          salonId,
-          AUTEUR_SYSTEME,
-          `${utilisateur.pseudo} a rejoint le salon`,
-          Date.now(),
-          'systeme'
-        );
-        this.messages.set(messageSysteme.id, messageSysteme);
-        this.emetEvenement('message-recu', { message: messageSysteme });
-
-        return salonMisAJour;
-      }
-
-      return salon;
-    });
+    return salon;
   }
 
   /**
@@ -622,6 +763,21 @@ export class MockGateway {
           message: `Auteur ${auteurId} non trouvé`,
         });
         throw new Error(`Auteur ${auteurId} non trouvé`);
+      }
+
+      const salon = this.salons.get(conversationId);
+      const conversationPrivee = this.conversationsPrivees.get(conversationId);
+
+      if (salon) {
+        if (!salon.membreIds.includes(auteurId)) {
+          throw new Error(`Accès refusé au salon ${conversationId}`);
+        }
+      } else if (conversationPrivee) {
+        if (!conversationPrivee.participantIds.includes(auteurId)) {
+          throw new Error(`Accès refusé à la conversation ${conversationId}`);
+        }
+      } else {
+        throw new Error(`Conversation ${conversationId} introuvable`);
       }
 
       const message = creerMessage(

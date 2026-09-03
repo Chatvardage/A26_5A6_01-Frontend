@@ -13,6 +13,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         conversations: [],
         activeConversationId: null,
         currentFilter: 'all',
+        currentUserId: null,
     };
 
     function getFilteredConversations() {
@@ -26,7 +27,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function refreshConversations() {
-        const conversations = await window.electronAPI.obtenirConversationsPrivees();
+        const conversations = await window.electronAPI.obtenirConversationsPrivees(
+            state.currentUserId
+        );
         state.conversations = [...conversations].sort((a, b) => {
             const aTime = a.lastMessage?.envoi ?? a.messages?.[0]?.envoi ?? 0;
             const bTime = b.lastMessage?.envoi ?? b.messages?.[0]?.envoi ?? 0;
@@ -160,8 +163,11 @@ window.addEventListener('DOMContentLoaded', async () => {
 
         messages.forEach((message) => {
             const row = document.createElement('article');
-            const isOwn = message.auteurId === 'u1';
-            const author = message.auteurId === 'u1' ? 'Moi' : otherUser?.pseudo ?? 'Utilisateur';
+            const isOwn = message.auteurId === state.currentUserId;
+            const author =
+                message.auteurId === state.currentUserId
+                    ? 'Moi'
+                    : otherUser?.pseudo ?? 'Utilisateur';
             const timeLabel = new Date(message.envoi).toLocaleTimeString([], {
                 hour: '2-digit',
                 minute: '2-digit',
@@ -232,8 +238,20 @@ window.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            await window.electronAPI.envoyerMessagePrive(state.activeConversationId, content);
+            await window.electronAPI.envoyerMessagePrive(
+                state.activeConversationId,
+                content,
+                state.currentUserId
+            );
             messageInput.value = '';
+            const utilisateurs = await window.electronAPI.obtenirUtilisateurs();
+            const currentUserSelect = document.getElementById('current-user-select');
+            const selectedUserId = currentUserSelect?.value;
+            state.currentUserId =
+                utilisateurs.find((u) => u.id === selectedUserId)?.id ??
+                utilisateurs[0]?.id ??
+                'u1';
+
             await refreshConversations();
         });
     }

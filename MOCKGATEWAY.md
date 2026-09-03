@@ -165,6 +165,14 @@ await gateway.ajouterUtilisateurAuSalon('s1', 'u3');
 // Retirer un utilisateur
 await gateway.retirerUtilisateurDuSalon('s1', 'u3');
 
+// Inviter un utilisateur dans un salon privé (seul l'hôte peut le faire)
+await gateway.inviterUtilisateurAuSalon('s2', 'u2', 'u1');
+
+// Voir, accepter ou refuser les invitations locales
+const invitations = await gateway.obtenirInvitationsUtilisateur('u2');
+await gateway.accepterInvitationSalon('s2', 'u2');
+// ou : await gateway.refuserInvitationSalon('s2', 'u2');
+
 // Supprimer le salon
 await gateway.supprimerSalon('s1');
 ```
