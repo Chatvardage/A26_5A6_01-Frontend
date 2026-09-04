@@ -19,6 +19,7 @@ function spawnProcess(bin, args) {
     env: { ...process.env },
     stdio: 'inherit',
     windowsHide: false,
+    shell: true,
   });
 }
 
