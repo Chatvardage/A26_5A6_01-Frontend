@@ -36,6 +36,18 @@ contextBridge.exposeInMainWorld('notifications', {
   // renderer.js / message-prive.js) : main.js n'a pas accès à <canvas>.
   setBadgeCount: (count, iconDataUrl) =>
     ipcRenderer.invoke('notifications:set-badge-count', { count, iconDataUrl }),
+  // État de focus de la fenêtre (voir fenetreEstFocusee dans main.js) :
+  // isWindowFocused() donne l'état au moment de l'appel (utile à
+  // l'initialisation d'une page, avant qu'un premier événement ait pu être
+  // reçu), onFocusChange() abonne à ses changements par la suite. Utilisé
+  // pour ne marquer une conversation comme "lue" (NotifPrefs.marquerCommeLu)
+  // que si la fenêtre a réellement le focus au moment où elle est affichée.
+  isWindowFocused: () => ipcRenderer.invoke('window:is-focused'),
+  onFocusChange: (callback) => {
+    const ecouteur = (_event, focused) => callback(focused);
+    ipcRenderer.on('window:focus-changed', ecouteur);
+    return () => ipcRenderer.removeListener('window:focus-changed', ecouteur);
+  },
 });
 
 contextBridge.exposeInMainWorld('electronAPI', {

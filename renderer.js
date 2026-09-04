@@ -34,6 +34,17 @@ const NotifPrefs =
 let utilisateurActuelId = sessionStorage.getItem('currentUserId') ?? 'u1';
 let salonActifId = null;
 let etat = { utilisateurs: [], salons: [], invitations: [] };
+// Miroir côté renderer de fenetreEstFocusee dans main.js (voir
+// 'window:focus-changed' / 'window:is-focused' dans preload.js), initialisé
+// à `true` par défaut le temps que la vraie valeur arrive (voir plus bas où
+// on l'interroge dès le démarrage) : la fenêtre vient tout juste d'être
+// affichée à ce moment-là, donc `true` est la meilleure hypothèse de départ.
+// Sert uniquement à décider si la conversation actuellement affichée doit
+// être marquée "lue" (voir afficherMessages()) — main.js gère déjà son
+// propre état équivalent pour décider d'afficher ou non une notification
+// système, les deux doivent rester d'accord (voir le commentaire dans
+// afficherMessages()).
+let fenetreEstFocusee = true;
 
 const el = {
   salons: document.querySelector('#channel-list'),
@@ -306,10 +317,23 @@ function afficherMessages() {
     definirConversationActivePourNotifs(null);
     return;
   }
-  // Le salon affiché est par définition "lu" par l'utilisateur courant, et
-  // c'est aussi la conversation "active" que main.js ne doit pas notifier
-  // (voir showMessageNotification côté main.js).
-  NotifPrefs.marquerCommeLu(utilisateurActuelId, salon.id, Date.now());
+  // Le salon affiché est "lu" par l'utilisateur courant — mais SEULEMENT si
+  // la fenêtre a effectivement le focus en ce moment (fenetreEstFocusee) :
+  // sans ce garde-fou, un message de démo/réel reçu pendant que la fenêtre
+  // est en arrière-plan (mais que ce salon était déjà sélectionné) serait
+  // marqué "lu" ici alors même qu'une vraie notification système vient
+  // d'être déclenchée pour ce même message côté main.js (qui, lui, exige
+  // déjà fenetreEstFocusee avant de considérer une conversation comme
+  // "déjà lue en direct" — voir showMessageNotification). Les deux
+  // indicateurs (rond de notification ici, notification système côté
+  // main.js) doivent rester d'accord entre eux.
+  if (fenetreEstFocusee) {
+    NotifPrefs.marquerCommeLu(utilisateurActuelId, salon.id, Date.now());
+  }
+  // La conversation "active" que main.js ne doit pas notifier (voir
+  // showMessageNotification côté main.js) reste définie qu'on ait le focus
+  // ou non : c'est ce salon qui est affiché à l'écran, peu importe si la
+  // fenêtre est actuellement au premier plan.
   definirConversationActivePourNotifs(salon.id);
   remplirLabelSalon(el.nomSalon, salon);
   el.prive.hidden = salon.visibilite !== 'prive';
@@ -605,6 +629,18 @@ async function initialiserUtilisateurCourant() {
 async function initialiser() {
   try {
     await initialiserUtilisateurCourant();
+    // À ce stade, le script s'est déjà mis en pause une fois (l'await
+    // ci-dessus), donc le reste du script synchrone du module a fini de
+    // s'exécuter — `serviceNotifications`, déclaré plus bas dans le fichier
+    // (voir "--- Notifications système ---"), est donc garanti défini ici,
+    // comme pour definirConversationActivePourNotifs()/notifierMessageSysteme()
+    // qui reposent sur le même ordre d'exécution. On récupère l'état de
+    // focus réel AVANT le premier appel à actualiser()/afficherMessages(),
+    // pour que la toute première conversation affichée au démarrage ne soit
+    // marquée "lue" que si la fenêtre a effectivement le focus à ce moment.
+    if (typeof serviceNotifications?.isWindowFocused === 'function') {
+      fenetreEstFocusee = Boolean(await serviceNotifications.isWindowFocused());
+    }
     await actualiser();
   } catch (erreur) {
     notifier(messageErreur(erreur), true);
@@ -630,6 +666,23 @@ btn?.addEventListener('click', () => {
 // donc jamais. Câblé maintenant directement aux points réels où le salon
 // affiché change (afficherMessages()) et où on envoie/simule un message.
 const serviceNotifications = window.notifications;
+
+// Tient fenetreEstFocusee à jour (voir sa déclaration plus haut, et la
+// requête initiale dans initialiser()) à partir des changements de focus
+// réels côté main.js. Quand la fenêtre regagne le focus alors qu'une
+// conversation était déjà affichée (donc jamais marquée "lue" pendant
+// qu'elle était en arrière-plan, voir afficherMessages()), on relance
+// l'affichage pour la marquer "lue" maintenant qu'elle est effectivement
+// visible.
+if (typeof serviceNotifications?.onFocusChange === 'function') {
+  serviceNotifications.onFocusChange((focused) => {
+    const regagneLeFocus = focused && !fenetreEstFocusee;
+    fenetreEstFocusee = focused;
+    if (regagneLeFocus) {
+      afficherTout();
+    }
+  });
+}
 
 function definirConversationActivePourNotifs(conversationId) {
   if (typeof serviceNotifications?.setActiveConversation === 'function') {

@@ -48,6 +48,31 @@ window.addEventListener('DOMContentLoaded', async () => {
     })();
   const serviceNotifications = window.notifications;
 
+  // Miroir de fenetreEstFocusee côté main.js (voir 'window:is-focused' /
+  // 'window:focus-changed' dans preload.js) : sert uniquement à décider si
+  // la conversation actuellement affichée doit être marquée "lue" (voir
+  // renderActiveConversation() plus bas) — même raisonnement que dans
+  // renderer.js (voir son commentaire équivalent pour le pourquoi).
+  let fenetreEstFocusee = true;
+  if (typeof serviceNotifications?.isWindowFocused === 'function') {
+    fenetreEstFocusee = Boolean(await serviceNotifications.isWindowFocused());
+  }
+  if (typeof serviceNotifications?.onFocusChange === 'function') {
+    serviceNotifications.onFocusChange(async (focused) => {
+      const regagneLeFocus = focused && !fenetreEstFocusee;
+      fenetreEstFocusee = focused;
+      if (regagneLeFocus) {
+        // La conversation déjà affichée n'a jamais pu être marquée "lue"
+        // pendant qu'elle était en arrière-plan (voir
+        // renderActiveConversation()) : on relance l'affichage maintenant
+        // qu'elle est effectivement visible.
+        await renderActiveConversation();
+        renderConversationList();
+        mettreAJourBadgeApplication();
+      }
+    });
+  }
+
   function definirConversationActivePourNotifs(conversationId) {
     if (typeof serviceNotifications?.setActiveConversation === 'function') {
       serviceNotifications.setActiveConversation(conversationId ?? null);
@@ -262,10 +287,22 @@ window.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    // La conversation affichée est par définition "lue", et c'est la
-    // conversation "active" que main.js ne doit pas notifier (voir
-    // showMessageNotification côté main.js).
-    NotifPrefs.marquerCommeLu(state.currentUserId, conversation.id, Date.now());
+    // La conversation affichée est "lue" — mais SEULEMENT si la fenêtre a
+    // effectivement le focus en ce moment (fenetreEstFocusee) : voir le
+    // commentaire équivalent dans renderer.js (afficherMessages()) pour le
+    // pourquoi (sinon ce rond de notification et la vraie notification
+    // système de main.js, qui exige déjà le focus pour la même décision,
+    // finissent en désaccord).
+    if (fenetreEstFocusee) {
+      NotifPrefs.marquerCommeLu(
+        state.currentUserId,
+        conversation.id,
+        Date.now()
+      );
+    }
+    // La conversation "active" que main.js ne doit pas notifier (voir
+    // showMessageNotification côté main.js) reste définie qu'on ait le
+    // focus ou non : c'est elle qui est affichée à l'écran.
     definirConversationActivePourNotifs(conversation.id);
 
     const messages = [...(conversation.messages ?? [])].sort(

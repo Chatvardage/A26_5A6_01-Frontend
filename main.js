@@ -239,9 +239,18 @@ function showMessageNotification(message) {
     // notification système si on a déjà la fenêtre au premier plan. Pour
     // observer la notification, mettre l'app en arrière-plan (alt-tab,
     // minimiser) avant le prochain message de démo (toutes les 5s/10s).
-    logDebugNotif(
-      `[showMessageNotification] ignoré : la fenêtre de l'app a le focus (mets-la en arrière-plan pour voir la notification). [minimisee=${fenetreMinimisee}, focusee=${fenetreEstFocusee}, isVisible=${mainWindow.isVisible()}, isMinimized=${mainWindow.isMinimized()}, isFocused=${mainWindow.isFocused()}]`
-    );
+    // Le message inclut trois appels IPC natifs (isVisible/isMinimized/
+    // isFocused) : on les évite complètement quand debugNotifications est
+    // désactivé plutôt que de construire la chaîne (et donc de les
+    // appeler) pour la jeter aussitôt à l'intérieur de logDebugNotif — les
+    // arguments d'un appel sont toujours évalués avant l'appel lui-même en
+    // JS, un simple `if` autour de logDebugNotif() ne suffirait pas côté
+    // logDebugNotif seul.
+    if (debugNotifications) {
+      logDebugNotif(
+        `[showMessageNotification] ignoré : la fenêtre de l'app a le focus (mets-la en arrière-plan pour voir la notification). [minimisee=${fenetreMinimisee}, focusee=${fenetreEstFocusee}, isVisible=${mainWindow.isVisible()}, isMinimized=${mainWindow.isMinimized()}, isFocused=${mainWindow.isFocused()}]`
+      );
+    }
     return false;
   }
 
@@ -343,10 +352,20 @@ function createWindow() {
   win.on('focus', () => {
     fenetreEstFocusee = true;
     logDebugNotif('[fenetre] focus');
+    // Voir 'window:focus-changed' plus bas : le renderer a besoin de ce
+    // signal pour ne marquer une conversation comme "lue" (NotifPrefs.
+    // marquerCommeLu) que si la fenêtre a réellement le focus au moment où
+    // elle est affichée — sinon un message reçu pendant que la fenêtre est
+    // en arrière-plan se retrouverait marqué "lu" côté rond de notification
+    // alors même qu'une vraie notification système vient d'être déclenchée
+    // pour ce même message (voir showMessageNotification, qui se base déjà
+    // sur fenetreEstFocusee pour la même raison).
+    envoyerVersRenderer('window:focus-changed', true);
   });
   win.on('blur', () => {
     fenetreEstFocusee = false;
     logDebugNotif('[fenetre] blur');
+    envoyerVersRenderer('window:focus-changed', false);
   });
   // Piste de secours : sous WSLg, le bouton de réduction natif ne semble
   // déclencher ni 'minimize' ni changer isMinimized()/isFocused() — peut-être
@@ -462,6 +481,19 @@ ipcMain.handle('notification:message-received', (event, message) => {
     return { shown: false };
   }
   return { shown: showMessageNotification(message) };
+});
+
+// Permet au renderer de connaître l'état de focus actuel dès son
+// initialisation (avant qu'un premier événement 'focus'/'blur' n'ait pu être
+// relayé via 'window:focus-changed' ci-dessus) : nécessaire pour que la
+// conversation affichée au chargement de la page ne soit marquée "lue" que
+// si la fenêtre a bien le focus à ce moment-là (voir le commentaire sur
+// 'window:focus-changed' dans createWindow()).
+ipcMain.handle('window:is-focused', (event) => {
+  if (!isTrustedIpcEvent(event)) {
+    return true;
+  }
+  return fenetreEstFocusee;
 });
 
 /**
