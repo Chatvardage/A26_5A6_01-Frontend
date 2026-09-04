@@ -983,6 +983,57 @@ export class MockGateway {
   }
 
   /**
+   * Démarre une conversation privée avec un autre utilisateur, ou retourne
+   * l'existante si les deux utilisateurs ont déjà un DM (même schéma d'ID
+   * trié que creerDmId : idempotent, jamais de doublon). Miroir de
+   * `demarrerConversationPrivee` dans MockGatewayRuntime.js (câblé dans
+   * l'app réelle via main.js) — cette version tient le même contrat côté
+   * mock de domaine couvert par la suite de tests.
+   * @param utilisateurActuelId L'identifiant de l'utilisateur courant
+   * @param autreUtilisateurId L'identifiant de l'autre utilisateur
+   * @returns Promise<ConversationPrivee> La conversation privée (existante ou nouvellement créée)
+   */
+  async demarrerConversationPrivee(
+    utilisateurActuelId: string,
+    autreUtilisateurId: string
+  ): Promise<ConversationPrivee> {
+    return this.simulerLatence(async () => {
+      if (utilisateurActuelId === autreUtilisateurId) {
+        this.emetEvenement('erreur', {
+          message: 'Impossible de démarrer une conversation avec soi-même',
+        });
+        throw new Error(
+          'Impossible de démarrer une conversation avec soi-même'
+        );
+      }
+
+      const utilisateurActuel = this.utilisateurs.get(utilisateurActuelId);
+      const autreUtilisateur = this.utilisateurs.get(autreUtilisateurId);
+      if (!utilisateurActuel || !autreUtilisateur) {
+        this.emetEvenement('erreur', {
+          message: "Un des utilisateurs n'a pas été trouvé",
+        });
+        throw new Error("Un des utilisateurs n'a pas été trouvé");
+      }
+
+      const conversationId = creerDmId(utilisateurActuelId, autreUtilisateurId);
+      const conversationExistante =
+        this.conversationsPrivees.get(conversationId);
+      if (conversationExistante) {
+        return conversationExistante;
+      }
+
+      const conversation = creerConversationPrivee(
+        utilisateurActuelId,
+        autreUtilisateurId
+      );
+      this.conversationsPrivees.set(conversation.id, conversation);
+
+      return conversation;
+    });
+  }
+
+  /**
    * Récupère une conversation privée par son ID
    * @param conversationId L'identifiant de la conversation
    * @returns Promise<ConversationPrivee | undefined> La conversation ou undefined
@@ -1061,6 +1112,14 @@ export class MockGateway {
 
   /**
    * Attend la latence définie
+   *
+   * Utilise `this.latenceMs` tel quel : la version précédente ajoutait un
+   * padding arbitraire (`Math.max(this.latenceMs, 1) + 5`), ce qui faisait
+   * mentir cette méthode par rapport à son propre nom et à `definirLatence` —
+   * un appelant qui fixe `latenceMs` à 0 (ex. pour accélérer des tests) s'
+   * attend à ne payer aucun délai artificiel, pas +5ms. `setTimeout` reste de
+   * toute façon asynchrone même avec un délai de 0, donc rien ne redevient
+   * synchrone ici.
    * @returns Promise<void>
    */
   private attendreLatence(): Promise<void> {

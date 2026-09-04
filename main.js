@@ -100,11 +100,11 @@ function buildMenu() {
     // DevTools uniquement en développement : jamais exposé en production.
     ...(isDev
       ? [
-          {
-            label: 'Développement',
-            submenu: [{ role: 'toggleDevTools' }, { role: 'reload' }],
-          },
-        ]
+        {
+          label: 'Développement',
+          submenu: [{ role: 'toggleDevTools' }, { role: 'reload' }],
+        },
+      ]
       : []),
   ];
   return Menu.buildFromTemplate(template);
@@ -233,7 +233,9 @@ function exposerCanal(nom, action) {
 exposerCanal('salons:etat', ({ utilisateurId }) =>
   chatGateway.obtenirEtat(utilisateurId)
 );
-exposerCanal('utilisateurs:lister', () => chatGateway.obtenirUtilisateurs());
+exposerCanal('utilisateurs:lister', () =>
+  chatGateway.obtenirUtilisateurs()
+);
 exposerCanal('salons:creer', (donnees) => chatGateway.creerSalon(donnees));
 exposerCanal('salons:inviter', (donnees) => chatGateway.inviter(donnees));
 exposerCanal('salons:accepter-invitation', (donnees) =>
@@ -245,6 +247,14 @@ exposerCanal('salons:refuser-invitation', (donnees) =>
 exposerCanal('salons:envoyer-message', (donnees) =>
   chatGateway.envoyerMessage(donnees)
 );
+// Comme tous les canaux ci-dessus, ceux-ci font confiance à l'`utilisateurId`
+// fourni par le renderer plutôt que de le lier à une session authentifiée :
+// il n'y a pas de backend ni de notion de session réelle dans cette maquette
+// (l'utilisateur "courant" est un simple sélecteur côté UI, voir renderer.js
+// / message-prive.js). C'est cohérent avec le reste de l'app, mais à garder
+// en tête si un vrai backend/auth arrive un jour : ces canaux permettent
+// aujourd'hui à n'importe quel code du renderer de lire/démarrer les DM de
+// n'importe quel utilisateur.
 exposerCanal('obtenir-conversations-privees', ({ utilisateurId }) =>
   chatGateway.obtenirConversationsPrivees(utilisateurId)
 );
@@ -255,6 +265,7 @@ exposerCanal('envoyer-message-prive', (donnees) =>
 exposerCanal('demarrer-conversation-privee', (donnees) =>
   chatGateway.demarrerConversationPrivee(donnees)
 );
+
 
 ipcMain.handle('navigate', (event, page) => {
   verifierProvenance(event);

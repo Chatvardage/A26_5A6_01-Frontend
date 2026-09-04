@@ -897,6 +897,61 @@ describe('MockGateway', () => {
     });
   });
 
+  describe('demarrerConversationPrivee', () => {
+    it('devrait refuser de démarrer une conversation avec soi-même', async () => {
+      const erreurs: string[] = [];
+      gateway.ecouterEvenement('erreur', (evt) =>
+        erreurs.push(evt.donnees.message as string)
+      );
+
+      await expect(
+        gateway.demarrerConversationPrivee('u1', 'u1')
+      ).rejects.toThrow(
+        'Impossible de démarrer une conversation avec soi-même'
+      );
+      expect(erreurs).toContain(
+        'Impossible de démarrer une conversation avec soi-même'
+      );
+    });
+
+    it('devrait refuser si un des deux utilisateurs est inconnu', async () => {
+      await expect(
+        gateway.demarrerConversationPrivee('u1', 'inconnu')
+      ).rejects.toThrow("Un des utilisateurs n'a pas été trouvé");
+      await expect(
+        gateway.demarrerConversationPrivee('inconnu', 'u2')
+      ).rejects.toThrow("Un des utilisateurs n'a pas été trouvé");
+    });
+
+    it('devrait créer une nouvelle conversation privée entre deux utilisateurs qui n’en ont pas encore', async () => {
+      const nouvelUtilisateur = await gateway.creerUtilisateur('denis');
+
+      const conversation = await gateway.demarrerConversationPrivee(
+        'u1',
+        nouvelUtilisateur.id
+      );
+
+      expect(conversation.participantIds).toEqual(
+        expect.arrayContaining(['u1', nouvelUtilisateur.id])
+      );
+      expect(await gateway.obtenirConversationPrivee(conversation.id)).toEqual(
+        conversation
+      );
+    });
+
+    it('devrait retourner la conversation existante plutôt que d’en recréer une (idempotent, indépendant de l’ordre des IDs)', async () => {
+      // u1/u2 ont déjà un DM seedé.
+      const conversationExistante =
+        await gateway.obtenirConversationPrivee('u1:u2');
+
+      const viaOrdreA = await gateway.demarrerConversationPrivee('u1', 'u2');
+      const viaOrdreB = await gateway.demarrerConversationPrivee('u2', 'u1');
+
+      expect(viaOrdreA).toEqual(conversationExistante);
+      expect(viaOrdreB).toEqual(conversationExistante);
+    });
+  });
+
   describe('obtenirConversationPrivee', () => {
     it('devrait retourner undefined pour une conversation privée inconnue', async () => {
       await expect(
