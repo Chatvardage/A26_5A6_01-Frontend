@@ -117,6 +117,138 @@
     return (dernierMessage.timestamp ?? 0) > derniereLecture;
   }
 
+  // --- Badge d'icône d'application (partagé renderer.js / message-prive.js) --
+  // Ces fonctions vivaient auparavant en double dans renderer.js ET
+  // message-prive.js (copiées-collées à l'identique) — exactement le genre de
+  // risque de divergence décrit dans le commentaire en tête de ce fichier.
+  // Elles vivent maintenant ici, seul endroit partagé entre les deux pages.
+
+  /** Le dernier message d'un salon (forme `{ messages: [...] }`), normalisé
+   * pour estNonLu()/compterSalonsNonLus(). */
+  function dernierMessageSalon(salon) {
+    const messages = salon?.messages;
+    if (!messages || !messages.length) return null;
+    const dernier = messages[messages.length - 1];
+    return { auteurId: dernier.auteurId, timestamp: dernier.date };
+  }
+
+  /** Le dernier message d'une conversation privée (forme `{ lastMessage }`),
+   * normalisé pour estNonLu()/compterConversationsNonLues(). */
+  function dernierMessageConversation(conversation) {
+    const dernier = conversation?.lastMessage;
+    if (!dernier) return null;
+    return { auteurId: dernier.auteurId, timestamp: dernier.envoi };
+  }
+
+  /** Nombre de salons non lus pour `utilisateurId` parmi `salons`. */
+  function compterSalonsNonLus(utilisateurId, salons) {
+    return (salons ?? []).reduce(
+      (total, salon) =>
+        estNonLu(utilisateurId, salon.id, dernierMessageSalon(salon))
+          ? total + 1
+          : total,
+      0
+    );
+  }
+
+  /** Nombre de conversations privées non lues pour `utilisateurId` parmi
+   * `conversations`. */
+  function compterConversationsNonLues(utilisateurId, conversations) {
+    return (conversations ?? []).reduce(
+      (total, conversation) =>
+        estNonLu(
+          utilisateurId,
+          conversation.id,
+          dernierMessageConversation(conversation)
+        )
+          ? total + 1
+          : total,
+      0
+    );
+  }
+
+  /**
+   * Dessine un petit badge numérique (cercle rouge + chiffre blanc) dans un
+   * canvas hors-écran. Utilisé uniquement pour la superposition d'icône
+   * Windows (setOverlayIcon dans main.js), qui exige une image plutôt qu'un
+   * simple nombre — contrairement à app.setBadgeCount (macOS/Linux), qui
+   * affiche directement un chiffre sans qu'on ait à le dessiner.
+   */
+  function genererIconeBadge(nombre) {
+    const texte = nombre > 9 ? '9+' : String(nombre);
+    const taille = 32;
+    const canvas = global.document.createElement('canvas');
+    canvas.width = taille;
+    canvas.height = taille;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#e53935';
+    ctx.beginPath();
+    ctx.arc(taille / 2, taille / 2, taille / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(texte, taille / 2, taille / 2 + 1);
+    return canvas.toDataURL('image/png');
+  }
+
+  /**
+   * Envoie `nombre` à `serviceNotifications.setBadgeCount` (voir preload.js /
+   * main.js), en générant l'icône de superposition Windows seulement si
+   * nombre > 0. `serviceNotifications` est passé en paramètre plutôt que lu
+   * depuis un global : renderer.js et message-prive.js exposent chacun leur
+   * propre référence locale à window.notifications.
+   */
+  function appliquerBadge(serviceNotifications, nombre) {
+    if (typeof serviceNotifications?.setBadgeCount !== 'function') return;
+    serviceNotifications.setBadgeCount(
+      nombre,
+      nombre > 0 ? genererIconeBadge(nombre) : null
+    );
+  }
+
+  // --- Traitement d'un message de démo simulé (main.js) -----------------
+  // Corps partagé du handler `onMockMessage` de renderer.js et
+  // message-prive.js : log de diagnostic, résolution du mode NotifPrefs de
+  // l'utilisateur actuellement affiché, et décision de déclencher ou non une
+  // notification système. Seule la partie "quoi rafraîchir à l'écran" diffère
+  // réellement entre les deux pages (une page affiche les salons, l'autre les
+  // conversations privées) — elle reste donc du ressort de l'appelant, via
+  // les callbacks `surSalon`/`surPrive`.
+  async function traiterMessageSimule(message, options) {
+    const { utilisateurId, surSalon, surPrive, notifierMessageSysteme } =
+      options ?? {};
+    try {
+      const mode = obtenirMode(utilisateurId);
+      // Log de diagnostic : lance l'app avec `NODE_ENV=development` pour voir
+      // les DevTools et cette ligne dans la console si un message de démo
+      // semble ne rien déclencher. Ne casse rien en production, où personne
+      // ne regarde la console de toute façon.
+      console.log(
+        `[notifications:message-simule] reçu (type=${message.type}, auteur=${message.auteurId}, utilisateur courant=${utilisateurId}, mode=${mode})`
+      );
+      if (message.type === 'salon') {
+        await surSalon?.();
+      } else {
+        await surPrive?.();
+      }
+      if (message.auteurId === utilisateurId) {
+        console.log(
+          '[notifications:message-simule] ignoré : auteur = utilisateur courant (jamais de notif pour son propre message).'
+        );
+      } else if (mode !== MODE_SYSTEME) {
+        console.log(
+          `[notifications:message-simule] pas de notification système : mode actuel = "${mode}" (seul le mode "systeme" en déclenche).`
+        );
+      } else {
+        notifierMessageSysteme?.(message);
+      }
+    } catch (erreur) {
+      console.error('[notifications:message-simule] ERREUR:', erreur);
+    }
+  }
+
   global.NotifPrefs = {
     MODE_SYSTEME,
     MODE_DISCRET,
@@ -127,5 +259,11 @@
     afficheRonds,
     marquerCommeLu,
     estNonLu,
+    dernierMessageSalon,
+    compterSalonsNonLus,
+    compterConversationsNonLues,
+    genererIconeBadge,
+    appliquerBadge,
+    traiterMessageSimule,
   };
 })(window);

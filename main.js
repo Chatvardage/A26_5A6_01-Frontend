@@ -17,6 +17,22 @@ const chatGateway = new MockGatewayRuntime();
 
 const isDev = process.env.NODE_ENV === 'development';
 
+// Active les logs de diagnostic liés aux notifications (avertissement WSL,
+// décisions de showMessageNotification, transitions minimize/restore/
+// focus/blur/hide/show) : activés par défaut en développement, ou
+// explicitement via DEBUG_NOTIFICATIONS=1 (utile pour déboguer un souci de
+// notification dans un build empaqueté sans relancer toute l'app en mode
+// développement). Désactivés sinon, pour ne pas spammer le terminal en
+// usage normal — ces logs sont diagnostiques, pas des erreurs à surveiller
+// en continu (voir console.error, laissé actif partout ailleurs).
+const debugNotifications = isDev || process.env.DEBUG_NOTIFICATIONS === '1';
+
+function logDebugNotif(...args) {
+  if (debugNotifications) {
+    console.log(...args);
+  }
+}
+
 // Port du serveur de dev local (ex. Vite) : mettre à jour ici s'il change,
 // plutôt que d'accepter n'importe quel port sur localhost.
 const DEV_SERVER_PORT = '5173';
@@ -176,7 +192,7 @@ function estProbablementWSL() {
 
 function avertirSiWSL() {
   if (!estProbablementWSL()) return;
-  console.log(
+  logDebugNotif(
     '[notifications] Exécution détectée sous WSL. Les notifications système ' +
       'passent par libnotify (D-Bus), relayé par WSLg vers le Centre de ' +
       'notifications Windows — mais seulement si un bus D-Bus de session est ' +
@@ -199,13 +215,13 @@ function showMessageNotification(message) {
   // qui a lancé `npm start`/`electron .` (le processus main n'a pas de
   // console DevTools comme le renderer).
   if (!Notification.isSupported()) {
-    console.log(
+    logDebugNotif(
       '[showMessageNotification] ignoré : Notification non supportée sur ce système.'
     );
     return false;
   }
   if (!mainWindow || mainWindow.isDestroyed()) {
-    console.log(
+    logDebugNotif(
       '[showMessageNotification] ignoré : fenêtre principale absente ou détruite.'
     );
     return false;
@@ -223,7 +239,7 @@ function showMessageNotification(message) {
     // notification système si on a déjà la fenêtre au premier plan. Pour
     // observer la notification, mettre l'app en arrière-plan (alt-tab,
     // minimiser) avant le prochain message de démo (toutes les 5s/10s).
-    console.log(
+    logDebugNotif(
       `[showMessageNotification] ignoré : la fenêtre de l'app a le focus (mets-la en arrière-plan pour voir la notification). [minimisee=${fenetreMinimisee}, focusee=${fenetreEstFocusee}, isVisible=${mainWindow.isVisible()}, isMinimized=${mainWindow.isMinimized()}, isFocused=${mainWindow.isFocused()}]`
     );
     return false;
@@ -232,7 +248,7 @@ function showMessageNotification(message) {
   const conversationId = cleanText(message?.conversationId, 120);
   const body = cleanText(message?.contenu, 180);
   if (!conversationId || !body) {
-    console.log(
+    logDebugNotif(
       '[showMessageNotification] ignoré : message invalide (conversationId ou contenu manquant).'
     );
     return false;
@@ -244,7 +260,7 @@ function showMessageNotification(message) {
   // le focus restait ignorée pour toujours, même une fois l'app
   // véritablement en arrière-plan.
   if (fenetreEstFocusee && conversationId === activeConversationId) {
-    console.log(
+    logDebugNotif(
       `[showMessageNotification] ignoré : conversation "${conversationId}" actuellement affichée (déjà "lue" en direct).`
     );
     return false;
@@ -274,7 +290,7 @@ function showMessageNotification(message) {
   // sous Linux/WSL, l'affichage réel dépend d'un service de notification
   // (D-Bus) qui peut être absent même quand cet appel "réussit" (voir
   // avertirSiWSL() plus haut).
-  console.log(
+  logDebugNotif(
     `[showMessageNotification] notification affichée pour "${conversationId}".`
   );
   return true;
@@ -318,19 +334,19 @@ function createWindow() {
   // ce correctif ne suffirait pas non plus).
   win.on('minimize', () => {
     fenetreMinimisee = true;
-    console.log('[fenetre] minimize');
+    logDebugNotif('[fenetre] minimize');
   });
   win.on('restore', () => {
     fenetreMinimisee = false;
-    console.log('[fenetre] restore');
+    logDebugNotif('[fenetre] restore');
   });
   win.on('focus', () => {
     fenetreEstFocusee = true;
-    console.log('[fenetre] focus');
+    logDebugNotif('[fenetre] focus');
   });
   win.on('blur', () => {
     fenetreEstFocusee = false;
-    console.log('[fenetre] blur');
+    logDebugNotif('[fenetre] blur');
   });
   // Piste de secours : sous WSLg, le bouton de réduction natif ne semble
   // déclencher ni 'minimize' ni changer isMinimized()/isFocused() — peut-être
@@ -340,11 +356,11 @@ function createWindow() {
   // peut pas contourner depuis le code de l'app (voir avertirSiWSL()).
   win.on('hide', () => {
     fenetreMinimisee = true;
-    console.log('[fenetre] hide');
+    logDebugNotif('[fenetre] hide');
   });
   win.on('show', () => {
     fenetreMinimisee = false;
-    console.log('[fenetre] show');
+    logDebugNotif('[fenetre] show');
   });
 
   // Désactive le zoom Chromium par défaut (Ctrl+molette, pincement) : pas
@@ -507,6 +523,11 @@ ipcMain.handle('notifications:set-badge-count', (event, donnees) => {
 // 5s/10s) pour faciliter les tests répétés des notifications ; repassé à un
 // envoi unique (setTimeout) une fois les tests terminés — plus de messages
 // de démo générés en continu pendant l'utilisation normale de l'app.
+// Réservé au développement (voir isDev dans demarrerSimulationMessages
+// ci-dessous) : ces messages injectent de fausses données dans l'état réel
+// du ChatGateway (chatGateway.envoyerMessagePrive/envoyerMessage), ce qui n'a
+// aucun sens pour une utilisatrice réelle d'un build empaqueté — seulement
+// pour tester les notifications pendant le développement.
 // Chaque message est poussé aux deux pages via l'événement
 // 'notifications:message-simule' (voir preload.js / renderer.js /
 // message-prive.js) ; c'est le renderer qui décide ensuite, selon le mode
@@ -570,6 +591,10 @@ function simulerMessageSalon() {
 
 function demarrerSimulationMessages() {
   arreterSimulationMessages();
+  // Jamais en production : voir le commentaire au-dessus de DEMO_DM_ID.
+  // Sans ce garde-fou, chaque lancement de l'app empaquetée injecterait ces
+  // deux messages fabriqués dans les conversations de tout le monde.
+  if (!isDev) return;
   // Un seul envoi par canal (setTimeout, pas setInterval) : plus de boucle
   // continue une fois les tests de notifications terminés.
   demoDmTimeoutId = setTimeout(simulerMessagePrive, 5000);

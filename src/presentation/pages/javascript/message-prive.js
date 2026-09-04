@@ -20,7 +20,32 @@ window.addEventListener('DOMContentLoaded', async () => {
   // avant ce module (voir message-prive.html) — voir ce fichier pour le
   // pourquoi du partage entre les deux pages plutôt qu'une réimplémentation
   // locale.
-  const NotifPrefs = window.NotifPrefs;
+  // Garde-fou : si notif-prefs.js n'a pas chargé (ordre des <script> changé
+  // par erreur dans message-prive.html, échec de chargement, etc.), on
+  // dégrade vers un mode "sans notifications" plutôt que de faire planter le
+  // rendu des conversations (voir le même garde-fou dans renderer.js).
+  const NotifPrefs =
+    window.NotifPrefs ??
+    (() => {
+      console.error(
+        '[message-prive] window.NotifPrefs est introuvable : notif-prefs.js doit être chargé avant ce script (voir message-prive.html). Notifications et badges désactivés pour cette session.'
+      );
+      return {
+        MODE_SYSTEME: 'systeme',
+        MODE_DISCRET: 'discret',
+        MODE_AUCUNE: 'aucune',
+        obtenirMode: () => 'aucune',
+        definirMode: () => {},
+        afficheRonds: () => false,
+        marquerCommeLu: () => {},
+        estNonLu: () => false,
+        compterSalonsNonLus: () => 0,
+        compterConversationsNonLues: () => 0,
+        genererIconeBadge: () => null,
+        appliquerBadge: () => {},
+        traiterMessageSimule: async () => {},
+      };
+    })();
   const serviceNotifications = window.notifications;
 
   function definirConversationActivePourNotifs(conversationId) {
@@ -447,12 +472,24 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // Salons actuels de `state.currentUserId`, telle que renvoyée par
+  // obtenirEtatSalons() (voir preload.js). Petit helper pour permettre à un
+  // appelant qui a besoin à la fois de actualiserBadgeSalons() ET de
+  // mettreAJourBadgeApplication() de ne faire qu'un seul appel IPC pour les
+  // deux (voir leur paramètre optionnel `salonsPreChauffes` plus bas).
+  async function obtenirSalonsActuels() {
+    const etatSalons = await window.electronAPI.obtenirEtatSalons(
+      state.currentUserId
+    );
+    return etatSalons?.salons ?? [];
+  }
+
   // --- Badge "non lu" sur le rail (icônes qui ramènent à l'accueil) -------
   // Ces icônes vivent sur CETTE page mais doivent refléter l'état des
   // salons (autre page/fichier). Best-effort et silencieux : un badge qui
   // ne se met pas à jour n'est pas une raison de perturber le reste de
   // l'app.
-  async function actualiserBadgeSalons() {
+  async function actualiserBadgeSalons(salonsPreChauffes) {
     const dots = document.querySelectorAll('#server-rail .notif-dot');
     if (!dots.length) return;
     if (!NotifPrefs.afficheRonds(state.currentUserId)) {
@@ -460,49 +497,18 @@ window.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     try {
-      const etatSalons = await window.electronAPI.obtenirEtatSalons(
-        state.currentUserId
-      );
-      const nonLu = (etatSalons?.salons ?? []).some((salon) => {
-        const dernier = salon.messages?.[salon.messages.length - 1];
-        const dernierMessage = dernier
-          ? { auteurId: dernier.auteurId, timestamp: dernier.date }
-          : null;
-        return NotifPrefs.estNonLu(
+      const salons = salonsPreChauffes ?? (await obtenirSalonsActuels());
+      const nonLu = salons.some((salon) =>
+        NotifPrefs.estNonLu(
           state.currentUserId,
           salon.id,
-          dernierMessage
-        );
-      });
+          NotifPrefs.dernierMessageSalon(salon)
+        )
+      );
       dots.forEach((dot) => (dot.hidden = !nonLu));
     } catch {
       // Badge best-effort, voir commentaire ci-dessus.
     }
-  }
-
-  // --- Badge "nombre de non-lus" sur l'icône de l'app ---------------------
-  // Dessine le même badge que renderer.js (voir son commentaire) : dupliqué
-  // ici plutôt que partagé, faute de mécanisme de module commun entre
-  // renderer.js et les scripts de pages secondaires comme celui-ci (seul
-  // notif-prefs.js est partagé, via un <script> classique chargé avant les
-  // deux).
-  function genererIconeBadge(nombre) {
-    const texte = nombre > 9 ? '9+' : String(nombre);
-    const taille = 32;
-    const canvas = document.createElement('canvas');
-    canvas.width = taille;
-    canvas.height = taille;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#e53935';
-    ctx.beginPath();
-    ctx.arc(taille / 2, taille / 2, taille / 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 18px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(texte, taille / 2, taille / 2 + 1);
-    return canvas.toDataURL('image/png');
   }
 
   /**
@@ -511,49 +517,36 @@ window.addEventListener('DOMContentLoaded', async () => {
    * l'app (voir mettreAJourBadgeApplication côté main.js). Respecte
    * NotifPrefs.afficheRonds() comme les ronds de notification. Best-effort
    * et silencieux.
+   *
+   * Le calcul du compte et le dessin de l'icône de badge vivent dans
+   * NotifPrefs (notif-prefs.js), partagés avec renderer.js — voir son
+   * en-tête pour le pourquoi (évite la divergence entre deux copies).
+   *
+   * @param {Array} [salonsPreChauffes] Liste de salons déjà récupérée par
+   *   l'appelant (voir actualiserBadgeSalons ci-dessus) : évite un second
+   *   appel IPC obtenirEtatSalons() identique quand les deux fonctions sont
+   *   appelées l'une après l'autre.
    */
-  async function mettreAJourBadgeApplication() {
+  async function mettreAJourBadgeApplication(salonsPreChauffes) {
     if (typeof serviceNotifications?.setBadgeCount !== 'function') return;
     if (!NotifPrefs.afficheRonds(state.currentUserId)) {
-      serviceNotifications.setBadgeCount(0, null);
+      NotifPrefs.appliquerBadge(serviceNotifications, 0);
       return;
     }
-    let nombre = 0;
-    try {
-      const etatSalons = await window.electronAPI.obtenirEtatSalons(
-        state.currentUserId
-      );
-      (etatSalons?.salons ?? []).forEach((salon) => {
-        const dernier = salon.messages?.[salon.messages.length - 1];
-        const dernierMessage = dernier
-          ? { auteurId: dernier.auteurId, timestamp: dernier.date }
-          : null;
-        if (
-          NotifPrefs.estNonLu(state.currentUserId, salon.id, dernierMessage)
-        ) {
-          nombre += 1;
-        }
-      });
-    } catch {
-      // Badge best-effort, voir commentaire ci-dessus.
+    let salons = salonsPreChauffes;
+    if (!salons) {
+      try {
+        salons = await obtenirSalonsActuels();
+      } catch {
+        salons = [];
+      }
     }
-    state.conversations.forEach((conversation) => {
-      const nonLu = NotifPrefs.estNonLu(
-        state.currentUserId,
-        conversation.id,
-        conversation.lastMessage
-          ? {
-              auteurId: conversation.lastMessage.auteurId,
-              timestamp: conversation.lastMessage.envoi,
-            }
-          : null
-      );
-      if (nonLu) nombre += 1;
-    });
-    serviceNotifications.setBadgeCount(
-      nombre,
-      nombre > 0 ? genererIconeBadge(nombre) : null
+    let nombre = NotifPrefs.compterSalonsNonLus(state.currentUserId, salons);
+    nombre += NotifPrefs.compterConversationsNonLues(
+      state.currentUserId,
+      state.conversations
     );
+    NotifPrefs.appliquerBadge(serviceNotifications, nombre);
   }
 
   // --- Menu de préférences de notification --------------------------------
@@ -585,12 +578,15 @@ window.addEventListener('DOMContentLoaded', async () => {
   notifMenu?.addEventListener('click', (event) => event.stopPropagation());
 
   notifMenu?.querySelectorAll('input[name="notif-mode"]').forEach((radio) => {
-    radio.addEventListener('change', () => {
+    radio.addEventListener('change', async () => {
       NotifPrefs.definirMode(state.currentUserId, radio.value);
       fermerMenuNotif();
       renderConversationList();
-      actualiserBadgeSalons();
-      mettreAJourBadgeApplication();
+      // Un seul appel obtenirEtatSalons(), partagé entre les deux mises à
+      // jour ci-dessous, plutôt qu'un appel indépendant dans chacune.
+      const salons = await obtenirSalonsActuels().catch(() => []);
+      actualiserBadgeSalons(salons);
+      mettreAJourBadgeApplication(salons);
       notifier('Préférence de notification mise à jour.');
     });
   });
@@ -600,44 +596,32 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (event.key === 'Escape') fermerMenuNotif();
   });
 
-  // --- Messages de démo simulés en continu par main.js ---------------------
+  // --- Messages de démo simulés (une fois) par main.js ----------------------
   // Voir demarrerSimulationMessages() dans main.js et le même bloc dans
-  // renderer.js : un message privé (ariane → sam) toutes les 5s et un
-  // message dans #général toutes les 10s, en continu, quelle que soit la
-  // page actuellement affichée. C'est ce fichier (pas main.js) qui décide,
-  // selon le mode NotifPrefs de l'utilisateur actuellement affiché ici, s'il
-  // faut déclencher une notification système.
+  // renderer.js : un message privé (ariane → sam) après 5s et un message
+  // dans #général après 10s, une seule fois, quelle que soit la page
+  // actuellement affichée. C'est ce fichier (pas main.js) qui décide, selon
+  // le mode NotifPrefs de l'utilisateur actuellement affiché ici, s'il faut
+  // déclencher une notification système. Le corps commun (log de
+  // diagnostic, résolution du mode, décision de notifier) vit dans
+  // NotifPrefs.traiterMessageSimule (notif-prefs.js), partagé avec
+  // renderer.js.
   if (typeof serviceNotifications?.onMockMessage === 'function') {
-    serviceNotifications.onMockMessage(async (message) => {
-      try {
-        const mode = NotifPrefs.obtenirMode(state.currentUserId);
-        // Log de diagnostic : lance l'app avec `NODE_ENV=development` pour
-        // voir les DevTools et cette ligne dans la console si un message de
-        // démo semble ne rien déclencher. Ne casse rien en production.
-        console.log(
-          `[notifications:message-simule] reçu (type=${message.type}, auteur=${message.auteurId}, utilisateur courant=${state.currentUserId}, mode=${mode})`
-        );
-        if (message.type === 'salon') {
-          await actualiserBadgeSalons();
-          mettreAJourBadgeApplication();
-        } else {
-          await refreshConversations();
-        }
-        if (message.auteurId === state.currentUserId) {
-          console.log(
-            '[notifications:message-simule] ignoré : auteur = utilisateur courant (jamais de notif pour son propre message).'
-          );
-        } else if (mode !== NotifPrefs.MODE_SYSTEME) {
-          console.log(
-            `[notifications:message-simule] pas de notification système : mode actuel = "${mode}" (seul le mode "systeme" en déclenche).`
-          );
-        } else {
-          notifierMessageSysteme(message);
-        }
-      } catch (erreur) {
-        console.error('[notifications:message-simule] ERREUR:', erreur);
-      }
-    });
+    serviceNotifications.onMockMessage((message) =>
+      NotifPrefs.traiterMessageSimule(message, {
+        utilisateurId: state.currentUserId,
+        surSalon: async () => {
+          // Un seul appel obtenirEtatSalons(), partagé entre les deux mises
+          // à jour ci-dessous (voir le paramètre salonsPreChauffes de
+          // mettreAJourBadgeApplication).
+          const salons = await obtenirSalonsActuels().catch(() => []);
+          await actualiserBadgeSalons(salons);
+          mettreAJourBadgeApplication(salons);
+        },
+        surPrive: () => refreshConversations(),
+        notifierMessageSysteme,
+      })
+    );
   }
 
   await initialiserUtilisateurCourant();

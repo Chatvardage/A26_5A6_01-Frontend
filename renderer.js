@@ -3,7 +3,34 @@
 // (voir index.html) qui expose window.NotifPrefs comme global — cette référence
 // locale évite les erreurs ESLint no-undef (comme le fait déjà message-prive.js
 // avec `const NotifPrefs = window.NotifPrefs;`).
-const NotifPrefs = window.NotifPrefs;
+// Garde-fou : si notif-prefs.js n'a pas chargé (ordre des <script> changé par
+// erreur dans index.html, échec de chargement, etc.), window.NotifPrefs serait
+// `undefined` et le moindre appel plus bas (afficherSalons/afficherMessages,
+// sur le chemin de rendu principal) ferait planter toute la page. On dégrade
+// plutôt vers un mode "sans notifications" : les ronds et le badge restent
+// simplement masqués, mais salons/messages continuent de s'afficher.
+const NotifPrefs =
+  window.NotifPrefs ??
+  (() => {
+    console.error(
+      '[renderer] window.NotifPrefs est introuvable : notif-prefs.js doit être chargé avant renderer.js (voir index.html). Notifications et badges désactivés pour cette session.'
+    );
+    return {
+      MODE_SYSTEME: 'systeme',
+      MODE_DISCRET: 'discret',
+      MODE_AUCUNE: 'aucune',
+      obtenirMode: () => 'aucune',
+      definirMode: () => {},
+      afficheRonds: () => false,
+      marquerCommeLu: () => {},
+      estNonLu: () => false,
+      compterSalonsNonLus: () => 0,
+      compterConversationsNonLues: () => 0,
+      genererIconeBadge: () => null,
+      appliquerBadge: () => {},
+      traiterMessageSimule: async () => {},
+    };
+  })();
 let utilisateurActuelId = sessionStorage.getItem('currentUserId') ?? 'u1';
 let salonActifId = null;
 let etat = { utilisateurs: [], salons: [], invitations: [] };
@@ -156,80 +183,35 @@ async function actualiser() {
 }
 
 /**
- * Dessine un petit badge numérique (cercle rouge + chiffre blanc) dans un
- * canvas hors-écran. Utilisé uniquement pour la superposition d'icône
- * Windows (setOverlayIcon dans main.js), qui exige une image plutôt qu'un
- * simple nombre — contrairement à app.setBadgeCount (macOS/Linux), qui
- * affiche directement un chiffre sans qu'on ait à le dessiner.
- */
-function genererIconeBadge(nombre) {
-  const texte = nombre > 9 ? '9+' : String(nombre);
-  const taille = 32;
-  const canvas = document.createElement('canvas');
-  canvas.width = taille;
-  canvas.height = taille;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#e53935';
-  ctx.beginPath();
-  ctx.arc(taille / 2, taille / 2, taille / 2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 18px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(texte, taille / 2, taille / 2 + 1);
-  return canvas.toDataURL('image/png');
-}
-
-/**
  * Recalcule le nombre total de conversations non lues (salons + messages
  * privés) pour l'utilisateur courant, et met à jour le badge de l'icône de
  * l'app en conséquence (voir mettreAJourBadgeApplication côté main.js).
  * Respecte NotifPrefs.afficheRonds() : en mode "aucune", le badge disparaît
  * comme les ronds de notification. Best-effort et silencieux, comme
  * actualiserBadgeMessagesPrives().
+ *
+ * Le calcul du compte et le dessin de l'icône de badge vivent dans
+ * NotifPrefs (notif-prefs.js), partagés avec message-prive.js — voir son
+ * en-tête pour le pourquoi (évite la divergence entre deux copies).
  */
 async function mettreAJourBadgeApplication() {
   if (typeof serviceNotifications?.setBadgeCount !== 'function') return;
   if (!NotifPrefs.afficheRonds(utilisateurActuelId)) {
-    serviceNotifications.setBadgeCount(0, null);
+    NotifPrefs.appliquerBadge(serviceNotifications, 0);
     return;
   }
-  let nombre = 0;
-  etat.salons.forEach((salon) => {
-    if (
-      NotifPrefs.estNonLu(
-        utilisateurActuelId,
-        salon.id,
-        derniereActiviteSalon(salon)
-      )
-    ) {
-      nombre += 1;
-    }
-  });
+  let nombre = NotifPrefs.compterSalonsNonLus(utilisateurActuelId, etat.salons);
   try {
     const conversations =
       await window.electronAPI.obtenirConversationsPrivees(utilisateurActuelId);
-    conversations.forEach((conversation) => {
-      const nonLu = NotifPrefs.estNonLu(
-        utilisateurActuelId,
-        conversation.id,
-        conversation.lastMessage
-          ? {
-              auteurId: conversation.lastMessage.auteurId,
-              timestamp: conversation.lastMessage.envoi,
-            }
-          : null
-      );
-      if (nonLu) nombre += 1;
-    });
+    nombre += NotifPrefs.compterConversationsNonLues(
+      utilisateurActuelId,
+      conversations
+    );
   } catch {
     // Badge best-effort, voir commentaire ci-dessus.
   }
-  serviceNotifications.setBadgeCount(
-    nombre,
-    nombre > 0 ? genererIconeBadge(nombre) : null
-  );
+  NotifPrefs.appliquerBadge(serviceNotifications, nombre);
 }
 
 /**
@@ -669,38 +651,21 @@ function notifierMessageSysteme(message) {
 // l'utilisateur actuellement affiché ici, s'il faut déclencher une
 // notification système — main.js ne connaît pas les préférences par
 // utilisateur (elles vivent dans localStorage, côté renderer).
+// Corps du handler partagé avec message-prive.js via
+// NotifPrefs.traiterMessageSimule (voir notif-prefs.js) : seule la partie
+// "quoi rafraîchir à l'écran" diffère réellement d'une page à l'autre.
 if (typeof serviceNotifications?.onMockMessage === 'function') {
-  serviceNotifications.onMockMessage(async (message) => {
-    try {
-      const mode = NotifPrefs.obtenirMode(utilisateurActuelId);
-      // Log de diagnostic : lance l'app avec `NODE_ENV=development` pour
-      // voir les DevTools et cette ligne dans la console si un message de
-      // démo semble ne rien déclencher. Ne casse rien en production, où
-      // personne ne regarde la console de toute façon.
-      console.log(
-        `[notifications:message-simule] reçu (type=${message.type}, auteur=${message.auteurId}, utilisateur courant=${utilisateurActuelId}, mode=${mode})`
-      );
-      if (message.type === 'salon') {
-        await actualiser();
-      } else {
+  serviceNotifications.onMockMessage((message) =>
+    NotifPrefs.traiterMessageSimule(message, {
+      utilisateurId: utilisateurActuelId,
+      surSalon: () => actualiser(),
+      surPrive: async () => {
         await actualiserBadgeMessagesPrives();
         mettreAJourBadgeApplication();
-      }
-      if (message.auteurId === utilisateurActuelId) {
-        console.log(
-          '[notifications:message-simule] ignoré : auteur = utilisateur courant (jamais de notif pour son propre message).'
-        );
-      } else if (mode !== NotifPrefs.MODE_SYSTEME) {
-        console.log(
-          `[notifications:message-simule] pas de notification système : mode actuel = "${mode}" (seul le mode "systeme" en déclenche).`
-        );
-      } else {
-        notifierMessageSysteme(message);
-      }
-    } catch (erreur) {
-      console.error('[notifications:message-simule] ERREUR:', erreur);
-    }
-  });
+      },
+      notifierMessageSysteme,
+    })
+  );
 }
 
 // --- Menu de préférences de notification ----------------------------------
