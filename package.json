@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
+    "prestart": "node -e \"if (process.env.NODE_ENV !== 'development') { require('child_process').execSync('npm run build:login', { stdio: 'inherit' }); }\"",
+    "start": "node scripts/start.js",
     "dev:login": "vite",
     "build:login": "vite build",
     "build": "npm run build:login",

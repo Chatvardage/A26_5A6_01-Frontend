@@ -197,7 +197,6 @@ class MockGatewayRuntime {
     // Compteur pour générer des ids de messages privés uniques (voir
     // envoyerMessagePrive) sans dépendre de l'horloge système.
     this.prochainMessagePriveIndex = this.messagesPrives.length;
-
   }
 
   verifierUtilisateur(utilisateurId) {
@@ -428,7 +427,10 @@ class MockGatewayRuntime {
     // figé à sa liste de création. On "rejoint" donc le salon au premier
     // message plutôt que d'exiger une étape d'adhésion séparée qui
     // n'existe pas encore dans cette UI.
-    if (salon.visibilite === 'public' && !salon.membreIds.includes(utilisateurId)) {
+    if (
+      salon.visibilite === 'public' &&
+      !salon.membreIds.includes(utilisateurId)
+    ) {
       salon.membreIds.push(utilisateurId);
     }
     if (!salon.membreIds.includes(utilisateurId)) {

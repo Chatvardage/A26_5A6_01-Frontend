@@ -640,9 +640,9 @@ export class MockGateway {
       const salonMisAJour = salon.membresInvites.includes(utilisateurId)
         ? salon
         : {
-          ...salon,
-          membresInvites: [...salon.membresInvites, utilisateurId],
-        };
+            ...salon,
+            membresInvites: [...salon.membresInvites, utilisateurId],
+          };
       this.salons.set(salonId, salonMisAJour);
       this.emetEvenement('invitation-salon-envoyee', {
         salonId,

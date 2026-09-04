@@ -92,12 +92,15 @@ function isAppUrl(url) {
     } catch {
       return false;
     }
-    return isPathInsideAppPages(filePath);
+    // Deux origines file:// légitimes : n'importe quelle page sous
+    // src/presentation/pages/ (dashboard, message-prive.html, ...), et le
+    // point d'entrée buildé de la page de connexion (dist/login/index.html),
+    // qui vit délibérément HORS de cet arbre (voir APP_LOGIN_PATH) — d'où le
+    // deuxième cas, sans quoi aucun appel IPC depuis la page de connexion en
+    // production ne passait jamais isAppUrl().
+    return isPathInsideAppPages(filePath) || filePath === APP_LOGIN_PATH;
   }
 
-  // Le serveur de dev local n'est autorisé qu'en développement, et seulement
-  // sur le hostname et le port attendus (comparaison structurée, pas un
-  // prefix-match qui matcherait aussi "localhost.evil.com").
   if (isDev && parsed.protocol === 'http:') {
     return parsed.hostname === 'localhost' && parsed.port === DEV_SERVER_PORT;
   }
@@ -446,7 +449,16 @@ function createWindow() {
     }
   });
 
-  win.loadFile(APP_INDEX_PATH);
+  // La page de connexion est chargée en premier ; c'est elle qui, une fois
+  // la session locale établie, demande la navigation vers le dashboard via
+  // le canal IPC 'navigation:tableau-de-bord' (voir plus bas) plutôt qu'une
+  // navigation directe côté renderer. En dev, on pointe vers le serveur Vite
+  // (Fast Refresh) ; en prod, vers le bundle buildé dans dist/login.
+  if (isDev) {
+    win.loadURL(`http://localhost:${DEV_SERVER_PORT}/`);
+  } else {
+    win.loadFile(APP_LOGIN_PATH);
+  }
 
   return win;
 }
@@ -518,6 +530,14 @@ ipcMain.handle('navigation:tableau-de-bord', (event) => {
   if (mainWindow) {
     mainWindow.loadFile(APP_INDEX_PATH);
   }
+  // Démarre la démo de notifications seulement maintenant : c'est le
+  // premier moment où chatGateway.obtenirUtilisateurConnecte() reflète
+  // réellement la personne qui vient de se connecter (voir
+  // demarrerSimulationMessages plus bas, qui en dépend pour cibler le DM de
+  // démo). L'appeler plus tôt (ex. dans app.whenReady(), avant que
+  // quiconque ait rempli l'écran de connexion) le ferait toujours annuler
+  // silencieusement faute d'utilisateur connecté.
+  demarrerSimulationMessages();
 });
 
 function verifierProvenance(event) {
@@ -654,17 +674,24 @@ ipcMain.handle('notifications:set-badge-count', (event, donnees) => {
 // vraie notification système.
 //
 // Même règle de calcul d'ID que creerDmId() dans MockGatewayRuntime.js (les
-// deux ID triés puis joints par ':') : 'u1' < 'u2', donc 'u1:u2'.
-const DEMO_DM_ID = 'u1:u2';
-const DEMO_DM_EXPEDITEUR_ID = 'u2'; // ariane
+// deux ID triés puis joints par ':') : dupliquée ici pour la même raison que
+// dans MockGatewayRuntime.js (pas d'import direct d'un module TS/CJS croisé).
+function creerDmId(utilisateurAId, utilisateurBId) {
+  return [utilisateurAId, utilisateurBId].sort().join(':');
+}
+
 const DEMO_SALON_ID = 's1'; // général
-// Volontairement 'u3' (eva) et non 'u1' (sam) : le message dans #général doit
-// être visible que l'utilisateur simulé courant soit sam OU ariane. S'il
-// était envoyé par 'u1', un test fait en tant que sam ne verrait jamais ce
-// message comme non lu (on ne se notifie jamais soi-même, voir
-// NotifPrefs.estNonLu) — même chose pour le DM si son expéditeur était le
-// même que l'utilisateur simulé courant.
-const DEMO_SALON_EXPEDITEUR_ID = 'u3'; // eva
+// Les deux messages de démo sont désormais envoyés "de la part d'ariane"
+// (u2), à destination de la personne qui vient de se connecter via l'écran
+// de connexion (voir demarrerSimulationMessages ci-dessous) — et non plus
+// entre deux comptes de démo fixes (sam/eva) qui n'ont plus de lien avec la
+// session réellement ouverte. Comme le nouvel utilisateur est créé avec un
+// UUID frais à la connexion (voir LoginPage.tsx), il ne peut jamais être
+// 'u2' lui-même (le pseudo "ariane" est déjà pris par ce compte de seed —
+// voir pseudoDisponible), donc pas de risque de "notification à soi-même"
+// ici, contrairement à l'ancienne version testée en tant que sam/ariane sur
+// le dashboard ouvert directement.
+const DEMO_EXPEDITEUR_ID = 'u2'; // ariane
 
 let demoDmTimeoutId = null;
 let demoSalonTimeoutId = null;
@@ -675,12 +702,19 @@ function envoyerVersRenderer(canal, donnees) {
   }
 }
 
-function simulerMessagePrive() {
+function simulerMessagePrive(destinataireId) {
   try {
+    // S'assure que la conversation existe avant d'y écrire (le seed initial
+    // de MockGatewayRuntime ne connaît pas encore ce nouvel utilisateur) ;
+    // idempotent si elle existe déjà.
+    chatGateway.demarrerConversationPrivee({
+      utilisateurId: DEMO_EXPEDITEUR_ID,
+      autreUtilisateurId: destinataireId,
+    });
     const message = chatGateway.envoyerMessagePrive({
-      conversationId: DEMO_DM_ID,
-      utilisateurId: DEMO_DM_EXPEDITEUR_ID,
-      contenu: 'Message de démo (ariane → sam).',
+      conversationId: creerDmId(DEMO_EXPEDITEUR_ID, destinataireId),
+      utilisateurId: DEMO_EXPEDITEUR_ID,
+      contenu: 'Message de démo (ariane → vous).',
     });
     envoyerVersRenderer('notifications:message-simule', {
       type: 'prive',
@@ -695,8 +729,8 @@ function simulerMessageSalon() {
   try {
     const message = chatGateway.envoyerMessage({
       salonId: DEMO_SALON_ID,
-      utilisateurId: DEMO_SALON_EXPEDITEUR_ID,
-      contenu: 'Message de démo dans #général (eva).',
+      utilisateurId: DEMO_EXPEDITEUR_ID,
+      contenu: 'Message de démo dans #général (ariane).',
     });
     envoyerVersRenderer('notifications:message-simule', {
       type: 'salon',
@@ -710,13 +744,28 @@ function simulerMessageSalon() {
 
 function demarrerSimulationMessages() {
   arreterSimulationMessages();
-  // Jamais en production : voir le commentaire au-dessus de DEMO_DM_ID.
+  // Jamais en production : voir le commentaire au-dessus de DEMO_EXPEDITEUR_ID.
   // Sans ce garde-fou, chaque lancement de l'app empaquetée injecterait ces
   // deux messages fabriqués dans les conversations de tout le monde.
   if (!isDev) return;
+
+  // Le destinataire du DM de démo est l'utilisateur qui vient de se
+  // connecter via l'écran de connexion. Si personne ne s'est connecté par ce
+  // biais (ex. dashboard ouvert directement en dev, sans passer par le
+  // login), ou si c'est ariane elle-même (ne devrait pas arriver, voir plus
+  // haut, mais on se protège quand même), on n'envoie rien plutôt que de
+  // planter ou de se notifier soi-même.
+  const nouvelUtilisateurId = chatGateway.obtenirUtilisateurConnecte();
+  if (!nouvelUtilisateurId || nouvelUtilisateurId === DEMO_EXPEDITEUR_ID) {
+    return;
+  }
+
   // Un seul envoi par canal (setTimeout, pas setInterval) : plus de boucle
   // continue une fois les tests de notifications terminés.
-  demoDmTimeoutId = setTimeout(simulerMessagePrive, 5000);
+  demoDmTimeoutId = setTimeout(
+    () => simulerMessagePrive(nouvelUtilisateurId),
+    5000
+  );
   demoSalonTimeoutId = setTimeout(simulerMessageSalon, 10000);
 }
 
@@ -801,14 +850,16 @@ if (!gotSingleInstanceLock) {
     Menu.setApplicationMenu(buildMenu());
     configurerCsp();
     mainWindow = createWindow();
-    demarrerSimulationMessages();
+    // Pas d'appel à demarrerSimulationMessages() ici : à ce stade, la
+    // fenêtre affiche l'écran de connexion et personne n'est encore
+    // connecté. Voir le handler 'navigation:tableau-de-bord' plus haut, qui
+    // la déclenche au bon moment (juste après une connexion réussie).
 
     app.on('activate', () => {
       // Comportement standard macOS : l'app reste active dans le dock après
       // la fermeture de toutes les fenêtres, et on en recrée une au clic.
       if (BrowserWindow.getAllWindows().length === 0) {
         mainWindow = createWindow();
-        demarrerSimulationMessages();
       }
     });
   });

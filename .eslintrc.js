@@ -1,5 +1,6 @@
 ﻿module.exports = {
   env: { browser: true, es2021: true, node: true },
+  ignorePatterns: ['dist/', 'coverage/', 'node_modules/'],
   extends: ['eslint:recommended', 'prettier'],
   parserOptions: { ecmaVersion: 'latest', sourceType: 'module' },
   rules: {},

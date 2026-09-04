@@ -188,7 +188,7 @@ describe('MockGateway', () => {
 
     it(
       "devrait gérer proprement une déconnexion dont l'utilisateur courant " +
-      "n'existe plus dans l'annuaire (branche défensive utilisateur introuvable)",
+        "n'existe plus dans l'annuaire (branche défensive utilisateur introuvable)",
       async () => {
         (
           gateway as unknown as { utilisateurActuelId: string | null }
@@ -318,12 +318,12 @@ describe('MockGateway', () => {
   // ===== Utilisateurs =====
   describe('pseudoDisponible', () => {
     it('devrait indiquer qu’un pseudo déjà pris (seedé) est indisponible', async () => {
-      expect(await gateway.pseudoDisponible('alice')).toBe(false);
+      expect(await gateway.pseudoDisponible('sam')).toBe(false);
     });
 
     it('devrait comparer les pseudos sans tenir compte de la casse', async () => {
-      expect(await gateway.pseudoDisponible('ALICE')).toBe(false);
-      expect(await gateway.pseudoDisponible('AlIcE')).toBe(false);
+      expect(await gateway.pseudoDisponible('SAM')).toBe(false);
+      expect(await gateway.pseudoDisponible('SaM')).toBe(false);
     });
 
     it('devrait indiquer qu’un pseudo libre est disponible', async () => {
@@ -360,7 +360,7 @@ describe('MockGateway', () => {
     });
 
     it('devrait rejeter la création d’un utilisateur avec un pseudo déjà pris', async () => {
-      await expect(gateway.creerUtilisateur('alice')).rejects.toThrow(
+      await expect(gateway.creerUtilisateur('sam')).rejects.toThrow(
         /déjà utilisé/
       );
     });
@@ -404,7 +404,7 @@ describe('MockGateway', () => {
     });
 
     it('devrait rejeter la connexion si le pseudo est déjà pris par un autre utilisateur', async () => {
-      const usurpateur = creerUtilisateur('u-usurpateur', 'alice');
+      const usurpateur = creerUtilisateur('u-usurpateur', 'sam');
 
       await expect(gateway.connexion(usurpateur)).rejects.toThrow(
         /déjà utilisé/
@@ -1172,12 +1172,15 @@ describe('MockGateway', () => {
     });
 
     it('devrait ignorer les salons auxquels l’utilisateur n’appartient pas lors de la déconnexion', async () => {
-      await gateway.simulerConnexion('u3');
+      // u4 est membre de s1 (public, tout le monde y est d'office) mais pas
+      // de s2 (privé, réservé à u1/u3) : s2 ne doit recevoir aucun message
+      // système pour la connexion/déconnexion de u4.
+      await gateway.simulerConnexion('u4');
       await gateway.simulerDeconnexion();
 
-      const messagesSalonPublic =
-        await gateway.obtenirMessagesConversation('s1');
-      expect(messagesSalonPublic).toHaveLength(0);
+      const messagesSalonPrive =
+        await gateway.obtenirMessagesConversation('s2');
+      expect(messagesSalonPrive).toHaveLength(0);
     });
   });
 });

@@ -22,7 +22,9 @@ import type { ChatGateway } from '../../../infrastructure/gateways/ChatGateway';
  * hors scope de cet écran.
  */
 export type GatewaySession = Pick<
-  ChatGateway, 'pseudoDisponible' | 'connexion'>;
+  ChatGateway,
+  'pseudoDisponible' | 'connexion'
+>;
 
 interface LoginPageProps {
   gateway: GatewaySession;
@@ -76,9 +78,25 @@ export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
     const pseudoVerifie = pseudo.trim();
 
     const debounce = setTimeout(async () => {
-      const disponible = await gateway.pseudoDisponible(pseudoVerifie);
-      if (jeton !== jetonVerification.current) return; // réponse obsolète
-      setDisponibilite({ pseudo: pseudoVerifie, disponible });
+      try {
+        const disponible = await gateway.pseudoDisponible(pseudoVerifie);
+        if (jeton !== jetonVerification.current) return; // réponse obsolète
+        setDisponibilite({ pseudo: pseudoVerifie, disponible });
+      } catch (err) {
+        // Sans ce catch, un appel IPC qui rejette (ou n'aboutit jamais)
+        // laissait le champ bloqué sur "Vérification de la disponibilité…"
+        // indéfiniment : ni `disponibilite` ni `erreurSoumission` n'étaient
+        // jamais mis à jour, donc `etat` restait sur 'checking' pour
+        // toujours (voir le calcul de `etat` plus bas).
+        if (jeton !== jetonVerification.current) return; // réponse obsolète
+        setErreurSoumission({
+          pseudo: pseudoVerifie,
+          message:
+            err instanceof Error
+              ? err.message
+              : 'Impossible de vérifier la disponibilité du pseudo.',
+        });
+      }
     }, 300);
 
     return () => clearTimeout(debounce);

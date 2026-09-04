@@ -31,7 +31,7 @@ const NotifPrefs =
       traiterMessageSimule: async () => {},
     };
   })();
-let utilisateurActuelId = sessionStorage.getItem('currentUserId') ?? 'u1';
+let utilisateurActuelId = sessionStorage.getItem('currentUserId') ?? null;
 let salonActifId = null;
 let etat = { utilisateurs: [], salons: [], invitations: [] };
 // Miroir côté renderer de fenetreEstFocusee dans main.js (voir
@@ -636,6 +636,16 @@ el.utilisateur.addEventListener('change', async (event) => {
 async function initialiserUtilisateurCourant() {
   const utilisateurs = await window.electronAPI.obtenirUtilisateurs();
   remplirSelectUtilisateur(utilisateurs);
+
+  if (!utilisateurActuelId) {
+    // Pas de sélection déjà mémorisée pour cette session (ex. arrivée sur le
+    // dashboard juste après la page de connexion) : on récupère l'utilisateur
+    // qui vient de s'y connecter plutôt que de tomber sur le premier
+    // utilisateur de la liste par défaut (voir l'incident "connecté en tant
+    // qu'alice par défaut" et session:utilisateur-connecte dans main.js).
+    utilisateurActuelId = await window.electronAPI.obtenirUtilisateurConnecte();
+  }
+
   utilisateurActuelId =
     utilisateurs.find((item) => item.id === utilisateurActuelId)?.id ??
     utilisateurs[0]?.id ??
