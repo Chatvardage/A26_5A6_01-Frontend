@@ -1,7 +1,50 @@
 // UI uniquement : toutes les opérations passent par l'API sécurisée du preload.
+// NotifPrefs vient de notif-prefs.js, un script classique chargé avant celui-ci
+// (voir index.html) qui expose window.NotifPrefs comme global — cette référence
+// locale évite les erreurs ESLint no-undef (comme le fait déjà message-prive.js
+// avec `const NotifPrefs = window.NotifPrefs;`).
+// Garde-fou : si notif-prefs.js n'a pas chargé (ordre des <script> changé par
+// erreur dans index.html, échec de chargement, etc.), window.NotifPrefs serait
+// `undefined` et le moindre appel plus bas (afficherSalons/afficherMessages,
+// sur le chemin de rendu principal) ferait planter toute la page. On dégrade
+// plutôt vers un mode "sans notifications" : les ronds et le badge restent
+// simplement masqués, mais salons/messages continuent de s'afficher.
+const NotifPrefs =
+  window.NotifPrefs ??
+  (() => {
+    console.error(
+      '[renderer] window.NotifPrefs est introuvable : notif-prefs.js doit être chargé avant renderer.js (voir index.html). Notifications et badges désactivés pour cette session.'
+    );
+    return {
+      MODE_SYSTEME: 'systeme',
+      MODE_DISCRET: 'discret',
+      MODE_AUCUNE: 'aucune',
+      obtenirMode: () => 'aucune',
+      definirMode: () => {},
+      afficheRonds: () => false,
+      marquerCommeLu: () => {},
+      estNonLu: () => false,
+      compterSalonsNonLus: () => 0,
+      compterConversationsNonLues: () => 0,
+      genererIconeBadge: () => null,
+      appliquerBadge: () => {},
+      traiterMessageSimule: async () => {},
+    };
+  })();
 let utilisateurActuelId = sessionStorage.getItem('currentUserId') ?? 'u1';
 let salonActifId = null;
 let etat = { utilisateurs: [], salons: [], invitations: [] };
+// Miroir côté renderer de fenetreEstFocusee dans main.js (voir
+// 'window:focus-changed' / 'window:is-focused' dans preload.js), initialisé
+// à `true` par défaut le temps que la vraie valeur arrive (voir plus bas où
+// on l'interroge dès le démarrage) : la fenêtre vient tout juste d'être
+// affichée à ce moment-là, donc `true` est la meilleure hypothèse de départ.
+// Sert uniquement à décider si la conversation actuellement affichée doit
+// être marquée "lue" (voir afficherMessages()) — main.js gère déjà son
+// propre état équivalent pour décider d'afficher ou non une notification
+// système, les deux doivent rester d'accord (voir le commentaire dans
+// afficherMessages()).
+let fenetreEstFocusee = true;
 
 const el = {
   salons: document.querySelector('#channel-list'),
@@ -140,25 +183,127 @@ async function actualiser() {
     }
     afficherTout();
   } catch (erreur) {
+    console.error('[actualiser] ERREUR:', erreur);
     notifier(messageErreur(erreur), true);
   }
+  // Note : mettreAJourBadgeApplication() n'est PAS rappelée ici, elle est
+  // déjà déclenchée par afficherTout() (voir plus bas) sur le chemin de
+  // succès. Un appel ici en plus doublait le recalcul du badge (et l'appel
+  // IPC obtenirConversationsPrivees sous-jacent) à chaque actualiser() réussi.
+  actualiserBadgeMessagesPrives();
+}
+
+/**
+ * Recalcule le nombre total de conversations non lues (salons + messages
+ * privés) pour l'utilisateur courant, et met à jour le badge de l'icône de
+ * l'app en conséquence (voir mettreAJourBadgeApplication côté main.js).
+ * Respecte NotifPrefs.afficheRonds() : en mode "aucune", le badge disparaît
+ * comme les ronds de notification. Best-effort et silencieux, comme
+ * actualiserBadgeMessagesPrives().
+ *
+ * Le calcul du compte et le dessin de l'icône de badge vivent dans
+ * NotifPrefs (notif-prefs.js), partagés avec message-prive.js — voir son
+ * en-tête pour le pourquoi (évite la divergence entre deux copies).
+ */
+async function mettreAJourBadgeApplication() {
+  if (typeof serviceNotifications?.setBadgeCount !== 'function') return;
+  if (!NotifPrefs.afficheRonds(utilisateurActuelId)) {
+    NotifPrefs.appliquerBadge(serviceNotifications, 0);
+    return;
+  }
+  let nombre = NotifPrefs.compterSalonsNonLus(utilisateurActuelId, etat.salons);
+  try {
+    const conversations =
+      await window.electronAPI.obtenirConversationsPrivees(utilisateurActuelId);
+    nombre += NotifPrefs.compterConversationsNonLues(
+      utilisateurActuelId,
+      conversations
+    );
+  } catch {
+    // Badge best-effort, voir commentaire ci-dessus.
+  }
+  NotifPrefs.appliquerBadge(serviceNotifications, nombre);
+}
+
+/**
+ * Le bouton d'accès aux messages privés (#message-prive-btn) vit sur CETTE
+ * page (index.html) mais doit refléter l'état des conversations privées
+ * (autre page). Best-effort et silencieux : un badge qui ne se met pas à
+ * jour n'est pas une raison de perturber le reste de l'app.
+ */
+async function actualiserBadgeMessagesPrives() {
+  const dots = document.querySelectorAll('#message-prive-btn .notif-dot');
+  if (!dots.length) return;
+  if (!NotifPrefs.afficheRonds(utilisateurActuelId)) {
+    dots.forEach((dot) => (dot.hidden = true));
+    return;
+  }
+  try {
+    const conversations =
+      await window.electronAPI.obtenirConversationsPrivees(utilisateurActuelId);
+    const nonLu = conversations.some((conversation) =>
+      NotifPrefs.estNonLu(
+        utilisateurActuelId,
+        conversation.id,
+        conversation.lastMessage
+          ? {
+              auteurId: conversation.lastMessage.auteurId,
+              timestamp: conversation.lastMessage.envoi,
+            }
+          : null
+      )
+    );
+    dots.forEach((dot) => (dot.hidden = !nonLu));
+  } catch {
+    // Badge best-effort, voir commentaire ci-dessus.
+  }
+}
+
+/** Le dernier message d'un salon, normalisé pour NotifPrefs.estNonLu(). */
+function derniereActiviteSalon(salon) {
+  if (!salon.messages.length) return null;
+  const dernier = salon.messages[salon.messages.length - 1];
+  return { auteurId: dernier.auteurId, timestamp: dernier.date };
 }
 
 function afficherSalons() {
   el.salons.replaceChildren(
     creerEl('li', { classe: 'category', texte: 'Salons' })
   );
+  const afficherRonds = NotifPrefs.afficheRonds(utilisateurActuelId);
+  let auMoinsUnSalonNonLu = false;
+
   etat.salons.forEach((salon) => {
     const item = document.createElement('li');
     const bouton = document.createElement('button');
     bouton.className = salon.id === salonActifId ? 'active' : '';
     remplirLabelSalon(bouton, salon);
+
+    const nonLu =
+      afficherRonds &&
+      NotifPrefs.estNonLu(
+        utilisateurActuelId,
+        salon.id,
+        derniereActiviteSalon(salon)
+      );
+    if (nonLu) auMoinsUnSalonNonLu = true;
+    bouton.appendChild(
+      creerEl('span', {
+        classe: 'notif-dot notif-dot--channel',
+        attrs: nonLu ? {} : { hidden: '' },
+      })
+    );
+
     bouton.addEventListener('click', () => {
       salonActifId = salon.id;
       afficherTout();
     });
     item.appendChild(bouton);
     el.salons.appendChild(item);
+  });
+
+  document.querySelectorAll('#server-icon-projet .notif-dot').forEach((dot) => {
+    dot.hidden = !auMoinsUnSalonNonLu;
   });
 }
 
@@ -169,8 +314,27 @@ function afficherMessages() {
     el.nomSalon.textContent = 'Aucun salon accessible';
     el.prive.hidden = true;
     el.message.disabled = true;
+    definirConversationActivePourNotifs(null);
     return;
   }
+  // Le salon affiché est "lu" par l'utilisateur courant — mais SEULEMENT si
+  // la fenêtre a effectivement le focus en ce moment (fenetreEstFocusee) :
+  // sans ce garde-fou, un message de démo/réel reçu pendant que la fenêtre
+  // est en arrière-plan (mais que ce salon était déjà sélectionné) serait
+  // marqué "lu" ici alors même qu'une vraie notification système vient
+  // d'être déclenchée pour ce même message côté main.js (qui, lui, exige
+  // déjà fenetreEstFocusee avant de considérer une conversation comme
+  // "déjà lue en direct" — voir showMessageNotification). Les deux
+  // indicateurs (rond de notification ici, notification système côté
+  // main.js) doivent rester d'accord entre eux.
+  if (fenetreEstFocusee) {
+    NotifPrefs.marquerCommeLu(utilisateurActuelId, salon.id, Date.now());
+  }
+  // La conversation "active" que main.js ne doit pas notifier (voir
+  // showMessageNotification côté main.js) reste définie qu'on ait le focus
+  // ou non : c'est ce salon qui est affiché à l'écran, peu importe si la
+  // fenêtre est actuellement au premier plan.
+  definirConversationActivePourNotifs(salon.id);
   remplirLabelSalon(el.nomSalon, salon);
   el.prive.hidden = salon.visibilite !== 'prive';
   el.message.disabled = false;
@@ -227,10 +391,24 @@ function afficherActions() {
 }
 
 function afficherTout() {
-  afficherSalons();
+  // afficherMessages() doit s'exécuter avant afficherSalons() : c'est elle qui
+  // marque le salon affiché comme "lu" (NotifPrefs.marquerCommeLu). Si
+  // afficherSalons() tournait en premier, le rond de notification du salon
+  // qu'on vient de cliquer serait calculé avec l'ancien état (non lu) et ne
+  // disparaîtrait qu'au prochain rafraîchissement.
   afficherMessages();
+  afficherSalons();
   afficherActions();
+  mettreAJourBadgeApplication();
 }
+
+// --- Initialisation au démarrage -----
+// Un seul appel à actualiser() au démarrage : il se fait via initialiser()
+// (plus bas dans ce fichier), qui appelle d'abord initialiserUtilisateurCourant()
+// pour résoudre le bon utilisateurActuelId avant de charger l'état des salons.
+// Un appel direct à actualiser() ici, en plus, chargeait l'état une première
+// fois avec un utilisateurActuelId potentiellement pas encore résolu, avant
+// d'être aussitôt écrasé par le second appel (double fetch + flash possible).
 
 el.creer.addEventListener('click', () => {
   const champNom = creerEl('input', { attrs: { maxlength: '40' } });
@@ -433,6 +611,7 @@ el.formulaire.addEventListener('submit', async (event) => {
 el.utilisateur.addEventListener('change', async (event) => {
   utilisateurActuelId = event.target.value;
   sessionStorage.setItem('currentUserId', utilisateurActuelId);
+  fermerMenuNotif();
   await actualiser();
 });
 
@@ -450,6 +629,26 @@ async function initialiserUtilisateurCourant() {
 async function initialiser() {
   try {
     await initialiserUtilisateurCourant();
+    // À ce stade, le script s'est déjà mis en pause une fois (l'await
+    // ci-dessus), donc le reste du script synchrone du module a fini de
+    // s'exécuter — `serviceNotifications`, déclaré plus bas dans le fichier
+    // (voir "--- Notifications système ---"), est donc garanti défini ici,
+    // comme pour definirConversationActivePourNotifs()/notifierMessageSysteme()
+    // qui reposent sur le même ordre d'exécution. On récupère l'état de
+    // focus réel AVANT le premier appel à actualiser()/afficherMessages(),
+    // pour que la toute première conversation affichée au démarrage ne soit
+    // marquée "lue" que si la fenêtre a effectivement le focus à ce moment.
+    if (typeof serviceNotifications?.isWindowFocused === 'function') {
+      fenetreEstFocusee = Boolean(await serviceNotifications.isWindowFocused());
+    }
+    // Consomme une éventuelle cible laissée par message-prive.js avant une
+    // navigation vers cette page suite au clic sur une notification de
+    // salon (voir onNavigateToConversation dans ce fichier et CLEF_CIBLE_SALON).
+    const cibleSalon = sessionStorage.getItem(CLEF_CIBLE_SALON);
+    if (cibleSalon) {
+      sessionStorage.removeItem(CLEF_CIBLE_SALON);
+      salonActifId = cibleSalon;
+    }
     await actualiser();
   } catch (erreur) {
     notifier(messageErreur(erreur), true);
@@ -463,3 +662,160 @@ const btn = document.getElementById('message-prive-btn');
 btn?.addEventListener('click', () => {
   window.electronAPI.navigate('message-prive.html');
 });
+
+// --- Notifications système -----------------------------------------------
+// Remplace l'ancien câblage basé sur des CustomEvent ('channel:selected',
+// 'chat:conversation-selected', 'chat:message-received') qui n'étaient
+// jamais émis nulle part dans ce fichier (ils visaient une architecture à
+// base de ServiceSalon/src/main.js jamais branchée sur la vraie app — voir
+// src/domain/service/ServiceSalon.ts, code mort). Résultat concret : la
+// conversation "active" côté main.js n'était jamais mise à jour, et le
+// garde-fou anti-notification-sur-conversation-déjà-ouverte ne s'activait
+// donc jamais. Câblé maintenant directement aux points réels où le salon
+// affiché change (afficherMessages()) et où on envoie/simule un message.
+const serviceNotifications = window.notifications;
+
+// Tient fenetreEstFocusee à jour (voir sa déclaration plus haut, et la
+// requête initiale dans initialiser()) à partir des changements de focus
+// réels côté main.js. Quand la fenêtre regagne le focus alors qu'une
+// conversation était déjà affichée (donc jamais marquée "lue" pendant
+// qu'elle était en arrière-plan, voir afficherMessages()), on relance
+// l'affichage pour la marquer "lue" maintenant qu'elle est effectivement
+// visible.
+if (typeof serviceNotifications?.onFocusChange === 'function') {
+  serviceNotifications.onFocusChange((focused) => {
+    const regagneLeFocus = focused && !fenetreEstFocusee;
+    fenetreEstFocusee = focused;
+    if (regagneLeFocus) {
+      afficherTout();
+      // afficherTout() ne rafraîchit pas lui-même le rond du bouton
+      // #message-prive-btn (voir son propre commentaire) : tous les autres
+      // appelants de afficherTout()/actualiser() l'appellent juste après
+      // pour cette raison (voir actualiser() et le handler de changement de
+      // mode de notif plus bas) — celui-ci l'oubliait, laissant ce rond
+      // potentiellement périmé jusqu'au prochain actualiser().
+      actualiserBadgeMessagesPrives();
+    }
+  });
+}
+
+function definirConversationActivePourNotifs(conversationId) {
+  if (typeof serviceNotifications?.setActiveConversation === 'function') {
+    serviceNotifications.setActiveConversation(conversationId ?? null);
+  }
+}
+
+function notifierMessageSysteme(message) {
+  if (typeof serviceNotifications?.messageReceived === 'function' && message) {
+    serviceNotifications.messageReceived(message);
+  }
+}
+
+// Clé sessionStorage utilisée pour transmettre, à travers une navigation
+// index.html -> message-prive.html, la conversation privée à ouvrir tout de
+// suite après le chargement (voir onNavigateToConversation ci-dessous et sa
+// consommation dans initialiser()). sessionStorage est partagé entre les
+// deux pages (même origine file://), comme `currentUserId` l'est déjà.
+const CLEF_CIBLE_DM = 'notif:cible-dm';
+// Symétrique de CLEF_CIBLE_DM, mais dans l'autre sens (portée par
+// message-prive.js) : présente ici seulement pour la consommer au retour
+// vers cette page (voir initialiser()).
+const CLEF_CIBLE_SALON = 'notif:cible-salon';
+
+// Clic sur une notification système (voir showMessageNotification dans
+// main.js) : ouvre directement la conversation concernée plutôt que de se
+// contenter de remettre la fenêtre au premier plan. Si c'est un salon, on
+// est déjà sur la bonne page (index.html) ; si c'est une conversation
+// privée, on mémorise la cible et on navigue vers message-prive.html, qui
+// la consommera à son chargement.
+if (typeof serviceNotifications?.onNavigateToConversation === 'function') {
+  serviceNotifications.onNavigateToConversation((cible) => {
+    const conversationId = cible?.conversationId;
+    if (!conversationId) return;
+    if (cible.type === 'salon') {
+      salonActifId = conversationId;
+      afficherTout();
+    } else if (cible.type === 'prive') {
+      sessionStorage.setItem(CLEF_CIBLE_DM, conversationId);
+      window.electronAPI.navigate('message-prive.html');
+    }
+  });
+}
+
+// --- Messages de démo simulés en continu par main.js ------------------------
+// Voir demarrerSimulationMessages() dans main.js : un message privé
+// (ariane → sam) toutes les 5s et un message dans #général toutes les 10s,
+// en continu, pour pouvoir observer les notifications sans action manuelle.
+// C'est ce fichier (pas main.js) qui décide, selon le mode NotifPrefs de
+// l'utilisateur actuellement affiché ici, s'il faut déclencher une
+// notification système — main.js ne connaît pas les préférences par
+// utilisateur (elles vivent dans localStorage, côté renderer).
+// Corps du handler partagé avec message-prive.js via
+// NotifPrefs.traiterMessageSimule (voir notif-prefs.js) : seule la partie
+// "quoi rafraîchir à l'écran" diffère réellement d'une page à l'autre.
+if (typeof serviceNotifications?.onMockMessage === 'function') {
+  serviceNotifications.onMockMessage((message) =>
+    NotifPrefs.traiterMessageSimule(message, {
+      utilisateurId: utilisateurActuelId,
+      surSalon: () => actualiser(),
+      surPrive: async () => {
+        await actualiserBadgeMessagesPrives();
+        mettreAJourBadgeApplication();
+      },
+      notifierMessageSysteme,
+    })
+  );
+}
+
+// --- Menu de préférences de notification ----------------------------------
+const elNotifBtn = document.querySelector('#open-notif-settings');
+const elNotifMenu = document.querySelector('#notif-menu');
+
+function fermerMenuNotif() {
+  if (!elNotifMenu || elNotifMenu.hidden) return;
+  elNotifMenu.hidden = true;
+  elNotifBtn?.setAttribute('aria-expanded', 'false');
+}
+
+function ouvrirMenuNotif() {
+  if (!elNotifMenu) return;
+  const modeActuel = NotifPrefs.obtenirMode(utilisateurActuelId);
+  elNotifMenu.querySelectorAll('input[name="notif-mode"]').forEach((radio) => {
+    radio.checked = radio.value === modeActuel;
+  });
+  elNotifMenu.hidden = false;
+  elNotifBtn?.setAttribute('aria-expanded', 'true');
+}
+
+elNotifBtn?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  if (elNotifMenu?.hidden === false) {
+    fermerMenuNotif();
+  } else {
+    ouvrirMenuNotif();
+  }
+});
+
+elNotifMenu?.addEventListener('click', (event) => event.stopPropagation());
+
+elNotifMenu?.querySelectorAll('input[name="notif-mode"]').forEach((radio) => {
+  radio.addEventListener('change', () => {
+    NotifPrefs.definirMode(utilisateurActuelId, radio.value);
+    fermerMenuNotif();
+    afficherTout();
+    actualiserBadgeMessagesPrives();
+    notifier('Préférence de notification mise à jour.');
+  });
+});
+
+document.addEventListener('click', fermerMenuNotif);
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') fermerMenuNotif();
+});
+
+// `index.html` est pour l'instant une
+// coquille statique (voir le commentaire en tête de src/presentation/pages/
+// index.html). Le rendu des salons/messages/présence, et l'envoi de
+// messages via #message-form, arriveront avec le ChatGateway (mock puis
+// réel), en ajoutant les méthodes correspondantes à `electronAPI` dans
+// preload.js plutôt qu'un accès direct à ipcRenderer.

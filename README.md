@@ -287,3 +287,13 @@ Le renderer ne construit jamais de HTML sous forme de chaîne : tous les éléme
 npm install -D vitest@^2 @vitest/coverage-v8@^2
 npm run test:coverage
 ```
+
+### Notifications
+
+Lancer le projet en mode développement avec les notifications activées
+
+### Lancer le projet en mode développement
+
+```bash
+NODE_ENV=development npm start
+```
