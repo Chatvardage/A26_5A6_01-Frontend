@@ -22,13 +22,29 @@ describe('MockGateway', () => {
       const utilisateurs = await gateway.obtenirTousLesUtilisateurs();
       const salons = await gateway.obtenirTousLesSalons();
 
-      expect(utilisateurs.map((u) => u.id).sort()).toEqual(['u1', 'u2', 'u3']);
+      expect(utilisateurs.map((u) => u.id).sort()).toEqual([
+        'u1',
+        'u2',
+        'u3',
+        'u4',
+        'u5',
+        'u6',
+      ]);
       expect(salons.map((s) => s.id).sort()).toEqual(['s1', 's2']);
 
       const s1 = salons.find((s) => s.id === 's1');
       const s2 = salons.find((s) => s.id === 's2');
       expect(s1?.visibilite).toBe('public');
       expect(s2?.visibilite).toBe('prive');
+      // Salon public : tous les utilisateurs existants en sont membres d'office.
+      expect(s1?.membreIds.slice().sort()).toEqual([
+        'u1',
+        'u2',
+        'u3',
+        'u4',
+        'u5',
+        'u6',
+      ]);
     });
 
     it('devrait démarrer déconnecté et sans utilisateur courant', () => {
@@ -80,8 +96,9 @@ describe('MockGateway', () => {
         messages.push(evt.donnees.message)
       );
 
-      // u3 n'est membre que de s2 (privé) ; pas de s1 ni invité nulle part
-      await gateway.simulerConnexion('u3');
+      // u4 est membre de s1 (public, tout le monde y est d'office) mais pas
+      // de s2 (privé, réservé à u1/u3) ; pas invité non plus
+      await gateway.simulerConnexion('u4');
 
       expect(messages.length).toBe(1);
     });
@@ -319,11 +336,13 @@ describe('MockGateway', () => {
 
     it('devrait retourner tous les utilisateurs existants', async () => {
       const utilisateurs = await gateway.obtenirTousLesUtilisateurs();
-      expect(utilisateurs.length).toBe(3);
+      expect(utilisateurs.length).toBe(6);
     });
 
     it("devrait retourner undefined pour la présence d'un utilisateur jamais connecté", async () => {
-      await expect(gateway.obtenirPresence('u1')).resolves.toBeUndefined();
+      await expect(
+        gateway.obtenirPresence('utilisateur-inexistant')
+      ).resolves.toBeUndefined();
     });
   });
 
@@ -578,6 +597,11 @@ describe('MockGateway', () => {
     });
 
     it('devrait ajouter directement un utilisateur à un salon public sans invitation', async () => {
+      // Le seed place déjà tous les utilisateurs existants dans s1 (public) ;
+      // pour tester l'ajout à un salon public sans invitation, on utilise un
+      // utilisateur créé après coup, donc pas encore membre.
+      const nouvelUtilisateur = await gateway.creerUtilisateur('denis');
+
       const evenements: TypeEvenement[] = [];
       const messages: unknown[] = [];
       gateway.ecouterEvenement('utilisateur-rejoint-salon', () =>
@@ -587,10 +611,12 @@ describe('MockGateway', () => {
         messages.push(evt.donnees.message)
       );
 
-      // u3 n'est ni membre ni invité de s1 (public)
-      const salon = await gateway.ajouterUtilisateurAuSalon('s1', 'u3');
+      const salon = await gateway.ajouterUtilisateurAuSalon(
+        's1',
+        nouvelUtilisateur.id
+      );
 
-      expect(salon.membreIds).toContain('u3');
+      expect(salon.membreIds).toContain(nouvelUtilisateur.id);
       expect(salon.membresInvites).toEqual([]);
       expect(evenements).toContain('utilisateur-rejoint-salon');
       expect(messages.length).toBe(1);
@@ -868,6 +894,61 @@ describe('MockGateway', () => {
       expect(await gateway.obtenirConversationPrivee(conversation.id)).toEqual(
         conversation
       );
+    });
+  });
+
+  describe('demarrerConversationPrivee', () => {
+    it('devrait refuser de démarrer une conversation avec soi-même', async () => {
+      const erreurs: string[] = [];
+      gateway.ecouterEvenement('erreur', (evt) =>
+        erreurs.push(evt.donnees.message as string)
+      );
+
+      await expect(
+        gateway.demarrerConversationPrivee('u1', 'u1')
+      ).rejects.toThrow(
+        'Impossible de démarrer une conversation avec soi-même'
+      );
+      expect(erreurs).toContain(
+        'Impossible de démarrer une conversation avec soi-même'
+      );
+    });
+
+    it('devrait refuser si un des deux utilisateurs est inconnu', async () => {
+      await expect(
+        gateway.demarrerConversationPrivee('u1', 'inconnu')
+      ).rejects.toThrow("Un des utilisateurs n'a pas été trouvé");
+      await expect(
+        gateway.demarrerConversationPrivee('inconnu', 'u2')
+      ).rejects.toThrow("Un des utilisateurs n'a pas été trouvé");
+    });
+
+    it('devrait créer une nouvelle conversation privée entre deux utilisateurs qui n’en ont pas encore', async () => {
+      const nouvelUtilisateur = await gateway.creerUtilisateur('denis');
+
+      const conversation = await gateway.demarrerConversationPrivee(
+        'u1',
+        nouvelUtilisateur.id
+      );
+
+      expect(conversation.participantIds).toEqual(
+        expect.arrayContaining(['u1', nouvelUtilisateur.id])
+      );
+      expect(await gateway.obtenirConversationPrivee(conversation.id)).toEqual(
+        conversation
+      );
+    });
+
+    it('devrait retourner la conversation existante plutôt que d’en recréer une (idempotent, indépendant de l’ordre des IDs)', async () => {
+      // u1/u2 ont déjà un DM seedé.
+      const conversationExistante =
+        await gateway.obtenirConversationPrivee('u1:u2');
+
+      const viaOrdreA = await gateway.demarrerConversationPrivee('u1', 'u2');
+      const viaOrdreB = await gateway.demarrerConversationPrivee('u2', 'u1');
+
+      expect(viaOrdreA).toEqual(conversationExistante);
+      expect(viaOrdreB).toEqual(conversationExistante);
     });
   });
 

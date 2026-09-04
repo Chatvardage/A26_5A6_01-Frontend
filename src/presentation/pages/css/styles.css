@@ -54,6 +54,39 @@ button {
   height: 44px;
   border-radius: 14px;
   display: block;
+  object-fit: cover;
+}
+
+#message-prive-btn {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 14px;
+  background: var(--bg-panel-alt);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+  transition:
+    border-radius 0.15s ease,
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+#message-prive-btn:hover,
+#message-prive-btn:focus-visible {
+  background: var(--bg-bubble);
+  border-radius: 30%;
+}
+
+#message-prive-btn .app-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: transparent;
+  border-radius: inherit;
 }
 
 #server-rail .rail-divider {

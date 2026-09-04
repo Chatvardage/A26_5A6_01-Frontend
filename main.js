@@ -16,13 +16,17 @@ const DEV_SERVER_PORT = '5173';
 // Chemin absolu du point d'entrée de l'app, utilisé pour vérifier qu'une
 // navigation file:// reste bien à l'intérieur du bundle (et non, par ex.,
 // file:///etc/passwd ou un autre fichier arbitraire du disque).
-const APP_INDEX_PATH = path.resolve(
-  __dirname,
-  'src',
-  'presentation',
-  'pages',
-  'index.html'
-);
+const APP_PAGES_ROOT = path.resolve(__dirname, 'src', 'presentation', 'pages');
+const APP_INDEX_PATH = path.resolve(APP_PAGES_ROOT, 'index.html');
+
+// Vrai si `filePath` (déjà résolu en chemin absolu) reste strictement à
+// l'intérieur de APP_PAGES_ROOT. Utilisé à la fois par isAppUrl() (pour les
+// URL file://) et par le handler IPC 'navigate' : centraliser le check évite
+// que les deux finissent par diverger. Le path.sep final est important : sans
+// lui, un dossier voisin comme "pages-evil" passerait le startsWith().
+function isPathInsideAppPages(filePath) {
+  return filePath.startsWith(`${APP_PAGES_ROOT}${path.sep}`);
+}
 
 // Icône personnalisée de l'app (mascotte de la maquette), utilisée à la
 // fois pour la fenêtre (barre des tâches/dock en dev) et comme base des
@@ -61,7 +65,7 @@ function isAppUrl(url) {
     } catch {
       return false;
     }
-    return filePath === APP_INDEX_PATH;
+    return isPathInsideAppPages(filePath);
   }
 
   // Le serveur de dev local n'est autorisé qu'en développement, et seulement
@@ -258,6 +262,19 @@ function createWindow() {
 }
 
 // --- IPC : API contrôlée côté Main ------------------------------------------
+function verifierProvenance(event) {
+  if (!isAppUrl(event.senderFrame?.url ?? '')) {
+    throw new Error('Origine IPC non autorisée');
+  }
+}
+
+function exposerCanal(nom, action) {
+  ipcMain.handle(nom, (event, donnees) => {
+    verifierProvenance(event);
+    return action(donnees ?? {});
+  });
+}
+
 ipcMain.handle('notification:set-active-conversation', (event, conversationId) => {
   if (!isTrustedIpcEvent(event)) {
     return false;
@@ -285,59 +302,53 @@ ipcMain.handle('salons:etat', (event, params) => {
   }
 });
 
-ipcMain.handle('salons:creer', (event, donnees) => {
-  if (!isTrustedIpcEvent(event)) {
-    throw new Error('Accès refusé');
-  }
-  try {
-    return chatGateway.creerSalon(donnees);
-  } catch (erreur) {
-    throw new Error(messageErreur(erreur));
-  }
-});
+exposerCanal('salons:etat', ({ utilisateurId }) =>
+  chatGateway.obtenirEtat(utilisateurId)
+);
+exposerCanal('utilisateurs:lister', () => chatGateway.obtenirUtilisateurs());
+exposerCanal('salons:creer', (donnees) => chatGateway.creerSalon(donnees));
+exposerCanal('salons:inviter', (donnees) => chatGateway.inviter(donnees));
+exposerCanal('salons:accepter-invitation', (donnees) =>
+  chatGateway.accepterInvitation(donnees)
+);
+exposerCanal('salons:refuser-invitation', (donnees) =>
+  chatGateway.refuserInvitation(donnees)
+);
+exposerCanal('salons:envoyer-message', (donnees) =>
+  chatGateway.envoyerMessage(donnees)
+);
+// Comme tous les canaux ci-dessus, ceux-ci font confiance à l'`utilisateurId`
+// fourni par le renderer plutôt que de le lier à une session authentifiée :
+// il n'y a pas de backend ni de notion de session réelle dans cette maquette
+// (l'utilisateur "courant" est un simple sélecteur côté UI, voir renderer.js
+// / message-prive.js). C'est cohérent avec le reste de l'app, mais à garder
+// en tête si un vrai backend/auth arrive un jour : ces canaux permettent
+// aujourd'hui à n'importe quel code du renderer de lire/démarrer les DM de
+// n'importe quel utilisateur.
+exposerCanal('obtenir-conversations-privees', ({ utilisateurId }) =>
+  chatGateway.obtenirConversationsPrivees(utilisateurId)
+);
 
-ipcMain.handle('salons:inviter', (event, donnees) => {
-  if (!isTrustedIpcEvent(event)) {
-    throw new Error('Accès refusé');
-  }
-  try {
-    return chatGateway.inviter(donnees);
-  } catch (erreur) {
-    throw new Error(messageErreur(erreur));
-  }
-});
+exposerCanal('envoyer-message-prive', (donnees) =>
+  chatGateway.envoyerMessagePrive(donnees)
+);
+exposerCanal('demarrer-conversation-privee', (donnees) =>
+  chatGateway.demarrerConversationPrivee(donnees)
+);
 
-ipcMain.handle('salons:accepter-invitation', (event, donnees) => {
-  if (!isTrustedIpcEvent(event)) {
-    throw new Error('Accès refusé');
+ipcMain.handle('navigate', (event, page) => {
+  verifierProvenance(event);
+  const pagePath = path.resolve(
+    __dirname,
+    'src',
+    'presentation',
+    'pages',
+    page ?? ''
+  );
+  if (!isPathInsideAppPages(pagePath)) {
+    throw new Error('Page de navigation invalide');
   }
-  try {
-    return chatGateway.accepterInvitation(donnees);
-  } catch (erreur) {
-    throw new Error(messageErreur(erreur));
-  }
-});
-
-ipcMain.handle('salons:refuser-invitation', (event, donnees) => {
-  if (!isTrustedIpcEvent(event)) {
-    throw new Error('Accès refusé');
-  }
-  try {
-    return chatGateway.refuserInvitation(donnees);
-  } catch (erreur) {
-    throw new Error(messageErreur(erreur));
-  }
-});
-
-ipcMain.handle('salons:envoyer-message', (event, donnees) => {
-  if (!isTrustedIpcEvent(event)) {
-    throw new Error('Accès refusé');
-  }
-  try {
-    return chatGateway.envoyerMessage(donnees);
-  } catch (erreur) {
-    throw new Error(messageErreur(erreur));
-  }
+  return BrowserWindow.fromWebContents(event.sender)?.loadFile(pagePath);
 });
 
 // --- Instance unique ---------------------------------------------------

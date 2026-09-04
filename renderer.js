@@ -1,9 +1,5 @@
 // UI uniquement : toutes les opérations passent par l'API sécurisée du preload.
-if (!window.electronAPI) {
-  throw new Error('window.electronAPI est indisponible : preload.js n’est pas chargé');
-}
-
-let utilisateurActuelId = 'u1';
+let utilisateurActuelId = sessionStorage.getItem('currentUserId') ?? 'u1';
 let salonActifId = null;
 let etat = { utilisateurs: [], salons: [], invitations: [] };
 
@@ -111,6 +107,16 @@ function notifier(message, erreur = false) {
 
 function messageErreur(erreur) {
   return erreur instanceof Error ? erreur.message : String(erreur);
+}
+
+function remplirSelectUtilisateur(utilisateurs) {
+  const options = utilisateurs.map((item) =>
+    creerEl('option', {
+      texte: item.pseudo,
+      attrs: { value: item.id },
+    })
+  );
+  el.utilisateur.replaceChildren(...options);
 }
 
 /**
@@ -451,36 +457,62 @@ el.formulaire.addEventListener('submit', async (event) => {
 
 el.utilisateur.addEventListener('change', async (event) => {
   utilisateurActuelId = event.target.value;
+  sessionStorage.setItem('currentUserId', utilisateurActuelId);
   await actualiser();
 });
 
-// Le renderer n'utilise jamais require/ipcRenderer directement : tout passe
-// par window.electronAPI, exposé de façon contrôlée par preload.js.
-//
+async function initialiserUtilisateurCourant() {
+  const utilisateurs = await window.electronAPI.obtenirUtilisateurs();
+  remplirSelectUtilisateur(utilisateurs);
+  utilisateurActuelId =
+    utilisateurs.find((item) => item.id === utilisateurActuelId)?.id ??
+    utilisateurs[0]?.id ??
+    '';
+  el.utilisateur.value = utilisateurActuelId;
+  sessionStorage.setItem('currentUserId', utilisateurActuelId);
+}
+
+async function initialiser() {
+  try {
+    await initialiserUtilisateurCourant();
+    await actualiser();
+  } catch (erreur) {
+    notifier(messageErreur(erreur), true);
+  }
+}
+
+initialiser();
+
+const btn = document.getElementById('message-prive-btn');
+
+btn?.addEventListener('click', () => {
+  window.electronAPI.navigate('message-prive.html');
+});
+
 const serviceNotifications = window.notifications;
 
 function updateActiveConversation(conversationId) {
   if (typeof serviceNotifications?.setActiveConversation === 'function') {
     serviceNotifications.setActiveConversation(conversationId ?? null);
-	}
+  }
 }
 
 function notifyForReceivedMessage(message) {
   if (typeof serviceNotifications?.messageReceived === 'function' && message) {
     serviceNotifications.messageReceived(message);
-	}
+  }
 }
 
 window.addEventListener('channel:selected', (event) => {
-	updateActiveConversation(event.detail?.channel?.id);
+  updateActiveConversation(event.detail?.channel?.id);
 });
 
 window.addEventListener('chat:conversation-selected', (event) => {
-	updateActiveConversation(event.detail?.conversationId);
+  updateActiveConversation(event.detail?.conversationId);
 });
 
 window.addEventListener('chat:message-received', (event) => {
-	notifyForReceivedMessage(event.detail?.message ?? event.detail);
+  notifyForReceivedMessage(event.detail?.message ?? event.detail);
 });
 
 // `index.html` est pour l'instant une
