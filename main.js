@@ -479,6 +479,41 @@ function createWindow() {
 // Le filtre `isLoginPageRequest` limite l'en-tête à l'origine de la page de
 // connexion (serveur de dev en dev, dossier dist/login en prod) pour ne pas
 // affecter le dashboard, qui a sa propre politique si besoin.
+
+// Vrai si `url` est la requête file:// pour le point d'entrée buildé de la
+// page de connexion (APP_LOGIN_PATH). Réutilise EXACTEMENT la même approche
+// que isAppUrl() ci-dessus (parser l'URL, décoder via fileURLToPath, puis
+// comparer des chemins résolus) plutôt que de reconstruire une chaîne
+// "file://" à partir du chemin disque brut et de comparer par préfixe sur
+// l'URL encodée : `win.loadFile()` fait passer le chemin par
+// `url.pathToFileURL()`, qui pourcent-encode certains caractères (ex. les
+// espaces, fréquents dans "C:\Program Files\..." ou un nom d'utilisateur
+// contenant un espace). Un préfixe construit à la main sur le chemin brut ne
+// contient jamais ces caractères encodés, donc `details.url.startsWith(...)`
+// ne matchait jamais dans ce cas — désactivant silencieusement la CSP
+// stricte de production pour la page même qu'elle est censée protéger.
+// Décoder l'URL (comme isAppUrl() le fait déjà) avant de comparer élimine
+// ce problème à la racine, plutôt que de multiplier les cas spéciaux
+// d'encodage/plateforme dans une reconstruction manuelle.
+function isProdLoginFileUrl(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'file:') return false;
+
+  let filePath;
+  try {
+    filePath = path.resolve(fileURLToPath(parsed));
+  } catch {
+    return false;
+  }
+
+  return filePath === APP_LOGIN_PATH;
+}
+
 function configurerCsp() {
   const cspDev =
     "default-src 'self'; " +
@@ -496,24 +531,11 @@ function configurerCsp() {
     "img-src 'self' data:;";
 
   const devOrigin = `http://localhost:${DEV_SERVER_PORT}/`;
-  // path.resolve() renvoie un chemin qui commence déjà par '/' sous
-  // POSIX (ex. "/home/..."), mais par "C:/..." (sans slash de tête) sous
-  // Windows une fois les back-slashes normalisés ci-dessous. `file://` +
-  // un chemin Windows donnerait "file://C:/..." (un seul slash après le
-  // schéma), alors que Chromium normalise ces URL avec TROIS slashes
-  // ("file:///C:/...") — sans ce troisième slash ajouté explicitement ici,
-  // `details.url.startsWith(prodLoginPrefix)` ne correspondait jamais en
-  // prod sur Windows, donc la CSP n'était jamais appliquée à la page de
-  // connexion sur cette plateforme.
-  const normalizedLoginPath = APP_LOGIN_PATH.replace(/\\/g, '/');
-  const prodLoginPrefix = normalizedLoginPath.startsWith('/')
-    ? `file://${normalizedLoginPath}`
-    : `file:///${normalizedLoginPath}`;
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const isLoginPageRequest = isDev
       ? details.url.startsWith(devOrigin)
-      : details.url.startsWith(prodLoginPrefix);
+      : isProdLoginFileUrl(details.url);
 
     if (!isLoginPageRequest) {
       callback({ responseHeaders: details.responseHeaders });

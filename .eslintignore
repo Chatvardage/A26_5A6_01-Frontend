@@ -1,5 +1,0 @@
-# Sorties de build générées automatiquement — jamais du code source,
-# ne doit jamais être linté (bundles minifiés Vite, etc.)
-dist/
-coverage/
-node_modules/

@@ -197,6 +197,14 @@ class MockGatewayRuntime {
     // Compteur pour générer des ids de messages privés uniques (voir
     // envoyerMessagePrive) sans dépendre de l'horloge système.
     this.prochainMessagePriveIndex = this.messagesPrives.length;
+
+    // Initialisé explicitement à `null` (plutôt que laissé non défini) :
+    // obtenirUtilisateurConnecte() ci-dessous documente et contractuellement
+    // renvoie `null` tant que personne ne s'est connecté via l'écran de
+    // connexion, et le renderer attend `Promise<string | null>` — pas
+    // `undefined`, que `connexion()` remplace de toute façon dès le premier
+    // appel.
+    this.utilisateurConnecteId = null;
   }
 
   verifierUtilisateur(utilisateurId) {
@@ -259,7 +267,10 @@ class MockGatewayRuntime {
    * page de connexion).
    */
   obtenirUtilisateurConnecte() {
-    return this.utilisateurConnecteId;
+    // Normalisation défensive vers `null` (voir l'initialisation dans le
+    // constructeur) : garde le contrat vrai même si un futur changement
+    // retire à nouveau cette initialisation par erreur.
+    return this.utilisateurConnecteId ?? null;
   }
 
   obtenirEtat(utilisateurId) {
