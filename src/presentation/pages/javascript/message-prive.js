@@ -13,6 +13,30 @@ window.addEventListener('DOMContentLoaded', async () => {
   const dmDialog = document.getElementById('dm-dialog');
   const dmDialogContent = document.getElementById('dialog-content');
   const toastElement = document.getElementById('toast');
+  const notifBtn = document.getElementById('open-notif-settings');
+  const notifMenu = document.getElementById('notif-menu');
+
+  // window.NotifPrefs vient de notif-prefs.js, un script classique chargé
+  // avant ce module (voir message-prive.html) — voir ce fichier pour le
+  // pourquoi du partage entre les deux pages plutôt qu'une réimplémentation
+  // locale.
+  const NotifPrefs = window.NotifPrefs;
+  const serviceNotifications = window.notifications;
+
+  function definirConversationActivePourNotifs(conversationId) {
+    if (typeof serviceNotifications?.setActiveConversation === 'function') {
+      serviceNotifications.setActiveConversation(conversationId ?? null);
+    }
+  }
+
+  function notifierMessageSysteme(message) {
+    if (
+      typeof serviceNotifications?.messageReceived === 'function' &&
+      message
+    ) {
+      serviceNotifications.messageReceived(message);
+    }
+  }
 
   const state = {
     conversations: [],
@@ -74,8 +98,15 @@ window.addEventListener('DOMContentLoaded', async () => {
       state.activeConversationId = firstOnline?.id ?? null;
     }
 
-    renderConversationList();
+    // renderActiveConversation() doit s'exécuter avant renderConversationList() :
+    // c'est elle qui marque la conversation active comme "lue"
+    // (NotifPrefs.marquerCommeLu). Si renderConversationList() tournait en
+    // premier, le rond de notification de cette conversation serait calculé
+    // avec l'ancien état (non lu) et ne disparaîtrait qu'au prochain
+    // rafraîchissement.
     await renderActiveConversation();
+    renderConversationList();
+    mettreAJourBadgeApplication();
   }
 
   async function initialiserUtilisateurCourant() {
@@ -92,7 +123,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       currentUserSelect.addEventListener('change', async (event) => {
         sessionStorage.setItem('currentUserId', event.target.value);
         state.currentUserId = event.target.value;
+        fermerMenuNotif();
         await refreshConversations();
+        await actualiserBadgeSalons();
       });
     }
     const selectedUserId = sessionStorage.getItem('currentUserId');
@@ -113,6 +146,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     const filtered = getFilteredConversations();
     listElement.innerHTML = '';
 
+    const afficherRonds = NotifPrefs.afficheRonds(state.currentUserId);
+
     filtered.forEach((conversation) => {
       const li = document.createElement('li');
       const otherUser = conversation.otherUser;
@@ -131,6 +166,23 @@ window.addEventListener('DOMContentLoaded', async () => {
         avatar.classList.add('offline');
       }
 
+      const nonLu =
+        afficherRonds &&
+        NotifPrefs.estNonLu(
+          state.currentUserId,
+          conversation.id,
+          conversation.lastMessage
+            ? {
+                auteurId: conversation.lastMessage.auteurId,
+                timestamp: conversation.lastMessage.envoi,
+              }
+            : null
+        );
+      const dot = document.createElement('span');
+      dot.classList.add('notif-dot', 'notif-dot--avatar');
+      dot.hidden = !nonLu;
+      avatar.appendChild(dot);
+
       const info = document.createElement('div');
       info.classList.add('conversation-info');
 
@@ -145,10 +197,13 @@ window.addEventListener('DOMContentLoaded', async () => {
       info.append(username, lastMessageEl);
       li.append(avatar, info);
 
-      li.addEventListener('click', () => {
+      li.addEventListener('click', async () => {
         state.activeConversationId = conversation.id;
+        // Voir le commentaire dans refreshConversations() : marquer comme lu
+        // doit se faire avant de recalculer les ronds de notification.
+        await renderActiveConversation();
         renderConversationList();
-        renderActiveConversation();
+        mettreAJourBadgeApplication();
       });
 
       listElement.appendChild(li);
@@ -160,6 +215,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (messageList) {
         messageList.innerHTML = '';
       }
+      definirConversationActivePourNotifs(null);
       return;
     }
 
@@ -168,8 +224,24 @@ window.addEventListener('DOMContentLoaded', async () => {
     );
 
     if (!conversation || !messageList) {
+      // `activeConversationId` pointe vers une conversation qui n'existe
+      // plus pour l'utilisateur courant (ex. changement d'utilisateur
+      // simulé vers quelqu'un qui n'a pas ce DM) : on ne laisse pas
+      // l'ancienne conversation affichée sous le nouvel utilisateur, et on
+      // arrête de la considérer comme "active" pour les notifications.
+      state.activeConversationId = null;
+      if (messageList) {
+        messageList.innerHTML = '';
+      }
+      definirConversationActivePourNotifs(null);
       return;
     }
+
+    // La conversation affichée est par définition "lue", et c'est la
+    // conversation "active" que main.js ne doit pas notifier (voir
+    // showMessageNotification côté main.js).
+    NotifPrefs.marquerCommeLu(state.currentUserId, conversation.id, Date.now());
+    definirConversationActivePourNotifs(conversation.id);
 
     const messages = [...(conversation.messages ?? [])].sort(
       (a, b) => (a.envoi ?? 0) - (b.envoi ?? 0)
@@ -332,7 +404,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   filterButtons.forEach((button) => {
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
       state.currentFilter = button.dataset.filter ?? 'all';
       filterButtons.forEach((item) => {
         item.classList.toggle('active', item === button);
@@ -349,8 +421,11 @@ window.addEventListener('DOMContentLoaded', async () => {
         state.activeConversationId = visible[0].id;
       }
 
+      // Voir le commentaire dans refreshConversations() : marquer comme lu
+      // doit se faire avant de recalculer les ronds de notification.
+      await renderActiveConversation();
       renderConversationList();
-      renderActiveConversation();
+      mettreAJourBadgeApplication();
     });
   });
 
@@ -372,8 +447,202 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // --- Badge "non lu" sur le rail (icônes qui ramènent à l'accueil) -------
+  // Ces icônes vivent sur CETTE page mais doivent refléter l'état des
+  // salons (autre page/fichier). Best-effort et silencieux : un badge qui
+  // ne se met pas à jour n'est pas une raison de perturber le reste de
+  // l'app.
+  async function actualiserBadgeSalons() {
+    const dots = document.querySelectorAll('#server-rail .notif-dot');
+    if (!dots.length) return;
+    if (!NotifPrefs.afficheRonds(state.currentUserId)) {
+      dots.forEach((dot) => (dot.hidden = true));
+      return;
+    }
+    try {
+      const etatSalons = await window.electronAPI.obtenirEtatSalons(
+        state.currentUserId
+      );
+      const nonLu = (etatSalons?.salons ?? []).some((salon) => {
+        const dernier = salon.messages?.[salon.messages.length - 1];
+        const dernierMessage = dernier
+          ? { auteurId: dernier.auteurId, timestamp: dernier.date }
+          : null;
+        return NotifPrefs.estNonLu(
+          state.currentUserId,
+          salon.id,
+          dernierMessage
+        );
+      });
+      dots.forEach((dot) => (dot.hidden = !nonLu));
+    } catch {
+      // Badge best-effort, voir commentaire ci-dessus.
+    }
+  }
+
+  // --- Badge "nombre de non-lus" sur l'icône de l'app ---------------------
+  // Dessine le même badge que renderer.js (voir son commentaire) : dupliqué
+  // ici plutôt que partagé, faute de mécanisme de module commun entre
+  // renderer.js et les scripts de pages secondaires comme celui-ci (seul
+  // notif-prefs.js est partagé, via un <script> classique chargé avant les
+  // deux).
+  function genererIconeBadge(nombre) {
+    const texte = nombre > 9 ? '9+' : String(nombre);
+    const taille = 32;
+    const canvas = document.createElement('canvas');
+    canvas.width = taille;
+    canvas.height = taille;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#e53935';
+    ctx.beginPath();
+    ctx.arc(taille / 2, taille / 2, taille / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(texte, taille / 2, taille / 2 + 1);
+    return canvas.toDataURL('image/png');
+  }
+
+  /**
+   * Recalcule le nombre total de conversations non lues (salons + messages
+   * privés) pour l'utilisateur courant et met à jour le badge de l'icône de
+   * l'app (voir mettreAJourBadgeApplication côté main.js). Respecte
+   * NotifPrefs.afficheRonds() comme les ronds de notification. Best-effort
+   * et silencieux.
+   */
+  async function mettreAJourBadgeApplication() {
+    if (typeof serviceNotifications?.setBadgeCount !== 'function') return;
+    if (!NotifPrefs.afficheRonds(state.currentUserId)) {
+      serviceNotifications.setBadgeCount(0, null);
+      return;
+    }
+    let nombre = 0;
+    try {
+      const etatSalons = await window.electronAPI.obtenirEtatSalons(
+        state.currentUserId
+      );
+      (etatSalons?.salons ?? []).forEach((salon) => {
+        const dernier = salon.messages?.[salon.messages.length - 1];
+        const dernierMessage = dernier
+          ? { auteurId: dernier.auteurId, timestamp: dernier.date }
+          : null;
+        if (
+          NotifPrefs.estNonLu(state.currentUserId, salon.id, dernierMessage)
+        ) {
+          nombre += 1;
+        }
+      });
+    } catch {
+      // Badge best-effort, voir commentaire ci-dessus.
+    }
+    state.conversations.forEach((conversation) => {
+      const nonLu = NotifPrefs.estNonLu(
+        state.currentUserId,
+        conversation.id,
+        conversation.lastMessage
+          ? {
+              auteurId: conversation.lastMessage.auteurId,
+              timestamp: conversation.lastMessage.envoi,
+            }
+          : null
+      );
+      if (nonLu) nombre += 1;
+    });
+    serviceNotifications.setBadgeCount(
+      nombre,
+      nombre > 0 ? genererIconeBadge(nombre) : null
+    );
+  }
+
+  // --- Menu de préférences de notification --------------------------------
+  function fermerMenuNotif() {
+    if (!notifMenu || notifMenu.hidden) return;
+    notifMenu.hidden = true;
+    notifBtn?.setAttribute('aria-expanded', 'false');
+  }
+
+  function ouvrirMenuNotif() {
+    if (!notifMenu) return;
+    const modeActuel = NotifPrefs.obtenirMode(state.currentUserId);
+    notifMenu.querySelectorAll('input[name="notif-mode"]').forEach((radio) => {
+      radio.checked = radio.value === modeActuel;
+    });
+    notifMenu.hidden = false;
+    notifBtn?.setAttribute('aria-expanded', 'true');
+  }
+
+  notifBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (notifMenu?.hidden === false) {
+      fermerMenuNotif();
+    } else {
+      ouvrirMenuNotif();
+    }
+  });
+
+  notifMenu?.addEventListener('click', (event) => event.stopPropagation());
+
+  notifMenu?.querySelectorAll('input[name="notif-mode"]').forEach((radio) => {
+    radio.addEventListener('change', () => {
+      NotifPrefs.definirMode(state.currentUserId, radio.value);
+      fermerMenuNotif();
+      renderConversationList();
+      actualiserBadgeSalons();
+      mettreAJourBadgeApplication();
+      notifier('Préférence de notification mise à jour.');
+    });
+  });
+
+  document.addEventListener('click', fermerMenuNotif);
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') fermerMenuNotif();
+  });
+
+  // --- Messages de démo simulés en continu par main.js ---------------------
+  // Voir demarrerSimulationMessages() dans main.js et le même bloc dans
+  // renderer.js : un message privé (ariane → sam) toutes les 5s et un
+  // message dans #général toutes les 10s, en continu, quelle que soit la
+  // page actuellement affichée. C'est ce fichier (pas main.js) qui décide,
+  // selon le mode NotifPrefs de l'utilisateur actuellement affiché ici, s'il
+  // faut déclencher une notification système.
+  if (typeof serviceNotifications?.onMockMessage === 'function') {
+    serviceNotifications.onMockMessage(async (message) => {
+      try {
+        const mode = NotifPrefs.obtenirMode(state.currentUserId);
+        // Log de diagnostic : lance l'app avec `NODE_ENV=development` pour
+        // voir les DevTools et cette ligne dans la console si un message de
+        // démo semble ne rien déclencher. Ne casse rien en production.
+        console.log(
+          `[notifications:message-simule] reçu (type=${message.type}, auteur=${message.auteurId}, utilisateur courant=${state.currentUserId}, mode=${mode})`
+        );
+        if (message.type === 'salon') {
+          await actualiserBadgeSalons();
+          mettreAJourBadgeApplication();
+        } else {
+          await refreshConversations();
+        }
+        if (message.auteurId === state.currentUserId) {
+          console.log(
+            '[notifications:message-simule] ignoré : auteur = utilisateur courant (jamais de notif pour son propre message).'
+          );
+        } else if (mode !== NotifPrefs.MODE_SYSTEME) {
+          console.log(
+            `[notifications:message-simule] pas de notification système : mode actuel = "${mode}" (seul le mode "systeme" en déclenche).`
+          );
+        } else {
+          notifierMessageSysteme(message);
+        }
+      } catch (erreur) {
+        console.error('[notifications:message-simule] ERREUR:', erreur);
+      }
+    });
+  }
+
   await initialiserUtilisateurCourant();
   await refreshConversations();
+  await actualiserBadgeSalons();
 });
 
 // Toute icône de la barre latérale (logo + icônes de serveur) ramène au

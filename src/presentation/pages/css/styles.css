@@ -69,6 +69,7 @@ button {
   justify-content: center;
   overflow: hidden;
   cursor: pointer;
+  position: relative;
   transition:
     border-radius 0.15s ease,
     background 0.15s ease,
@@ -109,6 +110,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
   transition:
     border-radius 0.15s ease,
     background 0.15s ease,
@@ -180,6 +182,7 @@ button {
   border-radius: 6px;
   font-size: 0.92rem;
   cursor: pointer;
+  position: relative;
 }
 
 #channel-list li button:hover {
@@ -198,6 +201,7 @@ button {
 }
 
 #user-panel {
+  position: relative;
   flex: 0 0 auto;
   padding: 10px 12px;
   border-top: 1px solid var(--border);
@@ -611,4 +615,122 @@ dialog::backdrop {
 
 #composer button:hover {
   color: var(--accent-start);
+}
+
+/* --- Notifications : rond "non lu" + menu de préférences --------------- */
+/* Élément toujours présent dans le DOM, visibilité pilotée par l'attribut
+   `hidden` (même convention que le reste de l'app, ex. #private-indicator),
+   plutôt que recréé/détruit à chaque rendu. */
+.notif-dot {
+  border-radius: 50%;
+  background: #ffffff;
+  pointer-events: none;
+}
+
+.notif-dot--rail {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--bg-panel);
+}
+
+.notif-dot--channel {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  transform: translateY(-50%);
+}
+
+.notif-dot--avatar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--bg-panel);
+}
+
+.notif-settings-btn {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.notif-settings-btn:hover,
+.notif-settings-btn[aria-expanded='true'] {
+  background: var(--bg-panel-alt);
+  color: var(--text-primary);
+}
+
+.notif-menu {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(100% + 8px);
+  background: var(--bg-panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+  z-index: 20;
+}
+
+.notif-menu-title {
+  margin: 4px 6px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.notif-menu-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 6px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.notif-menu-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.notif-menu-option input[type='radio'] {
+  margin-top: 3px;
+  accent-color: var(--accent-start);
+}
+
+.notif-menu-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.notif-menu-option-title {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.88rem;
+}
+
+.notif-menu-option-desc {
+  color: var(--text-muted);
+  font-size: 0.78rem;
 }

@@ -23,10 +23,12 @@
           src="../../../assets/icon.png"
           alt="ChatVardage"
         />
+        <span class="notif-dot notif-dot--rail" hidden></span>
       </button>
       <div class="rail-divider"></div>
       <button class="server-icon" title="Projet" aria-label="Serveur : Projet">
         P
+        <span class="notif-dot notif-dot--rail" hidden></span>
       </button>
       <button
         class="server-icon"
@@ -69,6 +71,64 @@
             aria-label="Utilisateur simulé"
           ></select>
           <div class="presence-label" id="current-user-presence">En ligne</div>
+        </div>
+        <button
+          id="open-notif-settings"
+          class="notif-settings-btn"
+          type="button"
+          title="Notifications"
+          aria-label="Paramètres de notifications"
+          aria-haspopup="true"
+          aria-expanded="false"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              fill="currentColor"
+              d="M8 1.4c-.6 0-1.05.47-1.05 1.05v.57C4.83 3.55 3.4 5.5 3.4 7.65v2.5L2.1 11.9c-.32.4-.03.98.48.98h10.84c.51 0 .8-.58.48-.98l-1.3-1.75v-2.5c0-2.15-1.43-4.1-3.55-4.63v-.57C9.05 1.87 8.6 1.4 8 1.4Z"
+            />
+            <path fill="currentColor" d="M6.2 13.4a1.8 1.8 0 0 0 3.6 0Z" />
+          </svg>
+        </button>
+        <div
+          id="notif-menu"
+          class="notif-menu"
+          hidden
+          role="menu"
+          aria-label="Préférences de notification"
+        >
+          <p class="notif-menu-title">Notifications</p>
+          <label class="notif-menu-option">
+            <input type="radio" name="notif-mode" value="systeme" />
+            <span class="notif-menu-option-text">
+              <span class="notif-menu-option-title">Système + son</span>
+              <span class="notif-menu-option-desc"
+                >Notification Windows avec son, et un rond sur la
+                conversation</span
+              >
+            </span>
+          </label>
+          <label class="notif-menu-option">
+            <input type="radio" name="notif-mode" value="discret" />
+            <span class="notif-menu-option-text">
+              <span class="notif-menu-option-title">Discret</span>
+              <span class="notif-menu-option-desc"
+                >Un rond sur la conversation, rien d'autre</span
+              >
+            </span>
+          </label>
+          <label class="notif-menu-option">
+            <input type="radio" name="notif-mode" value="aucune" />
+            <span class="notif-menu-option-text">
+              <span class="notif-menu-option-title">Aucune</span>
+              <span class="notif-menu-option-desc">Pas de notification</span>
+            </span>
+          </label>
         </div>
       </div>
     </aside>
@@ -126,6 +186,7 @@
 
     <div id="toast" role="status" aria-live="polite"></div>
 
+    <script src="javascript/notif-prefs.js"></script>
     <script type="module" src="javascript/message-prive.js"></script>
   </body>
 </html>
