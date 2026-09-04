@@ -13,7 +13,10 @@ import { creerMessage, AUTEUR_SYSTEME } from '../../domain/entities/Message.js';
 import { creerSalon } from '../../domain/entities/Salon.js';
 import { creerPresence } from '../../domain/entities/Presence.js';
 import { creerEtatConnexion } from '../../domain/entities/EtatConnexion.js';
-import { creerConversationPrivee } from '../../domain/entities/ConversationPrivee.js';
+import {
+  creerConversationPrivee,
+  creerDmId,
+} from '../../domain/entities/ConversationPrivee.js';
 
 /**
  * Types d'événements pouvant être émis par le MockGateway
@@ -79,19 +82,57 @@ export class MockGateway {
    * Initialise les données de test par défaut
    */
   private initialiserDonneesMock(): void {
-    // Créer quelques utilisateurs de test
-    const user1 = creerUtilisateur('u1', 'alice');
-    const user2 = creerUtilisateur('u2', 'bob');
-    const user3 = creerUtilisateur('u3', 'charlie');
+    const user1 = creerUtilisateur('u1', 'sam');
+    const user2 = creerUtilisateur('u2', 'ariane');
+    const user3 = creerUtilisateur('u3', 'eva');
+    const user4 = creerUtilisateur('u4', 'logan');
+    const user5 = creerUtilisateur('u5', 'lili-rose');
+    const user6 = creerUtilisateur('u6', 'fiona');
 
     this.utilisateurs.set(user1.id, user1);
     this.utilisateurs.set(user2.id, user2);
     this.utilisateurs.set(user3.id, user3);
+    this.utilisateurs.set(user4.id, user4);
+    this.utilisateurs.set(user5.id, user5);
+    this.utilisateurs.set(user6.id, user6);
 
-    // Créer quelques salons de test
+    this.presences.set(
+      user1.id,
+      creerPresence(user1.id, 'en-ligne', Date.now())
+    );
+    this.presences.set(
+      user2.id,
+      creerPresence(user2.id, 'hors-ligne', Date.now())
+    );
+    this.presences.set(
+      user3.id,
+      creerPresence(user3.id, 'en-ligne', Date.now())
+    );
+    this.presences.set(
+      user4.id,
+      creerPresence(user4.id, 'hors-ligne', Date.now())
+    );
+    this.presences.set(
+      user5.id,
+      creerPresence(user5.id, 'en-ligne', Date.now())
+    );
+    this.presences.set(
+      user6.id,
+      creerPresence(user6.id, 'hors-ligne', Date.now())
+    );
+
+    // Salon public : tous les utilisateurs existants en sont membres d'office
+    // dès le seed (cohérent avec MockGatewayRuntime.js). Les salons publics
+    // créés ensuite via creerSalon() démarrent eux avec le seul hôte, et se
+    // remplissent via ajouterUtilisateurAuSalon() — comportement volontairement
+    // différent, déjà couvert par les tests dédiés à creerSalon().
     const salon1 = creerSalon('s1', 'Général', user1.id, 'public', [
       user1.id,
       user2.id,
+      user3.id,
+      user4.id,
+      user5.id,
+      user6.id,
     ]);
     const salon2 = creerSalon('s2', 'Privé', user1.id, 'prive', [
       user1.id,
@@ -100,6 +141,96 @@ export class MockGateway {
 
     this.salons.set(salon1.id, salon1);
     this.salons.set(salon2.id, salon2);
+
+    const conversationsDM = [
+      ['u1', 'u2'],
+      ['u1', 'u3'],
+      ['u1', 'u4'],
+      ['u2', 'u5'],
+      ['u3', 'u6'],
+    ];
+
+    for (const [a, b] of conversationsDM) {
+      const conversation = creerConversationPrivee(a, b);
+      this.conversationsPrivees.set(conversation.id, conversation);
+    }
+
+    const messagesDM = [
+      {
+        conversationId: creerDmId('u1', 'u2'),
+        auteurId: 'u1',
+        contenu: 'Salut, on se voit ce soir ?',
+        type: 'texte' as const,
+      },
+      {
+        conversationId: creerDmId('u1', 'u2'),
+        auteurId: 'u2',
+        contenu: 'Oui, vers 20h, ça marche.',
+        type: 'texte' as const,
+      },
+      {
+        conversationId: creerDmId('u1', 'u3'),
+        auteurId: 'u3',
+        contenu: 'Tu as vu le dernier sprint ?',
+        type: 'texte' as const,
+      },
+      {
+        conversationId: creerDmId('u1', 'u3'),
+        auteurId: 'u1',
+        contenu: 'Oui, je le valide demain.',
+        type: 'texte' as const,
+      },
+      {
+        conversationId: creerDmId('u1', 'u4'),
+        auteurId: 'u4',
+        contenu: 'J’ai envoyé le document de synthèse.',
+        type: 'texte' as const,
+      },
+      {
+        conversationId: creerDmId('u1', 'u4'),
+        auteurId: 'u1',
+        contenu: 'Parfait, je le relirai tout à l’heure.',
+        type: 'texte' as const,
+      },
+      {
+        conversationId: creerDmId('u2', 'u5'),
+        auteurId: 'u2',
+        contenu: 'Le rapport est prêt pour relecture.',
+        type: 'texte' as const,
+      },
+      {
+        conversationId: creerDmId('u2', 'u5'),
+        auteurId: 'u5',
+        contenu: 'Merci, je le regarde ce midi.',
+        type: 'texte' as const,
+      },
+      {
+        conversationId: creerDmId('u3', 'u6'),
+        auteurId: 'u6',
+        contenu: 'Tu as vu le dernier correctif ?',
+        type: 'texte' as const,
+      },
+      {
+        conversationId: creerDmId('u3', 'u6'),
+        auteurId: 'u3',
+        contenu: 'Oui, il a déjà été validé.',
+        type: 'texte' as const,
+      },
+    ];
+
+    const baseTimestamp = Date.now() - messagesDM.length * 60000;
+
+    messagesDM.forEach((message, index) => {
+      const msg = creerMessage(
+        `msg-dm-${index + 1}`,
+        message.conversationId,
+        message.auteurId,
+        message.contenu,
+        baseTimestamp + index * 60000,
+        message.type
+      );
+      this.messages.set(msg.id, msg);
+    });
   }
 
   /**
@@ -913,6 +1044,57 @@ export class MockGateway {
   }
 
   /**
+   * Démarre une conversation privée avec un autre utilisateur, ou retourne
+   * l'existante si les deux utilisateurs ont déjà un DM (même schéma d'ID
+   * trié que creerDmId : idempotent, jamais de doublon). Miroir de
+   * `demarrerConversationPrivee` dans MockGatewayRuntime.js (câblé dans
+   * l'app réelle via main.js) — cette version tient le même contrat côté
+   * mock de domaine couvert par la suite de tests.
+   * @param utilisateurActuelId L'identifiant de l'utilisateur courant
+   * @param autreUtilisateurId L'identifiant de l'autre utilisateur
+   * @returns Promise<ConversationPrivee> La conversation privée (existante ou nouvellement créée)
+   */
+  async demarrerConversationPrivee(
+    utilisateurActuelId: string,
+    autreUtilisateurId: string
+  ): Promise<ConversationPrivee> {
+    return this.simulerLatence(async () => {
+      if (utilisateurActuelId === autreUtilisateurId) {
+        this.emetEvenement('erreur', {
+          message: 'Impossible de démarrer une conversation avec soi-même',
+        });
+        throw new Error(
+          'Impossible de démarrer une conversation avec soi-même'
+        );
+      }
+
+      const utilisateurActuel = this.utilisateurs.get(utilisateurActuelId);
+      const autreUtilisateur = this.utilisateurs.get(autreUtilisateurId);
+      if (!utilisateurActuel || !autreUtilisateur) {
+        this.emetEvenement('erreur', {
+          message: "Un des utilisateurs n'a pas été trouvé",
+        });
+        throw new Error("Un des utilisateurs n'a pas été trouvé");
+      }
+
+      const conversationId = creerDmId(utilisateurActuelId, autreUtilisateurId);
+      const conversationExistante =
+        this.conversationsPrivees.get(conversationId);
+      if (conversationExistante) {
+        return conversationExistante;
+      }
+
+      const conversation = creerConversationPrivee(
+        utilisateurActuelId,
+        autreUtilisateurId
+      );
+      this.conversationsPrivees.set(conversation.id, conversation);
+
+      return conversation;
+    });
+  }
+
+  /**
    * Récupère une conversation privée par son ID
    * @param conversationId L'identifiant de la conversation
    * @returns Promise<ConversationPrivee | undefined> La conversation ou undefined
@@ -991,6 +1173,14 @@ export class MockGateway {
 
   /**
    * Attend la latence définie
+   *
+   * Utilise `this.latenceMs` tel quel : la version précédente ajoutait un
+   * padding arbitraire (`Math.max(this.latenceMs, 1) + 5`), ce qui faisait
+   * mentir cette méthode par rapport à son propre nom et à `definirLatence` —
+   * un appelant qui fixe `latenceMs` à 0 (ex. pour accélérer des tests) s'
+   * attend à ne payer aucun délai artificiel, pas +5ms. `setTimeout` reste de
+   * toute façon asynchrone même avec un délai de 0, donc rien ne redevient
+   * synchrone ici.
    * @returns Promise<void>
    */
   private attendreLatence(): Promise<void> {

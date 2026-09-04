@@ -41,4 +41,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('salons:refuser-invitation', donnees),
   envoyerMessageSalon: (donnees) =>
     ipcRenderer.invoke('salons:envoyer-message', donnees),
+  navigate: (page) => ipcRenderer.invoke('navigate', page),
+  obtenirUtilisateurs: () => ipcRenderer.invoke('utilisateurs:lister'),
+  obtenirConversationsPrivees: (utilisateurId) =>
+    ipcRenderer.invoke('obtenir-conversations-privees', { utilisateurId }),
+  envoyerMessagePrive: (donnees) =>
+    ipcRenderer.invoke('envoyer-message-prive', donnees),
+  demarrerConversationPrivee: (donnees) =>
+    ipcRenderer.invoke('demarrer-conversation-privee', donnees),
 });

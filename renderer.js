@@ -1,5 +1,5 @@
 // UI uniquement : toutes les opérations passent par l'API sécurisée du preload.
-let utilisateurActuelId = 'u1';
+let utilisateurActuelId = sessionStorage.getItem('currentUserId') ?? 'u1';
 let salonActifId = null;
 let etat = { utilisateurs: [], salons: [], invitations: [] };
 
@@ -90,6 +90,21 @@ function messageErreur(erreur) {
   return erreur instanceof Error ? erreur.message : String(erreur);
 }
 
+function remplirSelectUtilisateur(utilisateurs) {
+  const options = utilisateurs.map((item) =>
+    creerEl('option', {
+      texte: item.pseudo,
+      attrs: { value: item.id },
+    })
+  );
+  el.utilisateur.replaceChildren(...options);
+}
+
+/**
+ * Ouvre la boîte de dialogue générique avec un titre et un contenu.
+ * @param {string} titre
+ * @param {Node|Node[]} contenu Un nœud DOM déjà construit, ou une liste de nœuds frères.
+ */
 function ouvrirDialogue(titre, contenu) {
   el.titreDialogue.textContent = titre;
   el.contenuDialogue.replaceChildren(
@@ -421,26 +436,34 @@ el.formulaire.addEventListener('submit', async (event) => {
 
 el.utilisateur.addEventListener('change', async (event) => {
   utilisateurActuelId = event.target.value;
+  sessionStorage.setItem('currentUserId', utilisateurActuelId);
   await actualiser();
 });
 
-/**
- * Démarre le dashboard avec l'utilisateur réellement connecté via l'écran
- * de connexion (voir main.js, canal 'session:utilisateur-connecte'), au
- * lieu du 'u1' codé en dur. Repli silencieux sur 'u1' si ce canal échoue ou
- * ne retourne rien (ex. dashboard ouvert directement, sans passer par la
- * page de connexion — utile en développement).
- */
 async function initialiserUtilisateurCourant() {
-  try {
-    const id = await window.electronAPI.obtenirUtilisateurConnecte();
-    if (id) {
-      utilisateurActuelId = id;
-    }
-  } catch {
-    // Repli sur 'u1' (valeur initiale) si le canal échoue.
-  }
-  await actualiser();
+  const utilisateurs = await window.electronAPI.obtenirUtilisateurs();
+  remplirSelectUtilisateur(utilisateurs);
+  utilisateurActuelId =
+    utilisateurs.find((item) => item.id === utilisateurActuelId)?.id ??
+    utilisateurs[0]?.id ??
+    '';
+  el.utilisateur.value = utilisateurActuelId;
+  sessionStorage.setItem('currentUserId', utilisateurActuelId);
 }
 
-initialiserUtilisateurCourant();
+async function initialiser() {
+  try {
+    await initialiserUtilisateurCourant();
+    await actualiser();
+  } catch (erreur) {
+    notifier(messageErreur(erreur), true);
+  }
+}
+
+initialiser();
+
+const btn = document.getElementById('message-prive-btn');
+
+btn?.addEventListener('click', () => {
+  window.electronAPI.navigate('message-prive.html');
+});

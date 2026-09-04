@@ -8,11 +8,17 @@
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ChatVardage</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="css/styles.css" />
   </head>
   <body>
     <nav id="server-rail" aria-label="Serveurs">
-      <img class="app-logo" src="../../../assets/icon.png" alt="ChatVardage" />
+      <button id="message-prive-btn">
+        <img
+          class="app-logo"
+          src="../../../assets/icon.png"
+          alt="ChatVardage"
+        />
+      </button>
       <div class="rail-divider"></div>
       <button
         class="server-icon active"
@@ -51,11 +57,10 @@
       <div id="user-panel">
         <div class="avatar"></div>
         <div>
-          <select id="current-user-select" aria-label="Utilisateur simulé">
-            <option value="u1">alice</option>
-            <option value="u2">bob</option>
-            <option value="u3">charlie</option>
-          </select>
+          <select
+            id="current-user-select"
+            aria-label="Utilisateur simulé"
+          ></select>
           <div class="presence-label" id="current-user-presence">En ligne</div>
         </div>
       </div>
