@@ -1,119 +1,125 @@
 <!doctype html>
 <html lang="fr">
-<head>
-  <meta charset="UTF-8" />
-  <meta
-    http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self'; img-src 'self' data:;"
-  />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ChatVardage</title>
-  <link rel="stylesheet" href="css/styles.css" />
-</head>
-<body>
-<nav id="server-rail" aria-label="Serveurs">
-  <button id="message-prive-btn">
-    <img class="app-logo" src="../../../assets/icon.png" alt="ChatVardage" />
-  </button>
-  <div class="rail-divider"></div>
-  <button
-    class="server-icon active"
-    title="Projet"
-    aria-label="Serveur : Projet"
-  >
-    P
-  </button>
-  <button
-    id="open-create-channel-rail"
-    class="server-icon"
-    title="Créer un salon"
-    aria-label="Créer un salon"
-  >
-    +
-  </button>
-</nav>
-
-<aside id="channel-sidebar">
-  <div class="sidebar-header">
-    <span id="server-name">Nom chat</span>
-    <button
-      id="open-create-channel"
-      class="icon-action"
-      title="Créer un salon"
-    >
-      +
-    </button>
-  </div>
-  <ul id="channel-list">
-    <li class="category">Projet</li>
-  </ul>
-  <button id="open-invitations" class="sidebar-action">
-    Invitations <span id="invitation-count" class="badge">0</span>
-  </button>
-  <div id="user-panel">
-    <div class="avatar"></div>
-    <div>
-      <select id="current-user-select" aria-label="Utilisateur simulé">
-      </select>
-      <div class="presence-label" id="current-user-presence">En ligne</div>
-    </div>
-  </div>
-</aside>
-
-<main id="main">
-  <header id="topbar">
-    <div class="channel-name">
-      <span id="active-channel-name"># général</span>
-      <span id="private-indicator" class="private-indicator" hidden
-      >Privé</span
-      >
-    </div>
-    <div class="topbar-actions">
-      <button id="open-members" class="secondary-button">Membres</button>
-      <button id="open-invite-user" class="primary-button">Inviter</button>
-      <div id="connection-status" data-state="connecte">
-        <span class="dot"></span>
-        <span id="connection-label">Connecté</span>
-      </div>
-    </div>
-  </header>
-
-  <div id="message-list" aria-live="polite"></div>
-
-  <div id="typing-indicator"></div>
-
-  <div id="composer">
-    <form id="message-form">
-      <input
-        id="message-input"
-        type="text"
-        placeholder="Envoyez un message dans #general"
-        autocomplete="off"
-      />
-      <button type="submit">Envoyer</button>
-    </form>
-  </div>
-</main>
-
-<dialog id="app-dialog">
-  <form method="dialog" id="dialog-form">
-    <div class="dialog-header">
-      <h2 id="dialog-title"></h2>
-      <button
-        value="cancel"
-        formnovalidate
-        class="close-button"
-        aria-label="Fermer"
-      >
-        ×
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; img-src 'self' data:;"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChatVardage</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <nav id="server-rail" aria-label="Serveurs">
+      <button id="message-prive-btn">
+        <img
+          class="app-logo"
+          src="../../../assets/icon.png"
+          alt="ChatVardage"
+        />
       </button>
-    </div>
-    <div id="dialog-content"></div>
-  </form>
-</dialog>
+      <div class="rail-divider"></div>
+      <button
+        class="server-icon active"
+        title="Projet"
+        aria-label="Serveur : Projet"
+      >
+        P
+      </button>
+      <button
+        id="open-create-channel-rail"
+        class="server-icon"
+        title="Créer un salon"
+        aria-label="Créer un salon"
+      >
+        +
+      </button>
+    </nav>
 
-<div id="toast" role="status" aria-live="polite"></div>
+    <aside id="channel-sidebar">
+      <div class="sidebar-header">
+        <span id="server-name">Nom chat</span>
+        <button
+          id="open-create-channel"
+          class="icon-action"
+          title="Créer un salon"
+        >
+          +
+        </button>
+      </div>
+      <ul id="channel-list">
+        <li class="category">Projet</li>
+      </ul>
+      <button id="open-invitations" class="sidebar-action">
+        Invitations <span id="invitation-count" class="badge">0</span>
+      </button>
+      <div id="user-panel">
+        <div class="avatar"></div>
+        <div>
+          <select
+            id="current-user-select"
+            aria-label="Utilisateur simulé"
+          ></select>
+          <div class="presence-label" id="current-user-presence">En ligne</div>
+        </div>
+      </div>
+    </aside>
 
-<script src="../../../renderer.js"></script>
-</body>
+    <main id="main">
+      <header id="topbar">
+        <div class="channel-name">
+          <span id="active-channel-name"># général</span>
+          <span id="private-indicator" class="private-indicator" hidden
+            >Privé</span
+          >
+        </div>
+        <div class="topbar-actions">
+          <button id="open-members" class="secondary-button">Membres</button>
+          <button id="open-invite-user" class="primary-button">Inviter</button>
+          <div id="connection-status" data-state="connecte">
+            <span class="dot"></span>
+            <span id="connection-label">Connecté</span>
+          </div>
+        </div>
+      </header>
+
+      <div id="message-list" aria-live="polite"></div>
+
+      <div id="typing-indicator"></div>
+
+      <div id="composer">
+        <form id="message-form">
+          <input
+            id="message-input"
+            type="text"
+            placeholder="Envoyez un message dans #general"
+            autocomplete="off"
+          />
+          <button type="submit">Envoyer</button>
+        </form>
+      </div>
+    </main>
+
+    <dialog id="app-dialog">
+      <form method="dialog" id="dialog-form">
+        <div class="dialog-header">
+          <h2 id="dialog-title"></h2>
+          <button
+            value="cancel"
+            formnovalidate
+            class="close-button"
+            aria-label="Fermer"
+          >
+            ×
+          </button>
+        </div>
+        <div id="dialog-content"></div>
+      </form>
+    </dialog>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+
+    <script src="../../../renderer.js"></script>
+  </body>
 </html>

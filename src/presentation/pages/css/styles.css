@@ -26,8 +26,8 @@ body {
   margin: 0;
   overflow: hidden;
   font-family:
-          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
-          sans-serif;
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
   color: var(--text-primary);
   background: var(--bg-panel);
   display: flex;
@@ -70,9 +70,9 @@ button {
   overflow: hidden;
   cursor: pointer;
   transition:
-          border-radius 0.15s ease,
-          background 0.15s ease,
-          transform 0.15s ease;
+    border-radius 0.15s ease,
+    background 0.15s ease,
+    transform 0.15s ease;
 }
 
 #message-prive-btn:hover,
@@ -110,9 +110,9 @@ button {
   align-items: center;
   justify-content: center;
   transition:
-          border-radius 0.15s ease,
-          background 0.15s ease,
-          color 0.15s ease;
+    border-radius 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .server-icon:hover,

@@ -100,11 +100,11 @@ function buildMenu() {
     // DevTools uniquement en développement : jamais exposé en production.
     ...(isDev
       ? [
-        {
-          label: 'Développement',
-          submenu: [{ role: 'toggleDevTools' }, { role: 'reload' }],
-        },
-      ]
+          {
+            label: 'Développement',
+            submenu: [{ role: 'toggleDevTools' }, { role: 'reload' }],
+          },
+        ]
       : []),
   ];
   return Menu.buildFromTemplate(template);
@@ -233,9 +233,7 @@ function exposerCanal(nom, action) {
 exposerCanal('salons:etat', ({ utilisateurId }) =>
   chatGateway.obtenirEtat(utilisateurId)
 );
-exposerCanal('utilisateurs:lister', () =>
-  chatGateway.obtenirUtilisateurs()
-);
+exposerCanal('utilisateurs:lister', () => chatGateway.obtenirUtilisateurs());
 exposerCanal('salons:creer', (donnees) => chatGateway.creerSalon(donnees));
 exposerCanal('salons:inviter', (donnees) => chatGateway.inviter(donnees));
 exposerCanal('salons:accepter-invitation', (donnees) =>
@@ -257,7 +255,6 @@ exposerCanal('envoyer-message-prive', (donnees) =>
 exposerCanal('demarrer-conversation-privee', (donnees) =>
   chatGateway.demarrerConversationPrivee(donnees)
 );
-
 
 ipcMain.handle('navigate', (event, page) => {
   verifierProvenance(event);
