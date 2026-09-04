@@ -48,6 +48,20 @@ contextBridge.exposeInMainWorld('notifications', {
     ipcRenderer.on('window:focus-changed', ecouteur);
     return () => ipcRenderer.removeListener('window:focus-changed', ecouteur);
   },
+  // Poussé par main.js quand l'utilisatrice clique sur une notification
+  // système (voir showMessageNotification) : `{ type: 'salon'|'prive',
+  // conversationId }`. Chaque page (renderer.js / message-prive.js) décide
+  // d'ouvrir directement la conversation si elle est déjà sur la bonne
+  // page, ou de naviguer vers l'autre page en mémorisant la cible.
+  onNavigateToConversation: (callback) => {
+    const ecouteur = (_event, cible) => callback(cible);
+    ipcRenderer.on('notifications:naviguer-vers-conversation', ecouteur);
+    return () =>
+      ipcRenderer.removeListener(
+        'notifications:naviguer-vers-conversation',
+        ecouteur
+      );
+  },
 });
 
 contextBridge.exposeInMainWorld('electronAPI', {

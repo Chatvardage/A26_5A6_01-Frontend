@@ -641,6 +641,14 @@ async function initialiser() {
     if (typeof serviceNotifications?.isWindowFocused === 'function') {
       fenetreEstFocusee = Boolean(await serviceNotifications.isWindowFocused());
     }
+    // Consomme une éventuelle cible laissée par message-prive.js avant une
+    // navigation vers cette page suite au clic sur une notification de
+    // salon (voir onNavigateToConversation dans ce fichier et CLEF_CIBLE_SALON).
+    const cibleSalon = sessionStorage.getItem(CLEF_CIBLE_SALON);
+    if (cibleSalon) {
+      sessionStorage.removeItem(CLEF_CIBLE_SALON);
+      salonActifId = cibleSalon;
+    }
     await actualiser();
   } catch (erreur) {
     notifier(messageErreur(erreur), true);
@@ -680,6 +688,13 @@ if (typeof serviceNotifications?.onFocusChange === 'function') {
     fenetreEstFocusee = focused;
     if (regagneLeFocus) {
       afficherTout();
+      // afficherTout() ne rafraîchit pas lui-même le rond du bouton
+      // #message-prive-btn (voir son propre commentaire) : tous les autres
+      // appelants de afficherTout()/actualiser() l'appellent juste après
+      // pour cette raison (voir actualiser() et le handler de changement de
+      // mode de notif plus bas) — celui-ci l'oubliait, laissant ce rond
+      // potentiellement périmé jusqu'au prochain actualiser().
+      actualiserBadgeMessagesPrives();
     }
   });
 }
@@ -694,6 +709,37 @@ function notifierMessageSysteme(message) {
   if (typeof serviceNotifications?.messageReceived === 'function' && message) {
     serviceNotifications.messageReceived(message);
   }
+}
+
+// Clé sessionStorage utilisée pour transmettre, à travers une navigation
+// index.html -> message-prive.html, la conversation privée à ouvrir tout de
+// suite après le chargement (voir onNavigateToConversation ci-dessous et sa
+// consommation dans initialiser()). sessionStorage est partagé entre les
+// deux pages (même origine file://), comme `currentUserId` l'est déjà.
+const CLEF_CIBLE_DM = 'notif:cible-dm';
+// Symétrique de CLEF_CIBLE_DM, mais dans l'autre sens (portée par
+// message-prive.js) : présente ici seulement pour la consommer au retour
+// vers cette page (voir initialiser()).
+const CLEF_CIBLE_SALON = 'notif:cible-salon';
+
+// Clic sur une notification système (voir showMessageNotification dans
+// main.js) : ouvre directement la conversation concernée plutôt que de se
+// contenter de remettre la fenêtre au premier plan. Si c'est un salon, on
+// est déjà sur la bonne page (index.html) ; si c'est une conversation
+// privée, on mémorise la cible et on navigue vers message-prive.html, qui
+// la consommera à son chargement.
+if (typeof serviceNotifications?.onNavigateToConversation === 'function') {
+  serviceNotifications.onNavigateToConversation((cible) => {
+    const conversationId = cible?.conversationId;
+    if (!conversationId) return;
+    if (cible.type === 'salon') {
+      salonActifId = conversationId;
+      afficherTout();
+    } else if (cible.type === 'prive') {
+      sessionStorage.setItem(CLEF_CIBLE_DM, conversationId);
+      window.electronAPI.navigate('message-prive.html');
+    }
+  });
 }
 
 // --- Messages de démo simulés en continu par main.js ------------------------

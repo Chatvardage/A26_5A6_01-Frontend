@@ -140,18 +140,17 @@ function buildMenu() {
 let mainWindow = null;
 let activeConversationId = null;
 
-// Suivi manuel de l'état minimisé/focus de la fenêtre, via les événements
-// natifs ('minimize', 'restore', 'focus', 'blur') plutôt que via
-// mainWindow.isMinimized()/isFocused() interrogés au moment de la
-// notification. Sous WSLg, ces deux méthodes se sont révélées peu fiables :
-// isMinimized() semble ne jamais refléter l'état réel une fois la fenêtre
-// réduite (probablement parce que WSLg ne relaie pas l'état "minimisé" côté
-// Linux, seulement côté barre des tâches Windows), et isFocused() reste
+// Suivi manuel du focus de la fenêtre, via les événements natifs ('focus',
+// 'blur') plutôt que via mainWindow.isFocused() interrogé au moment de la
+// notification. Sous WSLg, isFocused() s'est révélé peu fiable (reste
 // parfois figé sur son ancienne valeur tant qu'aucune autre fenêtre ne vole
-// le focus. Les événements, eux, sont émis au moment réel de la transition
-// (Electron doit forcément savoir quand la fenêtre est minimisée pour
-// arrêter de la peindre), donc plus fiables que d'interroger l'état après coup.
-let fenetreMinimisee = false;
+// le focus) ; l'événement, lui, est émis au moment réel de la transition,
+// donc plus fiable que d'interroger l'état après coup. Un suivi équivalent
+// de la minimisation ('minimize'/'restore'/'hide'/'show') a existé ici mais
+// s'est révélé totalement inutilisable sous WSLg (aucun de ces événements ne
+// se déclenche au clic sur le bouton de réduction natif) — plus rien ne s'en
+// sert désormais, voir les logs de diagnostic sur ces événements plus bas si
+// jamais ça doit être ressuscité un jour pour du réel Windows/macOS/Linux.
 let fenetreEstFocusee = true;
 
 function isTrustedIpcEvent(event) {
@@ -226,33 +225,6 @@ function showMessageNotification(message) {
     );
     return false;
   }
-  // Voir fenetreMinimisee/fenetreEstFocusee plus haut. On se base ici
-  // uniquement sur le focus (fenetreEstFocusee), pas sur fenetreMinimisee :
-  // sous WSLg, fenetreMinimisee reste bloqué à `false` en permanence, puisque
-  // ni l'événement 'minimize' ni 'hide' ne s'y déclenchent (constaté par les
-  // logs). Le focus, lui, fonctionne correctement dès qu'une autre fenêtre le
-  // vole réellement — c'est donc le seul signal fiable disponible ici pour
-  // savoir si l'utilisatrice regarde effectivement l'app en ce moment.
-  const fenetreAuPremierPlan = fenetreEstFocusee;
-  if (fenetreAuPremierPlan) {
-    // Comportement voulu (comme la plupart des apps de bureau) : pas de
-    // notification système si on a déjà la fenêtre au premier plan. Pour
-    // observer la notification, mettre l'app en arrière-plan (alt-tab,
-    // minimiser) avant le prochain message de démo (toutes les 5s/10s).
-    // Le message inclut trois appels IPC natifs (isVisible/isMinimized/
-    // isFocused) : on les évite complètement quand debugNotifications est
-    // désactivé plutôt que de construire la chaîne (et donc de les
-    // appeler) pour la jeter aussitôt à l'intérieur de logDebugNotif — les
-    // arguments d'un appel sont toujours évalués avant l'appel lui-même en
-    // JS, un simple `if` autour de logDebugNotif() ne suffirait pas côté
-    // logDebugNotif seul.
-    if (debugNotifications) {
-      logDebugNotif(
-        `[showMessageNotification] ignoré : la fenêtre de l'app a le focus (mets-la en arrière-plan pour voir la notification). [minimisee=${fenetreMinimisee}, focusee=${fenetreEstFocusee}, isVisible=${mainWindow.isVisible()}, isMinimized=${mainWindow.isMinimized()}, isFocused=${mainWindow.isFocused()}]`
-      );
-    }
-    return false;
-  }
 
   const conversationId = cleanText(message?.conversationId, 120);
   const body = cleanText(message?.contenu, 180);
@@ -262,15 +234,21 @@ function showMessageNotification(message) {
     );
     return false;
   }
-  // Même logique que ci-dessus : "déjà lue en direct" n'a de sens que si
-  // l'utilisatrice regarde effectivement la fenêtre à l'instant (focus).
-  // Utiliser fenetreMinimisee ici échouait systématiquement sans le sondage
-  // PowerShell (voir plus haut) : la conversation affichée avant de perdre
-  // le focus restait ignorée pour toujours, même une fois l'app
-  // véritablement en arrière-plan.
+
+  // Suppression fine, PAS un blocage total pendant que la fenêtre a le
+  // focus : avoir l'app ouverte sur un salon ne doit pas rendre muettes
+  // toutes les autres conversations (comme Slack/Discord — contrairement à
+  // une version précédente de cette fonction qui bloquait TOUTE
+  // notification dès que la fenêtre avait le focus, quelle que soit la
+  // conversation concernée). On ignore uniquement le cas précis où
+  // l'utilisatrice regarde right now (fenêtre focusée) la conversation même
+  // qui vient de recevoir ce message — "déjà lue en direct". Voir le
+  // commentaire sur fenetreEstFocusee plus haut pour pourquoi c'est le focus
+  // (et non la minimisation, abandonnée comme signal — peu fiable sous
+  // WSLg) qui est utilisé ici.
   if (fenetreEstFocusee && conversationId === activeConversationId) {
     logDebugNotif(
-      `[showMessageNotification] ignoré : conversation "${conversationId}" actuellement affichée (déjà "lue" en direct).`
+      `[showMessageNotification] ignoré : conversation "${conversationId}" actuellement affichée et fenêtre au premier plan (déjà "lue" en direct).`
     );
     return false;
   }
@@ -287,10 +265,28 @@ function showMessageNotification(message) {
     icon: APP_ICON_PATH,
   });
 
+  // `message.type` ('salon' ou 'prive') vient tel quel de l'événement
+  // d'origine (voir simulerMessagePrive/simulerMessageSalon plus bas, et
+  // notifierMessageSysteme côté renderer.js/message-prive.js qui relaie
+  // l'objet message complet sans le transformer) : on s'en sert pour dire
+  // au renderer sur quelle page/conversation naviguer au clic, en plus de
+  // remettre la fenêtre au premier plan. `type` volontairement optionnel
+  // (cleanText avec une liste blanche plutôt qu'un champ libre) : un champ
+  // inattendu ne doit pas planter le clic, juste désactiver la navigation.
+  const type =
+    message?.type === 'salon' || message?.type === 'prive'
+      ? message.type
+      : null;
   notification.on('click', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.show();
       mainWindow.focus();
+    }
+    if (type) {
+      envoyerVersRenderer('notifications:naviguer-vers-conversation', {
+        type,
+        conversationId,
+      });
     }
   });
   notification.show();
@@ -337,16 +333,15 @@ function createWindow() {
     win.show();
   });
 
-  // Voir le commentaire sur fenetreMinimisee/fenetreEstFocusee plus haut :
-  // ces logs de diagnostic permettent de confirmer, dans le terminal
-  // npm start, si ces événements sont bel et bien émis sous WSLg (au cas où
-  // ce correctif ne suffirait pas non plus).
+  // Voir le commentaire sur fenetreEstFocusee plus haut : ces logs de
+  // diagnostic permettent de confirmer, dans le terminal npm start, si ces
+  // événements de minimisation sont bel et bien émis sous WSLg (ils ne le
+  // sont pas dans les faits — voir plus bas — mais restent utiles pour
+  // diagnostiquer un jour un souci équivalent sur une vraie installation).
   win.on('minimize', () => {
-    fenetreMinimisee = true;
     logDebugNotif('[fenetre] minimize');
   });
   win.on('restore', () => {
-    fenetreMinimisee = false;
     logDebugNotif('[fenetre] restore');
   });
   win.on('focus', () => {
@@ -372,13 +367,15 @@ function createWindow() {
   // que WSLg traduit ça par 'hide' plutôt que par une vraie minimisation.
   // Log de diagnostic ajouté pour vérifier ; si rien de tout ça ne se
   // déclenche non plus, c'est très probablement une limite de WSLg qu'on ne
-  // peut pas contourner depuis le code de l'app (voir avertirSiWSL()).
+  // peut pas contourner depuis le code de l'app (voir avertirSiWSL()). Confirmé
+  // sans appel : aucun de ces événements ('minimize'/'restore'/'hide'/'show')
+  // ne se déclenche jamais sous cet environnement — seuls 'focus'/'blur'
+  // (voir plus haut) réagissent, d'où l'abandon complet de la minimisation
+  // comme signal de suppression des notifications (voir showMessageNotification).
   win.on('hide', () => {
-    fenetreMinimisee = true;
     logDebugNotif('[fenetre] hide');
   });
   win.on('show', () => {
-    fenetreMinimisee = false;
     logDebugNotif('[fenetre] show');
   });
 

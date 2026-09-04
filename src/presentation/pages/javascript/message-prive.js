@@ -88,6 +88,34 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Mêmes clés que renderer.js (voir son commentaire équivalent) : servent à
+  // transmettre, à travers une navigation entre les deux pages, la
+  // conversation à ouvrir tout de suite après le chargement suite au clic
+  // sur une notification.
+  const CLEF_CIBLE_DM = 'notif:cible-dm';
+  const CLEF_CIBLE_SALON = 'notif:cible-salon';
+
+  // Clic sur une notification système (voir showMessageNotification dans
+  // main.js) : ouvre directement la conversation concernée. Si c'est une
+  // conversation privée, on est déjà sur la bonne page ; si c'est un salon,
+  // on mémorise la cible et on navigue vers index.html, qui la consommera à
+  // son chargement (voir son onNavigateToConversation).
+  if (typeof serviceNotifications?.onNavigateToConversation === 'function') {
+    serviceNotifications.onNavigateToConversation(async (cible) => {
+      const conversationId = cible?.conversationId;
+      if (!conversationId) return;
+      if (cible.type === 'prive') {
+        state.activeConversationId = conversationId;
+        await renderActiveConversation();
+        renderConversationList();
+        mettreAJourBadgeApplication();
+      } else if (cible.type === 'salon') {
+        sessionStorage.setItem(CLEF_CIBLE_SALON, conversationId);
+        window.electronAPI.navigate('index.html');
+      }
+    });
+  }
+
   const state = {
     conversations: [],
     activeConversationId: null,
@@ -95,6 +123,18 @@ window.addEventListener('DOMContentLoaded', async () => {
     currentUserId: null,
     utilisateurs: [],
   };
+  // Consomme une éventuelle cible laissée par renderer.js avant une
+  // navigation vers cette page suite au clic sur une notification de
+  // conversation privée (voir onNavigateToConversation ci-dessus et
+  // CLEF_CIBLE_DM). Fait avant refreshConversations() plus bas : celui-ci
+  // ne fixe activeConversationId sur la première conversation que s'il est
+  // encore vide, donc le préremplir ici suffit à faire ouvrir la bonne dès
+  // le premier rendu.
+  const cibleDm = sessionStorage.getItem(CLEF_CIBLE_DM);
+  if (cibleDm) {
+    sessionStorage.removeItem(CLEF_CIBLE_DM);
+    state.activeConversationId = cibleDm;
+  }
 
   function notifier(message, erreur = false) {
     if (!toastElement) {
