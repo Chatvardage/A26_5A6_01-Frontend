@@ -96,16 +96,43 @@ export class MockGateway {
     this.utilisateurs.set(user5.id, user5);
     this.utilisateurs.set(user6.id, user6);
 
-    this.presences.set(user1.id, creerPresence(user1.id, 'en-ligne', Date.now()));
-    this.presences.set(user2.id, creerPresence(user2.id, 'hors-ligne', Date.now()));
-    this.presences.set(user3.id, creerPresence(user3.id, 'en-ligne', Date.now()));
-    this.presences.set(user4.id, creerPresence(user4.id, 'hors-ligne', Date.now()));
-    this.presences.set(user5.id, creerPresence(user5.id, 'en-ligne', Date.now()));
-    this.presences.set(user6.id, creerPresence(user6.id, 'hors-ligne', Date.now()));
+    this.presences.set(
+      user1.id,
+      creerPresence(user1.id, 'en-ligne', Date.now())
+    );
+    this.presences.set(
+      user2.id,
+      creerPresence(user2.id, 'hors-ligne', Date.now())
+    );
+    this.presences.set(
+      user3.id,
+      creerPresence(user3.id, 'en-ligne', Date.now())
+    );
+    this.presences.set(
+      user4.id,
+      creerPresence(user4.id, 'hors-ligne', Date.now())
+    );
+    this.presences.set(
+      user5.id,
+      creerPresence(user5.id, 'en-ligne', Date.now())
+    );
+    this.presences.set(
+      user6.id,
+      creerPresence(user6.id, 'hors-ligne', Date.now())
+    );
 
+    // Salon public : tous les utilisateurs existants en sont membres d'office
+    // dès le seed (cohérent avec MockGatewayRuntime.js). Les salons publics
+    // créés ensuite via creerSalon() démarrent eux avec le seul hôte, et se
+    // remplissent via ajouterUtilisateurAuSalon() — comportement volontairement
+    // différent, déjà couvert par les tests dédiés à creerSalon().
     const salon1 = creerSalon('s1', 'Général', user1.id, 'public', [
       user1.id,
       user2.id,
+      user3.id,
+      user4.id,
+      user5.id,
+      user6.id,
     ]);
     const salon2 = creerSalon('s2', 'Privé', user1.id, 'prive', [
       user1.id,
@@ -129,16 +156,66 @@ export class MockGateway {
     }
 
     const messagesDM = [
-      { conversationId: creerDmId('u1', 'u2'), auteurId: 'u1', contenu: 'Salut, on se voit ce soir ?', type: 'texte' as const },
-      { conversationId: creerDmId('u1', 'u2'), auteurId: 'u2', contenu: 'Oui, vers 20h, ça marche.', type: 'texte' as const },
-      { conversationId: creerDmId('u1', 'u3'), auteurId: 'u3', contenu: 'Tu as vu le dernier sprint ?', type: 'texte' as const },
-      { conversationId: creerDmId('u1', 'u3'), auteurId: 'u1', contenu: 'Oui, je le valide demain.', type: 'texte' as const },
-      { conversationId: creerDmId('u1', 'u4'), auteurId: 'u4', contenu: 'J’ai envoyé le document de synthèse.', type: 'texte' as const },
-      { conversationId: creerDmId('u1', 'u4'), auteurId: 'u1', contenu: 'Parfait, je le relirai tout à l’heure.', type: 'texte' as const },
-      { conversationId: creerDmId('u2', 'u5'), auteurId: 'u2', contenu: 'Le rapport est prêt pour relecture.', type: 'texte' as const },
-      { conversationId: creerDmId('u2', 'u5'), auteurId: 'u5', contenu: 'Merci, je le regarde ce midi.', type: 'texte' as const },
-      { conversationId: creerDmId('u3', 'u6'), auteurId: 'u6', contenu: 'Tu as vu le dernier correctif ?', type: 'texte' as const },
-      { conversationId: creerDmId('u3', 'u6'), auteurId: 'u3', contenu: 'Oui, il a déjà été validé.', type: 'texte' as const },
+      {
+        conversationId: creerDmId('u1', 'u2'),
+        auteurId: 'u1',
+        contenu: 'Salut, on se voit ce soir ?',
+        type: 'texte' as const,
+      },
+      {
+        conversationId: creerDmId('u1', 'u2'),
+        auteurId: 'u2',
+        contenu: 'Oui, vers 20h, ça marche.',
+        type: 'texte' as const,
+      },
+      {
+        conversationId: creerDmId('u1', 'u3'),
+        auteurId: 'u3',
+        contenu: 'Tu as vu le dernier sprint ?',
+        type: 'texte' as const,
+      },
+      {
+        conversationId: creerDmId('u1', 'u3'),
+        auteurId: 'u1',
+        contenu: 'Oui, je le valide demain.',
+        type: 'texte' as const,
+      },
+      {
+        conversationId: creerDmId('u1', 'u4'),
+        auteurId: 'u4',
+        contenu: 'J’ai envoyé le document de synthèse.',
+        type: 'texte' as const,
+      },
+      {
+        conversationId: creerDmId('u1', 'u4'),
+        auteurId: 'u1',
+        contenu: 'Parfait, je le relirai tout à l’heure.',
+        type: 'texte' as const,
+      },
+      {
+        conversationId: creerDmId('u2', 'u5'),
+        auteurId: 'u2',
+        contenu: 'Le rapport est prêt pour relecture.',
+        type: 'texte' as const,
+      },
+      {
+        conversationId: creerDmId('u2', 'u5'),
+        auteurId: 'u5',
+        contenu: 'Merci, je le regarde ce midi.',
+        type: 'texte' as const,
+      },
+      {
+        conversationId: creerDmId('u3', 'u6'),
+        auteurId: 'u6',
+        contenu: 'Tu as vu le dernier correctif ?',
+        type: 'texte' as const,
+      },
+      {
+        conversationId: creerDmId('u3', 'u6'),
+        auteurId: 'u3',
+        contenu: 'Oui, il a déjà été validé.',
+        type: 'texte' as const,
+      },
     ];
 
     const baseTimestamp = Date.now() - messagesDM.length * 60000;
@@ -988,7 +1065,7 @@ export class MockGateway {
    */
   private attendreLatence(): Promise<void> {
     return new Promise((resolve) => {
-      setTimeout(resolve, Math.max(this.latenceMs, 1) + 5);
+      setTimeout(resolve, this.latenceMs);
     });
   }
 

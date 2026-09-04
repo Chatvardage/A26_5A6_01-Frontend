@@ -7,7 +7,6 @@ const {
 
 const chatGateway = new MockGatewayRuntime();
 
-
 const isDev = process.env.NODE_ENV === 'development';
 
 // Port du serveur de dev local (ex. Vite) : mettre à jour ici s'il change,
@@ -19,6 +18,15 @@ const DEV_SERVER_PORT = '5173';
 // file:///etc/passwd ou un autre fichier arbitraire du disque).
 const APP_PAGES_ROOT = path.resolve(__dirname, 'src', 'presentation', 'pages');
 const APP_INDEX_PATH = path.resolve(APP_PAGES_ROOT, 'index.html');
+
+// Vrai si `filePath` (déjà résolu en chemin absolu) reste strictement à
+// l'intérieur de APP_PAGES_ROOT. Utilisé à la fois par isAppUrl() (pour les
+// URL file://) et par le handler IPC 'navigate' : centraliser le check évite
+// que les deux finissent par diverger. Le path.sep final est important : sans
+// lui, un dossier voisin comme "pages-evil" passerait le startsWith().
+function isPathInsideAppPages(filePath) {
+  return filePath.startsWith(`${APP_PAGES_ROOT}${path.sep}`);
+}
 
 // Icône personnalisée de l'app (mascotte de la maquette), utilisée à la
 // fois pour la fenêtre (barre des tâches/dock en dev) et comme base des
@@ -57,7 +65,7 @@ function isAppUrl(url) {
     } catch {
       return false;
     }
-    return filePath.startsWith(`${APP_PAGES_ROOT}${path.sep}`);
+    return isPathInsideAppPages(filePath);
   }
 
   // Le serveur de dev local n'est autorisé qu'en développement, et seulement
@@ -92,11 +100,11 @@ function buildMenu() {
     // DevTools uniquement en développement : jamais exposé en production.
     ...(isDev
       ? [
-          {
-            label: 'Développement',
-            submenu: [{ role: 'toggleDevTools' }, { role: 'reload' }],
-          },
-        ]
+        {
+          label: 'Développement',
+          submenu: [{ role: 'toggleDevTools' }, { role: 'reload' }],
+        },
+      ]
       : []),
   ];
   return Menu.buildFromTemplate(template);
@@ -246,6 +254,9 @@ exposerCanal('obtenir-conversations-privees', ({ utilisateurId }) =>
 exposerCanal('envoyer-message-prive', (donnees) =>
   chatGateway.envoyerMessagePrive(donnees)
 );
+exposerCanal('demarrer-conversation-privee', (donnees) =>
+  chatGateway.demarrerConversationPrivee(donnees)
+);
 
 
 ipcMain.handle('navigate', (event, page) => {
@@ -257,7 +268,7 @@ ipcMain.handle('navigate', (event, page) => {
     'pages',
     page ?? ''
   );
-  if (!pagePath.startsWith(`${APP_PAGES_ROOT}${path.sep}`)) {
+  if (!isPathInsideAppPages(pagePath)) {
     throw new Error('Page de navigation invalide');
   }
   return BrowserWindow.fromWebContents(event.sender)?.loadFile(pagePath);

@@ -432,8 +432,8 @@ el.formulaire.addEventListener('submit', async (event) => {
 
 el.utilisateur.addEventListener('change', async (event) => {
   utilisateurActuelId = event.target.value;
-sessionStorage.setItem('currentUserId', utilisateurActuelId);
-await actualiser();
+  sessionStorage.setItem('currentUserId', utilisateurActuelId);
+  await actualiser();
 });
 
 async function initialiserUtilisateurCourant() {

@@ -65,6 +65,41 @@ body {
     border-radius: 14px;
 }
 
+#home-btn {
+    width: 44px;
+    height: 44px;
+
+    padding: 0;
+    border: none;
+    border-radius: 14px;
+
+    background: transparent;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+
+    cursor: pointer;
+
+    transition: all 0.15s ease;
+}
+
+#home-btn:hover,
+#home-btn:focus-visible {
+    background: var(--bg-panel-alt);
+    border-radius: 30%;
+}
+
+#home-btn .app-logo {
+    width: 100%;
+    height: 100%;
+
+    object-fit: cover;
+    background: transparent;
+    border-radius: inherit;
+}
+
 .rail-divider {
     width: 32px;
     height: 1px;
@@ -112,6 +147,10 @@ body {
     font-weight: 600;
 
     border-bottom: 1px solid var(--border);
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .friends-actions {
