@@ -31,10 +31,10 @@ export interface OptionsPaginationMessages {
  *
  * C'est le seul point de contact entre la couche UI / logique applicative et le service de chat.
  * Aucun composant UI ne doit importer ou instancier directement une implémentation concrète
- * (ex. MockChatGateway) : il doit uniquement dépendre de ce type `ChatGateway`, obtenu par
+ * (ex. MockGateway) : il doit uniquement dépendre de ce type `ChatGateway`, obtenu par
  * injection (ex. passé en paramètre, fourni par un contexte/store).
  *
- * Pour cette itération, seule une implémentation simulée existe (MockChatGateway : salons, DM,
+ * Pour cette itération, seule une implémentation simulée existe (MockGateway : salons, DM,
  * présence, "typing" et réseau simulés via timers/événements en mémoire, avec latence et
  * déconnexions paramétrables). Elle sera remplacée plus tard par une implémentation réseau réelle
  * (WebSocket/HTTP) sans qu'aucun composant UI n'ait à changer, puisqu'il ne connaît que ce contrat.
@@ -111,6 +111,64 @@ export interface ChatGateway {
    * @returns Le salon rejoint, avec ses informations à jour (membres, messages, etc.).
    */
   rejoindreSalon(salonId: ConversationId): Promise<Salon>;
+
+  /**
+   * Invite localement un utilisateur dans un salon privé. Seul l'hôte du salon peut inviter.
+   * Sans effet sur un salon public (les invitations n'y ont pas de sens, voir `rejoindreSalon`).
+   *
+   * @param salonId Identifiant du salon privé dans lequel inviter.
+   * @param utilisateurId Identifiant de l'utilisateur à inviter.
+   * @param hoteId Identifiant de l'hôte effectuant l'invitation.
+   * @throws Rejette la promesse si le salon n'existe pas, si le salon est public, ou si
+   * `hoteId` n'est pas l'hôte du salon.
+   *
+   * @returns Le salon mis à jour, avec l'invitation ajoutée.
+   */
+  inviterUtilisateurAuSalon(
+    salonId: ConversationId,
+    utilisateurId: string,
+    hoteId: string
+  ): Promise<Salon>;
+
+  /**
+   * Retourne la liste des salons privés pour lesquels l'utilisateur donné a une
+   * invitation en attente (ni acceptée, ni refusée).
+   *
+   * @param utilisateurId Identifiant de l'utilisateur dont on veut les invitations en attente.
+   *
+   * @returns La liste des salons pour lesquels une invitation est en attente.
+   */
+  obtenirInvitationsUtilisateur(utilisateurId: string): Promise<Salon[]>;
+
+  /**
+   * Accepte une invitation en attente et ajoute l'utilisateur aux membres du salon.
+   *
+   * @param salonId Identifiant du salon privé dont l'invitation est acceptée.
+   * @param utilisateurId Identifiant de l'utilisateur qui accepte l'invitation.
+   * @throws Rejette la promesse si le salon n'existe pas, ou si aucune invitation n'est
+   * en attente pour cet utilisateur sur ce salon.
+   *
+   * @returns Le salon mis à jour, avec l'utilisateur désormais membre.
+   */
+  accepterInvitationSalon(
+    salonId: ConversationId,
+    utilisateurId: string
+  ): Promise<Salon>;
+
+  /**
+   * Refuse une invitation en attente, sans donner accès au salon.
+   *
+   * @param salonId Identifiant du salon privé dont l'invitation est refusée.
+   * @param utilisateurId Identifiant de l'utilisateur qui refuse l'invitation.
+   * @throws Rejette la promesse si le salon n'existe pas, ou si aucune invitation n'est
+   * en attente pour cet utilisateur sur ce salon.
+   *
+   * @returns Le salon mis à jour, avec l'invitation retirée.
+   */
+  refuserInvitationSalon(
+    salonId: ConversationId,
+    utilisateurId: string
+  ): Promise<Salon>;
 
   // --- Messages ---------------------------------------------------------------
 

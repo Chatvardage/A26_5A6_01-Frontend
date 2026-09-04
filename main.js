@@ -496,7 +496,19 @@ function configurerCsp() {
     "img-src 'self' data:;";
 
   const devOrigin = `http://localhost:${DEV_SERVER_PORT}/`;
-  const prodLoginPrefix = `file://${APP_LOGIN_PATH.replace(/\\/g, '/')}`;
+  // path.resolve() renvoie un chemin qui commence déjà par '/' sous
+  // POSIX (ex. "/home/..."), mais par "C:/..." (sans slash de tête) sous
+  // Windows une fois les back-slashes normalisés ci-dessous. `file://` +
+  // un chemin Windows donnerait "file://C:/..." (un seul slash après le
+  // schéma), alors que Chromium normalise ces URL avec TROIS slashes
+  // ("file:///C:/...") — sans ce troisième slash ajouté explicitement ici,
+  // `details.url.startsWith(prodLoginPrefix)` ne correspondait jamais en
+  // prod sur Windows, donc la CSP n'était jamais appliquée à la page de
+  // connexion sur cette plateforme.
+  const normalizedLoginPath = APP_LOGIN_PATH.replace(/\\/g, '/');
+  const prodLoginPrefix = normalizedLoginPath.startsWith('/')
+    ? `file://${normalizedLoginPath}`
+    : `file:///${normalizedLoginPath}`;
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const isLoginPageRequest = isDev
@@ -522,6 +534,14 @@ function configurerCsp() {
 // l'appel via isAppUrl(event.senderFrame.url) avant d'agir dessus — un appel
 // IPC provenant d'une page non reconnue est silencieusement ignoré plutôt
 // que d'entraîner une navigation.
+//
+// Volontairement différent de exposerCanal()/verifierProvenance() (qui
+// lèvent sur une origine invalide) : ce canal est invoqué automatiquement
+// par LoginPage juste après une connexion réussie, jamais suite à une
+// action utilisateur explicite sur laquelle afficher une erreur. Lever ici
+// ne ferait que produire un rejet de promesse non géré côté renderer sans
+// bénéfice de sécurité additionnel (la navigation elle-même reste bloquée) ;
+// ignorer silencieusement est donc le comportement voulu, pas un oubli.
 ipcMain.handle('navigation:tableau-de-bord', (event) => {
   const url = event.senderFrame?.url ?? '';
   if (!isAppUrl(url)) {

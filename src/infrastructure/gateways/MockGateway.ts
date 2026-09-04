@@ -446,17 +446,39 @@ export class MockGateway {
    * `validationPseudo` dans `Utilisateur.ts`, qui ne fait volontairement
    * que la validation de FORMAT — l'unicité dépend d'un registre, donc de
    * la couche gateway, pas du domaine pur).
+   *
+   * ATTENTION concurrence : cette vérification n'est pas atomique avec
+   * l'écriture qui la suit (voir `creerUtilisateur`/`connexion`). Deux
+   * créations concurrentes du même pseudo peuvent toutes deux passer cette
+   * vérification avant que l'une n'écrive dans `this.utilisateurs` (TOCTOU).
+   * Sans impact réel ici (mock/démo, usage mono-utilisateur local), mais une
+   * future implémentation réseau réelle devra faire un check-and-set atomique
+   * côté serveur.
    * @param pseudo Le pseudo à vérifier.
    * @returns Promise<boolean> `true` si disponible, `false` si déjà pris.
    */
   async pseudoDisponible(pseudo: string): Promise<boolean> {
-    return this.simulerLatence(async () => {
-      const pseudoNormalise = pseudo.trim().toLowerCase();
-      const dejaPris = Array.from(this.utilisateurs.values()).some(
-        (u) => u.pseudo.toLowerCase() === pseudoNormalise
-      );
-      return !dejaPris;
-    });
+    return this.simulerLatence(async () =>
+      this.pseudoDisponibleSansLatence(pseudo)
+    );
+  }
+
+  /**
+   * Logique synchrone de vérification de disponibilité, sans latence
+   * simulée. Extraite pour être réutilisable par `creerUtilisateur` sans
+   * payer une seconde fois `simulerLatence` (même principe que
+   * `ajouterUtilisateurAuSalonSansLatence` / `simulerConnexionSansLatence`) :
+   * `creerUtilisateur` est déjà lui-même enveloppé dans `simulerLatence`,
+   * donc appeler `pseudoDisponible` (async, avec sa propre latence) depuis
+   * son intérieur doublait artificiellement le délai d'une seule opération
+   * logique.
+   */
+  private pseudoDisponibleSansLatence(pseudo: string): boolean {
+    const pseudoNormalise = pseudo.trim().toLowerCase();
+    const dejaPris = Array.from(this.utilisateurs.values()).some(
+      (u) => u.pseudo.toLowerCase() === pseudoNormalise
+    );
+    return !dejaPris;
   }
 
   /**
@@ -476,7 +498,11 @@ export class MockGateway {
       // Unicité (voir pseudoDisponible) : on ne s'appuie pas uniquement sur
       // la vérification préalable côté UI — le gateway reste la source de
       // vérité, au cas où deux créations concurrentes arriveraient ici.
-      const disponible = await this.pseudoDisponible(pseudo);
+      // Version SansLatence : cette méthode est déjà enveloppée dans
+      // simulerLatence ci-dessus, appeler la variante publique (async, avec
+      // sa propre latence) doublerait le délai simulé pour une seule
+      // opération logique (voir le commentaire sur pseudoDisponibleSansLatence).
+      const disponible = this.pseudoDisponibleSansLatence(pseudo);
       if (!disponible) {
         this.emetEvenement('erreur', {
           message: `Pseudo déjà utilisé : ${pseudo}`,

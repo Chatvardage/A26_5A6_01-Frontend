@@ -5,6 +5,7 @@
   "scripts": {
     "prestart": "node -e \"if (process.env.NODE_ENV !== 'development') { require('child_process').execSync('npm run build:login', { stdio: 'inherit' }); }\"",
     "start": "node scripts/start.js",
+    "start:dev": "cross-env NODE_ENV=development node scripts/start.js",
     "dev:login": "vite",
     "build:login": "vite build",
     "build": "npm run build:login",
@@ -21,6 +22,7 @@
     "@typescript-eslint/parser": "^7.0.0",
     "@vitejs/plugin-react": "^4.7.0",
     "@vitest/coverage-v8": "^4.1.11",
+    "cross-env": "^7.0.3",
     "electron": "^44.0.0",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.0.0",
@@ -38,9 +40,6 @@
   ],
   "author": "Eva-afk",
   "license": "ISC",
-  "allowScripts": {
-    "electron@30.5.1": true
-  },
   "dependencies": {
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

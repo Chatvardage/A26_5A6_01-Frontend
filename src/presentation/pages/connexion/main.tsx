@@ -34,7 +34,17 @@ function nettoyerErreurIpc(err: unknown): Error {
 }
 
 const gateway: GatewaySession = {
-  pseudoDisponible: (pseudo) => window.electronAPI.pseudoDisponible(pseudo),
+  // Même normalisation que `connexion` ci-dessous : sans elle, un échec IPC
+  // sur cet appel afficherait le préfixe interne d'Electron
+  // ("Error invoking remote method ...") tel quel dans LoginPage.tsx, qui
+  // lit directement `err.message`.
+  pseudoDisponible: async (pseudo) => {
+    try {
+      return await window.electronAPI.pseudoDisponible(pseudo);
+    } catch (err) {
+      throw nettoyerErreurIpc(err);
+    }
+  },
   connexion: async (utilisateur) => {
     try {
       return await window.electronAPI.connexionSession({
