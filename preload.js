@@ -7,21 +7,63 @@ const { contextBridge, ipcRenderer } = require('electron');
 // arbitraire), chaque canal IPC est fixé ici en dur, dans le preload — le
 // renderer ne peut pas choisir ou inventer un canal.
 //
-// pseudoDisponible / connexionSession : utilisées par la page de connexion
-// (LoginPage.tsx). connexionSession enregistre le nouvel utilisateur dans le
-// MockGatewayRuntime PARTAGÉ côté main (voir main.js) — c'est ce qui permet
-// au dashboard de connaître ensuite ce même utilisateur.
-//
-// allerAuTableauDeBord : appelée une fois la session établie, pour demander
-// au processus main de naviguer vers le dashboard (canal
-// 'navigation:tableau-de-bord').
-//
-// obtenirUtilisateurConnecte : utilisée par le dashboard au démarrage pour
-// savoir qui vient de se connecter (voir renderer.js), au lieu de coder un
-// utilisateur en dur.
-//
-// Les méthodes salons:* : utilisées par le dashboard (salons/messages), sur
-// le même principe d'un canal nommé par besoin métier.
+// `messageRead` a été retiré : ce canal n'était pas enregistré côté main.js
+// (aucun `ipcMain.handle('notification:message-read', ...)`) et n'était
+// appelé nulle part côté renderer — un appel aurait simplement rejeté avec
+// "No handler registered". L'état lu/non lu est désormais géré entièrement
+// côté renderer via NotifPrefs (localStorage), voir
+// javascript/notif-prefs.js : pas besoin d'aller-retour IPC pour ça.
+contextBridge.exposeInMainWorld('notifications', {
+  setActiveConversation: (conversationId) =>
+    ipcRenderer.invoke('notification:set-active-conversation', conversationId),
+  messageReceived: (message) =>
+    ipcRenderer.invoke('notification:message-received', message),
+  // Écoute les messages simulés en continu par main.js (démo des
+  // notifications, voir demarrerSimulationMessages) : contrairement aux deux
+  // méthodes ci-dessus, ce canal part du main process vers le renderer
+  // (ipcRenderer.on, pas invoke), puisque main.js pousse ces messages de son
+  // propre chef plutôt qu'en réponse à un appel du renderer. Retourne une
+  // fonction pour se désabonner, au cas où elle serait utile un jour.
+  onMockMessage: (callback) => {
+    const ecouteur = (_event, message) => callback(message);
+    ipcRenderer.on('notifications:message-simule', ecouteur);
+    return () =>
+      ipcRenderer.removeListener('notifications:message-simule', ecouteur);
+  },
+  // Badge de messages non lus sur l'icône de l'app (dock macOS/Linux,
+  // superposition sur la barre des tâches Windows). `iconDataUrl` est un
+  // PNG en dataURL dessiné côté renderer (voir genererIconeBadge dans
+  // renderer.js / message-prive.js) : main.js n'a pas accès à <canvas>.
+  setBadgeCount: (count, iconDataUrl) =>
+    ipcRenderer.invoke('notifications:set-badge-count', { count, iconDataUrl }),
+  // État de focus de la fenêtre (voir fenetreEstFocusee dans main.js) :
+  // isWindowFocused() donne l'état au moment de l'appel (utile à
+  // l'initialisation d'une page, avant qu'un premier événement ait pu être
+  // reçu), onFocusChange() abonne à ses changements par la suite. Utilisé
+  // pour ne marquer une conversation comme "lue" (NotifPrefs.marquerCommeLu)
+  // que si la fenêtre a réellement le focus au moment où elle est affichée.
+  isWindowFocused: () => ipcRenderer.invoke('window:is-focused'),
+  onFocusChange: (callback) => {
+    const ecouteur = (_event, focused) => callback(focused);
+    ipcRenderer.on('window:focus-changed', ecouteur);
+    return () => ipcRenderer.removeListener('window:focus-changed', ecouteur);
+  },
+  // Poussé par main.js quand l'utilisatrice clique sur une notification
+  // système (voir showMessageNotification) : `{ type: 'salon'|'prive',
+  // conversationId }`. Chaque page (renderer.js / message-prive.js) décide
+  // d'ouvrir directement la conversation si elle est déjà sur la bonne
+  // page, ou de naviguer vers l'autre page en mémorisant la cible.
+  onNavigateToConversation: (callback) => {
+    const ecouteur = (_event, cible) => callback(cible);
+    ipcRenderer.on('notifications:naviguer-vers-conversation', ecouteur);
+    return () =>
+      ipcRenderer.removeListener(
+        'notifications:naviguer-vers-conversation',
+        ecouteur
+      );
+  },
+});
+
 contextBridge.exposeInMainWorld('electronAPI', {
   pseudoDisponible: (pseudo) =>
     ipcRenderer.invoke('session:pseudo-disponible', { pseudo }),

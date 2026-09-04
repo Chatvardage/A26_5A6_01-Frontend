@@ -2,6 +2,8 @@ const {
   app,
   BrowserWindow,
   Menu,
+  Notification,
+  nativeImage,
   shell,
   ipcMain,
   session,
@@ -16,15 +18,25 @@ const chatGateway = new MockGatewayRuntime();
 
 const isDev = process.env.NODE_ENV === 'development';
 
+// Active les logs de diagnostic liés aux notifications (avertissement WSL,
+// décisions de showMessageNotification, transitions minimize/restore/
+// focus/blur/hide/show) : activés par défaut en développement, ou
+// explicitement via DEBUG_NOTIFICATIONS=1 (utile pour déboguer un souci de
+// notification dans un build empaqueté sans relancer toute l'app en mode
+// développement). Désactivés sinon, pour ne pas spammer le terminal en
+// usage normal — ces logs sont diagnostiques, pas des erreurs à surveiller
+// en continu (voir console.error, laissé actif partout ailleurs).
+const debugNotifications = isDev || process.env.DEBUG_NOTIFICATIONS === '1';
+
+function logDebugNotif(...args) {
+  if (debugNotifications) {
+    console.log(...args);
+  }
+}
+
 // Port du serveur de dev local (ex. Vite) : mettre à jour ici s'il change,
 // plutôt que d'accepter n'importe quel port sur localhost.
 const DEV_SERVER_PORT = '5173';
-
-// URL du serveur de dev Vite pour la page de connexion (voir vite.config.mts,
-// root = src/presentation/pages/connexion). En développement, c'est la
-// première page chargée par la fenêtre (voir createWindow) ; en production,
-// la version buildée (APP_LOGIN_PATH) est utilisée à la place.
-const DEV_LOGIN_URL = `http://localhost:${DEV_SERVER_PORT}/`;
 
 // Chemin absolu du dashboard (post-connexion), utilisé pour vérifier qu'une
 // navigation file:// reste bien à l'intérieur du bundle (et non, par ex.,
@@ -41,14 +53,22 @@ function isPathInsideAppPages(filePath) {
   return filePath.startsWith(`${APP_PAGES_ROOT}${path.sep}`);
 }
 
-// Chemin absolu de la page de connexion buildée par Vite (voir
-// `npm run build:login` / vite.config.mts). C'est la première page chargée
-// par la fenêtre en production (voir createWindow).
-const APP_LOGIN_PATH = path.resolve(__dirname, 'dist', 'login', 'index.html');
+// Icône personnalisée de l'app (mascotte de la maquette), utilisée à la
+// fois pour la fenêtre (barre des tâches/dock en dev) et comme base des
+// icônes de build packagées séparément.
+const APP_ICON_PATH = path.join(__dirname, 'assets', 'icon.png');
 
-// Chemins file:// autorisés par isAppUrl (voir plus bas) : le dashboard et
-// la page de connexion, et rien d'autre.
-const ALLOWED_FILE_PATHS = new Set([APP_INDEX_PATH, APP_LOGIN_PATH]);
+// Couleur de fond peinte avant que index.html ne soit chargé/affiché.
+// Évite le flash de fenêtre blanche par défaut d'Electron au démarrage ;
+// reprend la teinte sombre de la maquette (voir maquette/maquette_multi.pdf).
+const WINDOW_BACKGROUND_COLOR = '#0d3d38';
+
+const DEFAULT_WINDOW_WIDTH = 1280;
+const DEFAULT_WINDOW_HEIGHT = 800;
+const MIN_WINDOW_WIDTH = 960;
+const MIN_WINDOW_HEIGHT = 600;
+
+const APP_LOGIN_PATH = path.resolve(__dirname, 'dist', 'login', 'index.html');
 
 // --- Vérification structurée d'une URL "interne à l'app" --------------------
 // Utilisée à la fois pour le garde-fou de navigation (will-navigate) et pour
@@ -107,25 +127,198 @@ function buildMenu() {
     // DevTools uniquement en développement : jamais exposé en production.
     ...(isDev
       ? [
-        {
-          label: 'Développement',
-          submenu: [{ role: 'toggleDevTools' }, { role: 'reload' }],
-        },
-      ]
+          {
+            label: 'Développement',
+            submenu: [{ role: 'toggleDevTools' }, { role: 'reload' }],
+          },
+        ]
       : []),
   ];
   return Menu.buildFromTemplate(template);
 }
 
+// Référence vers la fenêtre principale, utilisée par le verrou d'instance
+// unique (second-instance) et par 'activate' pour savoir si une fenêtre
+// existe déjà plutôt que de se fier uniquement à getAllWindows().
+let mainWindow = null;
+let activeConversationId = null;
+
+// Suivi manuel du focus de la fenêtre, via les événements natifs ('focus',
+// 'blur') plutôt que via mainWindow.isFocused() interrogé au moment de la
+// notification. Sous WSLg, isFocused() s'est révélé peu fiable (reste
+// parfois figé sur son ancienne valeur tant qu'aucune autre fenêtre ne vole
+// le focus) ; l'événement, lui, est émis au moment réel de la transition,
+// donc plus fiable que d'interroger l'état après coup. Un suivi équivalent
+// de la minimisation ('minimize'/'restore'/'hide'/'show') a existé ici mais
+// s'est révélé totalement inutilisable sous WSLg (aucun de ces événements ne
+// se déclenche au clic sur le bouton de réduction natif) — plus rien ne s'en
+// sert désormais, voir les logs de diagnostic sur ces événements plus bas si
+// jamais ça doit être ressuscité un jour pour du réel Windows/macOS/Linux.
+let fenetreEstFocusee = true;
+
+function isTrustedIpcEvent(event) {
+  return isAppUrl(event.senderFrame?.url ?? '');
+}
+
+function cleanText(value, maxLength) {
+  return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
+}
+
+// --- Diagnostic WSL ----------------------------------------------------
+// L'API Notification d'Electron est déjà cross-plateforme : sur Windows elle
+// passe par le Centre de notifications, sur macOS par Notification Center, et
+// sur Linux par libnotify (protocole D-Bus). Rien à brancher côté code pour
+// que ça fonctionne sur les trois OS — mais WSL est un cas particulier :
+// c'est un noyau Linux, donc Electron y utilise systématiquement la voie
+// libnotify, même si la fenêtre tourne visuellement dans Windows. WSLg relaie
+// normalement ces notifications vers le Centre de notifications Windows,
+// MAIS seulement si un bus de session D-Bus fonctionnel tourne dans la
+// distribution — ce qui n'est pas garanti par défaut. Symptôme observé :
+// showMessageNotification() ci-dessous appelle bien notification.show() sans
+// erreur ("notification affichée" dans les logs), mais rien n'apparaît à
+// l'écran, parce que personne n'écoute côté D-Bus (voir les avertissements
+// "libnotify-WARNING: Failed to connect to proxy" / adresse "disabled:" dans
+// la console d'Electron).
+function estProbablementWSL() {
+  if (process.platform !== 'linux') return false;
+  if (process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP) return true;
+  try {
+    return require('fs')
+      .readFileSync('/proc/version', 'utf8')
+      .toLowerCase()
+      .includes('microsoft');
+  } catch {
+    return false;
+  }
+}
+
+function avertirSiWSL() {
+  if (!estProbablementWSL()) return;
+  logDebugNotif(
+    '[notifications] Exécution détectée sous WSL. Les notifications système ' +
+      'passent par libnotify (D-Bus), relayé par WSLg vers le Centre de ' +
+      'notifications Windows — mais seulement si un bus D-Bus de session est ' +
+      'actif dans la distribution. Si les logs disent "notification ' +
+      'affichée" sans que rien ne s\'affiche : (1) vérifier que WSL est à jour ' +
+      '(wsl --update, puis wsl --shutdown, depuis PowerShell), (2) activer ' +
+      'systemd dans /etc/wsl.conf ([boot]\\nsystemd=true) puis relancer WSL, ' +
+      '(3) tester `notify-send "test" "hello"` dans le terminal WSL — si ' +
+      "ça n'affiche rien non plus côté Windows, le problème est dans " +
+      "l'environnement WSL, pas dans cette app. Sur un Windows, un macOS ou " +
+      'un Linux natif (avec un vrai bureau/démon de notifications), ce code ' +
+      'fonctionne sans configuration supplémentaire.'
+  );
+}
+
+function showMessageNotification(message) {
+  // Logs de diagnostic (voir aussi les logs côté renderer dans renderer.js /
+  // message-prive.js) : utiles pour comprendre pourquoi une notification
+  // système ne s'affiche pas sans avoir à deviner. Visibles dans le terminal
+  // qui a lancé `npm start`/`electron .` (le processus main n'a pas de
+  // console DevTools comme le renderer).
+  if (!Notification.isSupported()) {
+    logDebugNotif(
+      '[showMessageNotification] ignoré : Notification non supportée sur ce système.'
+    );
+    return false;
+  }
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    logDebugNotif(
+      '[showMessageNotification] ignoré : fenêtre principale absente ou détruite.'
+    );
+    return false;
+  }
+
+  const conversationId = cleanText(message?.conversationId, 120);
+  const body = cleanText(message?.contenu, 180);
+  if (!conversationId || !body) {
+    logDebugNotif(
+      '[showMessageNotification] ignoré : message invalide (conversationId ou contenu manquant).'
+    );
+    return false;
+  }
+
+  // Suppression fine, PAS un blocage total pendant que la fenêtre a le
+  // focus : avoir l'app ouverte sur un salon ne doit pas rendre muettes
+  // toutes les autres conversations (comme Slack/Discord — contrairement à
+  // une version précédente de cette fonction qui bloquait TOUTE
+  // notification dès que la fenêtre avait le focus, quelle que soit la
+  // conversation concernée). On ignore uniquement le cas précis où
+  // l'utilisatrice regarde right now (fenêtre focusée) la conversation même
+  // qui vient de recevoir ce message — "déjà lue en direct". Voir le
+  // commentaire sur fenetreEstFocusee plus haut pour pourquoi c'est le focus
+  // (et non la minimisation, abandonnée comme signal — peu fiable sous
+  // WSLg) qui est utilisé ici.
+  if (fenetreEstFocusee && conversationId === activeConversationId) {
+    logDebugNotif(
+      `[showMessageNotification] ignoré : conversation "${conversationId}" actuellement affichée et fenêtre au premier plan (déjà "lue" en direct).`
+    );
+    return false;
+  }
+
+  // `silent` volontairement laissé à sa valeur par défaut (false) : c'est ce
+  // qui fait jouer le son système de notification (celui de Windows en
+  // particulier). Le renderer ne construit cette notification que pour les
+  // utilisateurs ayant choisi le mode "Système + son" (voir NotifPrefs dans
+  // notif-prefs.js) — ne pas passer silent:true ici sans mettre ce
+  // commentaire à jour, ça casserait cette exigence silencieusement.
+  const notification = new Notification({
+    title: 'Nouveau message',
+    body,
+    icon: APP_ICON_PATH,
+  });
+
+  // `message.type` ('salon' ou 'prive') vient tel quel de l'événement
+  // d'origine (voir simulerMessagePrive/simulerMessageSalon plus bas, et
+  // notifierMessageSysteme côté renderer.js/message-prive.js qui relaie
+  // l'objet message complet sans le transformer) : on s'en sert pour dire
+  // au renderer sur quelle page/conversation naviguer au clic, en plus de
+  // remettre la fenêtre au premier plan. `type` volontairement optionnel
+  // (cleanText avec une liste blanche plutôt qu'un champ libre) : un champ
+  // inattendu ne doit pas planter le clic, juste désactiver la navigation.
+  const type =
+    message?.type === 'salon' || message?.type === 'prive'
+      ? message.type
+      : null;
+  notification.on('click', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    if (type) {
+      envoyerVersRenderer('notifications:naviguer-vers-conversation', {
+        type,
+        conversationId,
+      });
+    }
+  });
+  notification.show();
+  // Note : ce log confirme seulement que notification.show() a été appelé
+  // sans erreur, pas que quelque chose est réellement apparu à l'écran —
+  // sous Linux/WSL, l'affichage réel dépend d'un service de notification
+  // (D-Bus) qui peut être absent même quand cet appel "réussit" (voir
+  // avertirSiWSL() plus haut).
+  logDebugNotif(
+    `[showMessageNotification] notification affichée pour "${conversationId}".`
+  );
+  return true;
+}
+
 function createWindow() {
   const win = new BrowserWindow({
-    width: 900,
-    height: 700,
-    // TODO(assets): remplacer par l'icône réelle de l'app avant release
-    // (voir issue à créer) ; en son absence Electron retombe silencieusement
-    // sur une icône par défaut, donc rien ne casse mais ça ne doit pas être
-    // oublié avant le packaging final.
-    icon: path.join(__dirname, 'assets', 'icon.png'),
+    width: DEFAULT_WINDOW_WIDTH,
+    height: DEFAULT_WINDOW_HEIGHT,
+    minWidth: MIN_WINDOW_WIDTH,
+    minHeight: MIN_WINDOW_HEIGHT,
+    center: true,
+    show: false, // affichée seulement une fois prête (voir 'ready-to-show' plus bas)
+    backgroundColor: WINDOW_BACKGROUND_COLOR,
+    // Barre de menu masquée par défaut (Alt pour l'afficher sur
+    // Windows/Linux) : notre menu applicatif (buildMenu) reste actif et
+    // accessible, mais n'est pas imposé visuellement — élément Electron
+    // "non désiré" en moins dans l'interface par défaut.
+    autoHideMenuBar: true,
+    icon: APP_ICON_PATH,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true, // isole le contexte JS du preload de celui de la page web
@@ -137,18 +330,96 @@ function createWindow() {
     },
   });
 
+  // Affiche la fenêtre seulement quand son contenu est prêt à être peint,
+  // pour éviter le flash de fenêtre blanche vide typique d'Electron.
+  win.once('ready-to-show', () => {
+    win.show();
+  });
+
+  // Voir le commentaire sur fenetreEstFocusee plus haut : ces logs de
+  // diagnostic permettent de confirmer, dans le terminal npm start, si ces
+  // événements de minimisation sont bel et bien émis sous WSLg (ils ne le
+  // sont pas dans les faits — voir plus bas — mais restent utiles pour
+  // diagnostiquer un jour un souci équivalent sur une vraie installation).
+  win.on('minimize', () => {
+    logDebugNotif('[fenetre] minimize');
+  });
+  win.on('restore', () => {
+    logDebugNotif('[fenetre] restore');
+  });
+  win.on('focus', () => {
+    fenetreEstFocusee = true;
+    logDebugNotif('[fenetre] focus');
+    // Voir 'window:focus-changed' plus bas : le renderer a besoin de ce
+    // signal pour ne marquer une conversation comme "lue" (NotifPrefs.
+    // marquerCommeLu) que si la fenêtre a réellement le focus au moment où
+    // elle est affichée — sinon un message reçu pendant que la fenêtre est
+    // en arrière-plan se retrouverait marqué "lu" côté rond de notification
+    // alors même qu'une vraie notification système vient d'être déclenchée
+    // pour ce même message (voir showMessageNotification, qui se base déjà
+    // sur fenetreEstFocusee pour la même raison).
+    envoyerVersRenderer('window:focus-changed', true);
+  });
+  win.on('blur', () => {
+    fenetreEstFocusee = false;
+    logDebugNotif('[fenetre] blur');
+    envoyerVersRenderer('window:focus-changed', false);
+  });
+  // Piste de secours : sous WSLg, le bouton de réduction natif ne semble
+  // déclencher ni 'minimize' ni changer isMinimized()/isFocused() — peut-être
+  // que WSLg traduit ça par 'hide' plutôt que par une vraie minimisation.
+  // Log de diagnostic ajouté pour vérifier ; si rien de tout ça ne se
+  // déclenche non plus, c'est très probablement une limite de WSLg qu'on ne
+  // peut pas contourner depuis le code de l'app (voir avertirSiWSL()). Confirmé
+  // sans appel : aucun de ces événements ('minimize'/'restore'/'hide'/'show')
+  // ne se déclenche jamais sous cet environnement — seuls 'focus'/'blur'
+  // (voir plus haut) réagissent, d'où l'abandon complet de la minimisation
+  // comme signal de suppression des notifications (voir showMessageNotification).
+  win.on('hide', () => {
+    logDebugNotif('[fenetre] hide');
+  });
+  win.on('show', () => {
+    logDebugNotif('[fenetre] show');
+  });
+
+  // Désactive le zoom Chromium par défaut (Ctrl+molette, pincement) : pas
+  // pertinent pour cette application de bureau et pas prévu dans la maquette.
+  win.webContents.setVisualZoomLevelLimits(1, 1);
+
   // DevTools jamais ouverts automatiquement en production.
   if (isDev) {
     win.webContents.openDevTools({ mode: 'detach' });
+  } else {
+    // Le menu ne propose déjà plus l'accès aux DevTools en production (voir
+    // buildMenu). Les raccourcis clavier Chromium restants (F12 partout,
+    // Ctrl+Shift+I/J/C sur Windows/Linux, Cmd+Option+I/J/C sur macOS) restent
+    // actifs par défaut indépendamment du menu : on réduit la surface en les
+    // interceptant ici. Ce n'est pas une vraie barrière de sécurité (rien
+    // n'empêche d'ouvrir les DevTools via --remote-debugging-port ou un
+    // build modifié) — contextIsolation/sandbox/CSP sont ce qui protège
+    // réellement ; ceci évite seulement un accès accidentel au clavier.
+    const devToolsKeys = new Set(['I', 'J', 'C']);
+    win.webContents.on('before-input-event', (event, input) => {
+      // Windows/Linux : Ctrl+Shift+<touche>. macOS : Cmd+Option+<touche>
+      // (pas Cmd+Shift, qui est un raccourci différent sous Chromium).
+      const modifierPressed =
+        (input.control && input.shift) || (input.meta && input.alt);
+      const isDevToolsShortcut =
+        input.key === 'F12' ||
+        (modifierPressed && devToolsKeys.has(input.key.toUpperCase()));
+      if (isDevToolsShortcut) {
+        event.preventDefault();
+      }
+    });
   }
 
   // --- Navigation contrôlée ------------------------------------------------
   // Empêche le renderer de naviguer ailleurs que dans l'app (protection
   // contre une redirection malveillante si un lien externe finissait dans le DOM).
-  // Comparaison structurée via isAppUrl() : file:// n'autorise que les pages
-  // connues de l'app (login + dashboard), et http://localhost n'autorise que
-  // le hostname + port exacts du serveur de dev, en dev uniquement — jamais
-  // un simple prefix-match sur la chaîne d'URL brute.
+  // Comparaison structurée via isAppUrl() : file:// n'autorise que le point
+  // d'entrée de l'app (pas n'importe quel fichier local), et http://localhost
+  // n'autorise que le hostname + port exacts du serveur de dev, en dev
+  // uniquement — jamais un simple prefix-match sur la chaîne d'URL brute.
   win.webContents.on('will-navigate', (event, url) => {
     if (!isAppUrl(url)) {
       event.preventDefault();
@@ -165,15 +436,17 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  // La page de connexion est chargée en premier ; c'est elle qui, une fois
-  // la session locale établie, demande la navigation vers le dashboard via
-  // le canal IPC 'navigation:tableau-de-bord' (voir plus bas) plutôt qu'une
-  // navigation directe côté renderer.
-  if (isDev) {
-    win.loadURL(DEV_LOGIN_URL);
-  } else {
-    win.loadFile(APP_LOGIN_PATH);
-  }
+  // Le comportement de fermeture (window-all-closed / activate ci-dessous)
+  // et la relance depuis une deuxième instance (second-instance) dépendent
+  // de cette référence : on l'efface quand la fenêtre est réellement fermée
+  // pour ne jamais agir sur une fenêtre détruite.
+  win.on('closed', () => {
+    if (mainWindow === win) {
+      mainWindow = null;
+    }
+  });
+
+  win.loadFile(APP_INDEX_PATH);
 
   return win;
 }
@@ -232,11 +505,6 @@ function configurerCsp() {
   });
 }
 
-// --- IPC : API contrôlée côté Main ------------------------------------------
-// Chaque canal est déclaré explicitement ici ; le renderer n'a jamais accès
-// à ipcRenderer directement (voir preload.js), seulement à ces méthodes.
-let mainWindow = null;
-
 // 'navigation:tableau-de-bord' : appelé par la page de connexion une fois la
 // session locale établie (voir LoginPage.tsx). On revalide la provenance de
 // l'appel via isAppUrl(event.senderFrame.url) avant d'agir dessus — un appel
@@ -284,6 +552,181 @@ exposerCanal('session:utilisateur-connecte', () =>
 );
 
 // --- Salons ------------------------------------------------------------
+ipcMain.handle(
+  'notification:set-active-conversation',
+  (event, conversationId) => {
+    if (!isTrustedIpcEvent(event)) {
+      return false;
+    }
+    activeConversationId = cleanText(conversationId, 120) || null;
+    return true;
+  }
+);
+
+ipcMain.handle('notification:message-received', (event, message) => {
+  if (!isTrustedIpcEvent(event)) {
+    return { shown: false };
+  }
+  return { shown: showMessageNotification(message) };
+});
+
+// Permet au renderer de connaître l'état de focus actuel dès son
+// initialisation (avant qu'un premier événement 'focus'/'blur' n'ait pu être
+// relayé via 'window:focus-changed' ci-dessus) : nécessaire pour que la
+// conversation affichée au chargement de la page ne soit marquée "lue" que
+// si la fenêtre a bien le focus à ce moment-là (voir le commentaire sur
+// 'window:focus-changed' dans createWindow()).
+ipcMain.handle('window:is-focused', (event) => {
+  if (!isTrustedIpcEvent(event)) {
+    return true;
+  }
+  return fenetreEstFocusee;
+});
+
+/**
+ * Met à jour l'indicateur de messages non lus sur l'icône de l'app.
+ * - macOS et certains environnements Linux (Unity notamment) : app.setBadgeCount()
+ *   affiche directement le nombre sur l'icône (dock/launcher) ; sans effet
+ *   ailleurs (ex. Windows, où l'appel ne fait rien et ne lève pas d'erreur).
+ * - Windows n'a pas d'équivalent à setBadgeCount : on superpose une petite
+ *   image sur l'icône de la barre des tâches via setOverlayIcon(). Cette
+ *   image (un cercle avec le nombre dedans) est dessinée côté renderer, qui a
+ *   accès à <canvas> — main.js se contente de la recevoir en dataURL et de la
+ *   convertir en nativeImage.
+ */
+function mettreAJourBadgeApplication(count, iconDataUrl) {
+  const nombre = Number.isFinite(count) && count > 0 ? Math.trunc(count) : 0;
+
+  if (process.platform === 'darwin' || process.platform === 'linux') {
+    if (typeof app.setBadgeCount === 'function') {
+      app.setBadgeCount(nombre);
+    }
+  }
+
+  if (process.platform === 'win32' && mainWindow && !mainWindow.isDestroyed()) {
+    if (nombre > 0 && iconDataUrl) {
+      try {
+        mainWindow.setOverlayIcon(
+          nativeImage.createFromDataURL(iconDataUrl),
+          `${nombre} message(s) non lu(s)`
+        );
+      } catch (erreur) {
+        console.error(
+          "[badge] impossible de créer l'icône de superposition Windows :",
+          erreur
+        );
+      }
+    } else {
+      mainWindow.setOverlayIcon(null, '');
+    }
+  }
+}
+
+ipcMain.handle('notifications:set-badge-count', (event, donnees) => {
+  if (!isTrustedIpcEvent(event)) {
+    return false;
+  }
+  mettreAJourBadgeApplication(donnees?.count, donnees?.iconDataUrl);
+  return true;
+});
+
+// --- Démo : un message simulé par DM et par salon, une seule fois --------
+// But : pouvoir observer une notification (système, ou discret/points) sans
+// action manuelle, quelle que soit la page actuellement affichée (index.html
+// ou message-prive.html), sans avoir à envoyer de vrai message. C'est pour ça
+// que ça vit ici, dans le process main, et non dans renderer.js comme
+// l'ancien `programmerMessageTest()` (retiré) : les deux pages partagent la
+// même fenêtre (`win.loadFile` remplace le document à chaque navigation),
+// donc un minuteur posé côté renderer s'arrête dès qu'on change de page.
+// Anciennement en boucle continue (setInterval, un message toutes les
+// 5s/10s) pour faciliter les tests répétés des notifications ; repassé à un
+// envoi unique (setTimeout) une fois les tests terminés — plus de messages
+// de démo générés en continu pendant l'utilisation normale de l'app.
+// Réservé au développement (voir isDev dans demarrerSimulationMessages
+// ci-dessous) : ces messages injectent de fausses données dans l'état réel
+// du ChatGateway (chatGateway.envoyerMessagePrive/envoyerMessage), ce qui n'a
+// aucun sens pour une utilisatrice réelle d'un build empaqueté — seulement
+// pour tester les notifications pendant le développement.
+// Chaque message est poussé aux deux pages via l'événement
+// 'notifications:message-simule' (voir preload.js / renderer.js /
+// message-prive.js) ; c'est le renderer qui décide ensuite, selon le mode
+// NotifPrefs de l'utilisateur actuellement affiché, s'il faut déclencher une
+// vraie notification système.
+//
+// Même règle de calcul d'ID que creerDmId() dans MockGatewayRuntime.js (les
+// deux ID triés puis joints par ':') : 'u1' < 'u2', donc 'u1:u2'.
+const DEMO_DM_ID = 'u1:u2';
+const DEMO_DM_EXPEDITEUR_ID = 'u2'; // ariane
+const DEMO_SALON_ID = 's1'; // général
+// Volontairement 'u3' (eva) et non 'u1' (sam) : le message dans #général doit
+// être visible que l'utilisateur simulé courant soit sam OU ariane. S'il
+// était envoyé par 'u1', un test fait en tant que sam ne verrait jamais ce
+// message comme non lu (on ne se notifie jamais soi-même, voir
+// NotifPrefs.estNonLu) — même chose pour le DM si son expéditeur était le
+// même que l'utilisateur simulé courant.
+const DEMO_SALON_EXPEDITEUR_ID = 'u3'; // eva
+
+let demoDmTimeoutId = null;
+let demoSalonTimeoutId = null;
+
+function envoyerVersRenderer(canal, donnees) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(canal, donnees);
+  }
+}
+
+function simulerMessagePrive() {
+  try {
+    const message = chatGateway.envoyerMessagePrive({
+      conversationId: DEMO_DM_ID,
+      utilisateurId: DEMO_DM_EXPEDITEUR_ID,
+      contenu: 'Message de démo (ariane → sam).',
+    });
+    envoyerVersRenderer('notifications:message-simule', {
+      type: 'prive',
+      ...message,
+    });
+  } catch (erreur) {
+    console.error('[simulerMessagePrive] ERREUR:', erreur);
+  }
+}
+
+function simulerMessageSalon() {
+  try {
+    const message = chatGateway.envoyerMessage({
+      salonId: DEMO_SALON_ID,
+      utilisateurId: DEMO_SALON_EXPEDITEUR_ID,
+      contenu: 'Message de démo dans #général (eva).',
+    });
+    envoyerVersRenderer('notifications:message-simule', {
+      type: 'salon',
+      conversationId: DEMO_SALON_ID,
+      ...message,
+    });
+  } catch (erreur) {
+    console.error('[simulerMessageSalon] ERREUR:', erreur);
+  }
+}
+
+function demarrerSimulationMessages() {
+  arreterSimulationMessages();
+  // Jamais en production : voir le commentaire au-dessus de DEMO_DM_ID.
+  // Sans ce garde-fou, chaque lancement de l'app empaquetée injecterait ces
+  // deux messages fabriqués dans les conversations de tout le monde.
+  if (!isDev) return;
+  // Un seul envoi par canal (setTimeout, pas setInterval) : plus de boucle
+  // continue une fois les tests de notifications terminés.
+  demoDmTimeoutId = setTimeout(simulerMessagePrive, 5000);
+  demoSalonTimeoutId = setTimeout(simulerMessageSalon, 10000);
+}
+
+function arreterSimulationMessages() {
+  if (demoDmTimeoutId) clearTimeout(demoDmTimeoutId);
+  if (demoSalonTimeoutId) clearTimeout(demoSalonTimeoutId);
+  demoDmTimeoutId = null;
+  demoSalonTimeoutId = null;
+}
+
 exposerCanal('salons:etat', ({ utilisateurId }) =>
   chatGateway.obtenirEtat(utilisateurId)
 );
@@ -354,20 +797,24 @@ if (!gotSingleInstanceLock) {
   });
 
   app.whenReady().then(() => {
+    avertirSiWSL();
     Menu.setApplicationMenu(buildMenu());
     configurerCsp();
     mainWindow = createWindow();
+    demarrerSimulationMessages();
 
     app.on('activate', () => {
       // Comportement standard macOS : l'app reste active dans le dock après
       // la fermeture de toutes les fenêtres, et on en recrée une au clic.
       if (BrowserWindow.getAllWindows().length === 0) {
         mainWindow = createWindow();
+        demarrerSimulationMessages();
       }
     });
   });
 
   app.on('window-all-closed', () => {
+    arreterSimulationMessages();
     // Sur macOS, une app reste active sans fenêtre ouverte (convention de
     // plateforme) ; ailleurs, fermer la dernière fenêtre ferme l'app.
     if (process.platform !== 'darwin') {
