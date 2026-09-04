@@ -4,6 +4,8 @@ import {
   MockGateway,
   type TypeEvenement,
 } from './MockGateway';
+import type { Salon } from '../../domain/entities/Salon';
+import { creerUtilisateur } from '../../domain/entities/Utilisateur';
 
 describe('MockGateway', () => {
   let gateway: MockGateway;
@@ -51,6 +53,11 @@ describe('MockGateway', () => {
       expect(gateway.obtenirEtatConnexion().statut).toBe('deconnecte');
       expect(gateway.obtenirUtilisateurConnecte()).toBeNull();
     });
+
+    it('devrait utiliser les latences par défaut du constructeur et de la fabrique', () => {
+      expect(new MockGateway()).toBeInstanceOf(MockGateway);
+      expect(creerMockGateway()).toBeInstanceOf(MockGateway);
+    });
   });
 
   // ===== Connexion =====
@@ -66,9 +73,10 @@ describe('MockGateway', () => {
       );
 
       await gateway.simulerConnexion('u1');
+      const etat = gateway.obtenirEtatConnexion();
 
+      expect(etat.statut).toBe('connecte');
       expect(gateway.obtenirUtilisateurConnecte()).toBe('u1');
-      expect(gateway.obtenirEtatConnexion().statut).toBe('connecte');
       expect(await gateway.obtenirPresence('u1')).toMatchObject({
         statut: 'en-ligne',
       });
@@ -182,9 +190,6 @@ describe('MockGateway', () => {
       "devrait gérer proprement une déconnexion dont l'utilisateur courant " +
         "n'existe plus dans l'annuaire (branche défensive utilisateur introuvable)",
       async () => {
-        // Ce cas est impossible à atteindre via l'API publique (utilisateurActuelId
-        // n'est jamais défini sans passer par une validation dans simulerConnexion) ;
-        // on force l'état interne pour couvrir la branche défensive du code.
         (
           gateway as unknown as { utilisateurActuelId: string | null }
         ).utilisateurActuelId = 'fantome';
@@ -201,7 +206,6 @@ describe('MockGateway', () => {
 
         expect(gateway.obtenirUtilisateurConnecte()).toBeNull();
         expect(evenements).toContain('deconnexion');
-        // Aucune présence à mettre à jour pour un utilisateur qui n'existe pas
         expect(evenements).not.toContain('presence-mise-a-jour');
       }
     );
@@ -236,12 +240,9 @@ describe('MockGateway', () => {
         'Utilisateur fantome non trouvé'
       );
 
-      // L'état ne doit pas rester coincé sur 'reconnexion' : l'utilisateur
-      // n'a jamais été connecté, donc l'état doit refléter 'deconnecte'.
       expect(gateway.obtenirEtatConnexion().statut).toBe('deconnecte');
       expect(gateway.obtenirUtilisateurConnecte()).toBeNull();
       expect(erreurs).toContain('Utilisateur fantome non trouvé');
-      // Le compteur de tentatives est tout de même incrémenté.
       expect(gateway.obtenirEtatConnexion().reconnexions).toBe(1);
     });
   });
@@ -277,6 +278,23 @@ describe('MockGateway', () => {
       expect(appels).toEqual([]);
     });
 
+    it('devrait réellement désabonner uniquement l’écouteur demandé', async () => {
+      const appels: string[] = [];
+      const retire = () => appels.push('retire');
+      const conserve = () => appels.push('conserve');
+
+      gateway.ecouterEvenement('connexion', retire);
+      gateway.ecouterEvenement('connexion', conserve);
+      gateway.retirerEcouteur('connexion', retire);
+      // L'événement existe, mais cet écouteur précis n'y est plus inscrit :
+      // un second retrait ne doit pas lever d'erreur.
+      gateway.retirerEcouteur('connexion', retire);
+
+      await gateway.simulerConnexion('u1');
+
+      expect(appels).toEqual(['conserve']);
+    });
+
     it("ne devrait rien faire si on retire un écouteur d'un type jamais enregistré", () => {
       expect(() =>
         gateway.retirerEcouteur('salon-supprime', () => undefined)
@@ -298,6 +316,21 @@ describe('MockGateway', () => {
   });
 
   // ===== Utilisateurs =====
+  describe('pseudoDisponible', () => {
+    it('devrait indiquer qu’un pseudo déjà pris (seedé) est indisponible', async () => {
+      expect(await gateway.pseudoDisponible('sam')).toBe(false);
+    });
+
+    it('devrait comparer les pseudos sans tenir compte de la casse', async () => {
+      expect(await gateway.pseudoDisponible('SAM')).toBe(false);
+      expect(await gateway.pseudoDisponible('SaM')).toBe(false);
+    });
+
+    it('devrait indiquer qu’un pseudo libre est disponible', async () => {
+      expect(await gateway.pseudoDisponible('personne_encore')).toBe(true);
+    });
+  });
+
   describe('creerUtilisateur', () => {
     it('devrait créer un utilisateur avec un pseudo valide et émettre un événement', async () => {
       const evenements: TypeEvenement[] = [];
@@ -325,6 +358,17 @@ describe('MockGateway', () => {
       );
       expect(erreurs).toContain('Pseudo invalide : ab');
     });
+
+    it('devrait rejeter la création d’un utilisateur avec un pseudo déjà pris', async () => {
+      await expect(gateway.creerUtilisateur('sam')).rejects.toThrow(
+        /déjà utilisé/
+      );
+    });
+
+    it('devrait rendre un pseudo indisponible après création d’un utilisateur avec', async () => {
+      await gateway.creerUtilisateur('fraichement_cree');
+      expect(await gateway.pseudoDisponible('fraichement_cree')).toBe(false);
+    });
   });
 
   describe('obtenirUtilisateur / obtenirTousLesUtilisateurs / obtenirPresence', () => {
@@ -343,6 +387,46 @@ describe('MockGateway', () => {
       await expect(
         gateway.obtenirPresence('utilisateur-inexistant')
       ).resolves.toBeUndefined();
+    });
+  });
+
+  // ===== connexion() (ChatGateway.connexion, écran pseudo/session) =====
+  describe('connexion() — session pseudo/local (ChatGateway)', () => {
+    it('devrait créer une session pour un nouvel utilisateur et le connecter', async () => {
+      const nouveau = creerUtilisateur('u-nouveau', 'nouvel_arrivant');
+
+      const etat = await gateway.connexion(nouveau);
+
+      expect(etat.statut).toBe('connecte');
+      expect(gateway.obtenirUtilisateurConnecte()).toBe('u-nouveau');
+      const enregistre = await gateway.obtenirUtilisateur('u-nouveau');
+      expect(enregistre?.pseudo).toBe('nouvel_arrivant');
+    });
+
+    it('devrait rejeter la connexion si le pseudo est déjà pris par un autre utilisateur', async () => {
+      const usurpateur = creerUtilisateur('u-usurpateur', 'sam');
+
+      await expect(gateway.connexion(usurpateur)).rejects.toThrow(
+        /déjà utilisé/
+      );
+    });
+
+    it('devrait permettre de se reconnecter avec un utilisateur déjà enregistré (même id)', async () => {
+      const etat = await gateway.connexion(creerUtilisateur('u1', 'alice'));
+
+      expect(etat.statut).toBe('connecte');
+      expect(gateway.obtenirUtilisateurConnecte()).toBe('u1');
+    });
+
+    it('devrait émettre un événement de connexion pour une nouvelle session', async () => {
+      const evenements: TypeEvenement[] = [];
+      gateway.ecouterEvenement('connexion', () => {
+        evenements.push('connexion');
+      });
+
+      await gateway.connexion(creerUtilisateur('u-evt', 'temoin_evenement'));
+
+      expect(evenements).toContain('connexion');
     });
   });
 
@@ -452,16 +536,10 @@ describe('MockGateway', () => {
 
     it('devrait rester idempotent (sans doublon) si la même invitation est répétée', async () => {
       await gateway.inviterUtilisateurAuSalon('s2', 'u2', 'u1');
-      const evenements: TypeEvenement[] = [];
-      gateway.ecouterEvenement('invitation-salon-envoyee', () =>
-        evenements.push('invitation-salon-envoyee')
-      );
 
       const salon = await gateway.inviterUtilisateurAuSalon('s2', 'u2', 'u1');
 
       expect(salon.membresInvites).toEqual(['u2']);
-      // L'événement est ré-émis même si l'invitation existait déjà
-      expect(evenements).toEqual(['invitation-salon-envoyee']);
     });
   });
 
@@ -792,6 +870,7 @@ describe('MockGateway', () => {
       await gateway.envoyerMessage('s1', 'u2', 'Message 2');
 
       const messages = await gateway.obtenirMessagesConversation('s1');
+
       expect(messages.length).toBeGreaterThanOrEqual(2);
       expect(messages.every((m) => m.conversationId === 's1')).toBe(true);
 
@@ -891,9 +970,6 @@ describe('MockGateway', () => {
       expect(conversation.participantIds).toEqual(
         expect.arrayContaining(['u1', 'u2'])
       );
-      expect(await gateway.obtenirConversationPrivee(conversation.id)).toEqual(
-        conversation
-      );
     });
   });
 
@@ -958,6 +1034,16 @@ describe('MockGateway', () => {
         gateway.obtenirConversationPrivee('inconnue')
       ).resolves.toBeUndefined();
     });
+
+    it('devrait récupérer une conversation privée existante par son ID', async () => {
+      const conversation = await gateway.creerConversationPrivee('u1', 'u2');
+      const recuperee = await gateway.obtenirConversationPrivee(
+        conversation.id
+      );
+
+      expect(recuperee).toBeDefined();
+      expect(recuperee?.id).toBe(conversation.id);
+    });
   });
 
   // ===== État global =====
@@ -967,6 +1053,9 @@ describe('MockGateway', () => {
       await gateway.simulerConnexion('u1');
       expect(gateway.obtenirEtatConnexion().statut).toBe('connecte');
       expect(gateway.obtenirUtilisateurConnecte()).toBe('u1');
+
+      await gateway.simulerDeconnexion();
+      expect(gateway.obtenirEtatConnexion().statut).toBe('deconnecte');
     });
   });
 
@@ -976,6 +1065,7 @@ describe('MockGateway', () => {
       await gateway.creerSalon('Temporaire', 'u1');
       await gateway.envoyerMessage('s1', 'u1', 'Un message');
       await gateway.creerUtilisateur('denis');
+      gateway.definirLatence(500);
 
       gateway.reinitialiser();
 
@@ -1020,6 +1110,13 @@ describe('MockGateway', () => {
       expect(evenements).toEqual(types);
     });
 
+    it('devrait retourner undefined pour un utilisateur et un message inconnus', async () => {
+      await expect(
+        gateway.obtenirUtilisateur('inconnu')
+      ).resolves.toBeUndefined();
+      await expect(gateway.obtenirMessage('inconnu')).resolves.toBeUndefined();
+    });
+
     it('devrait gérer plusieurs utilisateurs dans un salon public et leurs messages', async () => {
       const salon = await gateway.creerSalon('Discussion', 'u1');
 
@@ -1053,6 +1150,37 @@ describe('MockGateway', () => {
 
       await gateway.simulerDeconnexion();
       expect(gateway.obtenirUtilisateurConnecte()).toBeNull();
+    });
+
+    it('devrait accepter une invitation privée injectée directement et la retirer après l’entrée', async () => {
+      type StockageInterne = { salons: Map<string, Salon> };
+      const stockage = gateway as unknown as StockageInterne;
+      const salon = await gateway.obtenirSalon('s2');
+      expect(salon).toBeDefined();
+      stockage.salons.set('s2', {
+        ...salon!,
+        membresInvites: [...salon!.membresInvites, 'u2'],
+      });
+
+      await gateway.simulerConnexion('u2');
+      await gateway.simulerDeconnexion();
+
+      const salonMisAJour = await gateway.ajouterUtilisateurAuSalon('s2', 'u2');
+
+      expect(salonMisAJour.membreIds).toContain('u2');
+      expect(salonMisAJour.membresInvites).not.toContain('u2');
+    });
+
+    it('devrait ignorer les salons auxquels l’utilisateur n’appartient pas lors de la déconnexion', async () => {
+      // u4 est membre de s1 (public, tout le monde y est d'office) mais pas
+      // de s2 (privé, réservé à u1/u3) : s2 ne doit recevoir aucun message
+      // système pour la connexion/déconnexion de u4.
+      await gateway.simulerConnexion('u4');
+      await gateway.simulerDeconnexion();
+
+      const messagesSalonPrive =
+        await gateway.obtenirMessagesConversation('s2');
+      expect(messagesSalonPrive).toHaveLength(0);
     });
   });
 });

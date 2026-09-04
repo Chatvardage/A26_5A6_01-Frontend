@@ -12,6 +12,7 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       exclude: [
         'src/**/*.test.ts',
+        'src/**/*.d.ts',
         'src/domain/entities/Conversation.ts',
         'src/infrastructure/gateways/ChatGateway.ts',
       ],

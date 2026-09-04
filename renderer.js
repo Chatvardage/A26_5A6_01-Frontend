@@ -31,7 +31,7 @@ const NotifPrefs =
       traiterMessageSimule: async () => {},
     };
   })();
-let utilisateurActuelId = sessionStorage.getItem('currentUserId') ?? 'u1';
+let utilisateurActuelId = sessionStorage.getItem('currentUserId') ?? null;
 let salonActifId = null;
 let etat = { utilisateurs: [], salons: [], invitations: [] };
 // Miroir côté renderer de fenetreEstFocusee dans main.js (voir
@@ -173,6 +173,29 @@ function ouvrirDialogue(titre, contenu) {
     ...(Array.isArray(contenu) ? contenu : [contenu])
   );
   el.dialogue.showModal();
+}
+
+/**
+ * Ajoute l'utilisateur courant à la liste déroulante de test s'il n'y
+ * figure pas déjà (ex. un nouvel utilisateur créé via l'écran de
+ * connexion, absent des <option> statiques du HTML), et synchronise la
+ * sélection affichée.
+ */
+function synchroniserSelecteurUtilisateur() {
+  if (!el.utilisateur) return;
+  const dejaPresent = Array.from(el.utilisateur.options).some(
+    (option) => option.value === utilisateurActuelId
+  );
+  if (!dejaPresent) {
+    const info = utilisateur(utilisateurActuelId);
+    el.utilisateur.appendChild(
+      creerEl('option', {
+        texte: info?.pseudo ?? utilisateurActuelId,
+        attrs: { value: utilisateurActuelId },
+      })
+    );
+  }
+  el.utilisateur.value = utilisateurActuelId;
 }
 
 async function actualiser() {
@@ -380,7 +403,6 @@ function afficherMessages() {
 
 function afficherActions() {
   const salon = salonActif();
-  // Un salon public n'a pas d'invitations : tout le monde en est déjà membre.
   el.inviter.hidden =
     !salon ||
     salon.hoteId !== utilisateurActuelId ||
@@ -391,11 +413,7 @@ function afficherActions() {
 }
 
 function afficherTout() {
-  // afficherMessages() doit s'exécuter avant afficherSalons() : c'est elle qui
-  // marque le salon affiché comme "lu" (NotifPrefs.marquerCommeLu). Si
-  // afficherSalons() tournait en premier, le rond de notification du salon
-  // qu'on vient de cliquer serait calculé avec l'ancien état (non lu) et ne
-  // disparaîtrait qu'au prochain rafraîchissement.
+  synchroniserSelecteurUtilisateur();
   afficherMessages();
   afficherSalons();
   afficherActions();
@@ -505,7 +523,7 @@ el.invitations.addEventListener('click', () => {
       'Mes invitations',
       creerEl('p', {
         classe: 'empty-state',
-        texte: 'Tu n’as aucune invitation en attente.',
+        texte: 'Tu n\u2019as aucune invitation en attente.',
       })
     );
     return;
@@ -618,6 +636,16 @@ el.utilisateur.addEventListener('change', async (event) => {
 async function initialiserUtilisateurCourant() {
   const utilisateurs = await window.electronAPI.obtenirUtilisateurs();
   remplirSelectUtilisateur(utilisateurs);
+
+  if (!utilisateurActuelId) {
+    // Pas de sélection déjà mémorisée pour cette session (ex. arrivée sur le
+    // dashboard juste après la page de connexion) : on récupère l'utilisateur
+    // qui vient de s'y connecter plutôt que de tomber sur le premier
+    // utilisateur de la liste par défaut (voir l'incident "connecté en tant
+    // qu'alice par défaut" et session:utilisateur-connecte dans main.js).
+    utilisateurActuelId = await window.electronAPI.obtenirUtilisateurConnecte();
+  }
+
   utilisateurActuelId =
     utilisateurs.find((item) => item.id === utilisateurActuelId)?.id ??
     utilisateurs[0]?.id ??

@@ -9,10 +9,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "declaration": true,
     "declarationMap": true,
-    "types": ["vitest/globals"]
+    "types": ["vitest/globals", "node", "vite/client"]
   },
   "include": ["src/**/*", "vite.config.*"],
   "exclude": ["node_modules", "dist"]

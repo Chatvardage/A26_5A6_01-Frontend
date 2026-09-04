@@ -3,7 +3,12 @@
   "version": "1.0.0",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
+    "prestart": "node -e \"if (process.env.NODE_ENV !== 'development') { require('child_process').execSync('npm run build:login', { stdio: 'inherit' }); }\"",
+    "start": "node scripts/start.js",
+    "start:dev": "cross-env NODE_ENV=development node scripts/start.js",
+    "dev:login": "vite",
+    "build:login": "vite build",
+    "build": "npm run build:login",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -11,15 +16,20 @@
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,html,css,md,txt}\""
   },
   "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
+    "@vitejs/plugin-react": "^4.7.0",
     "@vitest/coverage-v8": "^4.1.11",
+    "cross-env": "^7.0.3",
     "electron": "^44.0.0",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.0.0",
     "jsdom": "^29.1.1",
     "prettier": "^3.0.0",
     "typescript": "^5.9.3",
+    "vite": "^6.4.3",
     "vitest": "^4.1.11"
   },
   "description": "Application pour communiquer par des chats - ChatVardage",
@@ -29,5 +39,9 @@
     "electron"
   ],
   "author": "Eva-afk",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  }
 }

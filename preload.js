@@ -65,6 +65,14 @@ contextBridge.exposeInMainWorld('notifications', {
 });
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  pseudoDisponible: (pseudo) =>
+    ipcRenderer.invoke('session:pseudo-disponible', { pseudo }),
+  connexionSession: (utilisateur) =>
+    ipcRenderer.invoke('session:connexion', utilisateur),
+  obtenirUtilisateurConnecte: () =>
+    ipcRenderer.invoke('session:utilisateur-connecte'),
+  allerAuTableauDeBord: () => ipcRenderer.invoke('navigation:tableau-de-bord'),
+
   obtenirEtatSalons: (utilisateurId) =>
     ipcRenderer.invoke('salons:etat', { utilisateurId }),
   creerSalon: (donnees) => ipcRenderer.invoke('salons:creer', donnees),

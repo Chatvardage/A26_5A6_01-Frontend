@@ -6,6 +6,7 @@ const {
   nativeImage,
   shell,
   ipcMain,
+  session,
 } = require('electron');
 const path = require('path');
 const { fileURLToPath } = require('url');
@@ -37,7 +38,7 @@ function logDebugNotif(...args) {
 // plutôt que d'accepter n'importe quel port sur localhost.
 const DEV_SERVER_PORT = '5173';
 
-// Chemin absolu du point d'entrée de l'app, utilisé pour vérifier qu'une
+// Chemin absolu du dashboard (post-connexion), utilisé pour vérifier qu'une
 // navigation file:// reste bien à l'intérieur du bundle (et non, par ex.,
 // file:///etc/passwd ou un autre fichier arbitraire du disque).
 const APP_PAGES_ROOT = path.resolve(__dirname, 'src', 'presentation', 'pages');
@@ -67,6 +68,8 @@ const DEFAULT_WINDOW_HEIGHT = 800;
 const MIN_WINDOW_WIDTH = 960;
 const MIN_WINDOW_HEIGHT = 600;
 
+const APP_LOGIN_PATH = path.resolve(__dirname, 'dist', 'login', 'index.html');
+
 // --- Vérification structurée d'une URL "interne à l'app" --------------------
 // Utilisée à la fois pour le garde-fou de navigation (will-navigate) et pour
 // la validation de l'origine des messages IPC entrants. On parse l'URL et on
@@ -89,12 +92,15 @@ function isAppUrl(url) {
     } catch {
       return false;
     }
-    return isPathInsideAppPages(filePath);
+    // Deux origines file:// légitimes : n'importe quelle page sous
+    // src/presentation/pages/ (dashboard, message-prive.html, ...), et le
+    // point d'entrée buildé de la page de connexion (dist/login/index.html),
+    // qui vit délibérément HORS de cet arbre (voir APP_LOGIN_PATH) — d'où le
+    // deuxième cas, sans quoi aucun appel IPC depuis la page de connexion en
+    // production ne passait jamais isAppUrl().
+    return isPathInsideAppPages(filePath) || filePath === APP_LOGIN_PATH;
   }
 
-  // Le serveur de dev local n'est autorisé qu'en développement, et seulement
-  // sur le hostname et le port attendus (comparaison structurée, pas un
-  // prefix-match qui matcherait aussi "localhost.evil.com").
   if (isDev && parsed.protocol === 'http:') {
     return parsed.hostname === 'localhost' && parsed.port === DEV_SERVER_PORT;
   }
@@ -443,12 +449,139 @@ function createWindow() {
     }
   });
 
-  win.loadFile(APP_INDEX_PATH);
+  // La page de connexion est chargée en premier ; c'est elle qui, une fois
+  // la session locale établie, demande la navigation vers le dashboard via
+  // le canal IPC 'navigation:tableau-de-bord' (voir plus bas) plutôt qu'une
+  // navigation directe côté renderer. En dev, on pointe vers le serveur Vite
+  // (Fast Refresh) ; en prod, vers le bundle buildé dans dist/login.
+  if (isDev) {
+    win.loadURL(`http://localhost:${DEV_SERVER_PORT}/`);
+  } else {
+    win.loadFile(APP_LOGIN_PATH);
+  }
 
   return win;
 }
 
-// --- IPC : API contrôlée côté Main ------------------------------------------
+// --- Content-Security-Policy de la page de connexion (dev vs prod) --------
+// Appliquée via en-tête HTTP plutôt que balise <meta> dans index.html : la
+// CSP diffère entre dev et prod, ce qu'une seule balise statique ne peut pas
+// exprimer.
+//
+// - Dev : le plugin React de Vite injecte un <script type="module"> INLINE
+//   au tout début de <head> pour amorcer le Fast Refresh (React Refresh
+//   runtime) ; 'unsafe-inline' est nécessaire sur script-src en dev
+//   uniquement, sinon ce script est bloqué (échec silencieux au chargement).
+//   connect-src autorise aussi le WebSocket du serveur de dev (HMR).
+// - Prod : le bundle buildé par Vite (`npm run build:login`) ne contient
+//   aucun script inline, donc CSP stricte.
+//
+// Le filtre `isLoginPageRequest` limite l'en-tête à l'origine de la page de
+// connexion (serveur de dev en dev, dossier dist/login en prod) pour ne pas
+// affecter le dashboard, qui a sa propre politique si besoin.
+
+// Vrai si `url` est la requête file:// pour le point d'entrée buildé de la
+// page de connexion (APP_LOGIN_PATH). Réutilise EXACTEMENT la même approche
+// que isAppUrl() ci-dessus (parser l'URL, décoder via fileURLToPath, puis
+// comparer des chemins résolus) plutôt que de reconstruire une chaîne
+// "file://" à partir du chemin disque brut et de comparer par préfixe sur
+// l'URL encodée : `win.loadFile()` fait passer le chemin par
+// `url.pathToFileURL()`, qui pourcent-encode certains caractères (ex. les
+// espaces, fréquents dans "C:\Program Files\..." ou un nom d'utilisateur
+// contenant un espace). Un préfixe construit à la main sur le chemin brut ne
+// contient jamais ces caractères encodés, donc `details.url.startsWith(...)`
+// ne matchait jamais dans ce cas — désactivant silencieusement la CSP
+// stricte de production pour la page même qu'elle est censée protéger.
+// Décoder l'URL (comme isAppUrl() le fait déjà) avant de comparer élimine
+// ce problème à la racine, plutôt que de multiplier les cas spéciaux
+// d'encodage/plateforme dans une reconstruction manuelle.
+function isProdLoginFileUrl(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'file:') return false;
+
+  let filePath;
+  try {
+    filePath = path.resolve(fileURLToPath(parsed));
+  } catch {
+    return false;
+  }
+
+  return filePath === APP_LOGIN_PATH;
+}
+
+function configurerCsp() {
+  const cspDev =
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline'; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    'font-src https://fonts.gstatic.com; ' +
+    "img-src 'self' data:; " +
+    `connect-src 'self' http://localhost:${DEV_SERVER_PORT} ws://localhost:${DEV_SERVER_PORT};`;
+
+  const cspProd =
+    "default-src 'self'; " +
+    "script-src 'self'; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    'font-src https://fonts.gstatic.com; ' +
+    "img-src 'self' data:;";
+
+  const devOrigin = `http://localhost:${DEV_SERVER_PORT}/`;
+
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const isLoginPageRequest = isDev
+      ? details.url.startsWith(devOrigin)
+      : isProdLoginFileUrl(details.url);
+
+    if (!isLoginPageRequest) {
+      callback({ responseHeaders: details.responseHeaders });
+      return;
+    }
+
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [isDev ? cspDev : cspProd],
+      },
+    });
+  });
+}
+
+// 'navigation:tableau-de-bord' : appelé par la page de connexion une fois la
+// session locale établie (voir LoginPage.tsx). On revalide la provenance de
+// l'appel via isAppUrl(event.senderFrame.url) avant d'agir dessus — un appel
+// IPC provenant d'une page non reconnue est silencieusement ignoré plutôt
+// que d'entraîner une navigation.
+//
+// Volontairement différent de exposerCanal()/verifierProvenance() (qui
+// lèvent sur une origine invalide) : ce canal est invoqué automatiquement
+// par LoginPage juste après une connexion réussie, jamais suite à une
+// action utilisateur explicite sur laquelle afficher une erreur. Lever ici
+// ne ferait que produire un rejet de promesse non géré côté renderer sans
+// bénéfice de sécurité additionnel (la navigation elle-même reste bloquée) ;
+// ignorer silencieusement est donc le comportement voulu, pas un oubli.
+ipcMain.handle('navigation:tableau-de-bord', (event) => {
+  const url = event.senderFrame?.url ?? '';
+  if (!isAppUrl(url)) {
+    return;
+  }
+  if (mainWindow) {
+    mainWindow.loadFile(APP_INDEX_PATH);
+  }
+  // Démarre la démo de notifications seulement maintenant : c'est le
+  // premier moment où chatGateway.obtenirUtilisateurConnecte() reflète
+  // réellement la personne qui vient de se connecter (voir
+  // demarrerSimulationMessages plus bas, qui en dépend pour cibler le DM de
+  // démo). L'appeler plus tôt (ex. dans app.whenReady(), avant que
+  // quiconque ait rempli l'écran de connexion) le ferait toujours annuler
+  // silencieusement faute d'utilisateur connecté.
+  demarrerSimulationMessages();
+});
+
 function verifierProvenance(event) {
   if (!isAppUrl(event.senderFrame?.url ?? '')) {
     throw new Error('Origine IPC non autorisée');
@@ -462,6 +595,25 @@ function exposerCanal(nom, action) {
   });
 }
 
+// --- Session (écran de connexion) -------------------------------------------
+// chatGateway est une INSTANCE UNIQUE, partagée par la page de connexion et
+// le dashboard (contrairement à une instance par renderer, qui perdrait
+// l'utilisateur créé dès la navigation vers le dashboard — voir l'incident
+// "connecté en tant qu'alice par défaut"). C'est pour ça que ces canaux
+// vivent ici, dans le même fichier que les canaux 'salons:*'.
+exposerCanal('session:pseudo-disponible', ({ pseudo }) =>
+  chatGateway.pseudoDisponible(pseudo)
+);
+exposerCanal('session:connexion', (utilisateur) =>
+  chatGateway.connexion(utilisateur)
+);
+// Utilisé par le dashboard au démarrage pour savoir qui vient de se
+// connecter, au lieu de coder un utilisateur en dur (voir renderer.js).
+exposerCanal('session:utilisateur-connecte', () =>
+  chatGateway.obtenirUtilisateurConnecte()
+);
+
+// --- Salons ------------------------------------------------------------
 ipcMain.handle(
   'notification:set-active-conversation',
   (event, conversationId) => {
@@ -564,17 +716,24 @@ ipcMain.handle('notifications:set-badge-count', (event, donnees) => {
 // vraie notification système.
 //
 // Même règle de calcul d'ID que creerDmId() dans MockGatewayRuntime.js (les
-// deux ID triés puis joints par ':') : 'u1' < 'u2', donc 'u1:u2'.
-const DEMO_DM_ID = 'u1:u2';
-const DEMO_DM_EXPEDITEUR_ID = 'u2'; // ariane
+// deux ID triés puis joints par ':') : dupliquée ici pour la même raison que
+// dans MockGatewayRuntime.js (pas d'import direct d'un module TS/CJS croisé).
+function creerDmId(utilisateurAId, utilisateurBId) {
+  return [utilisateurAId, utilisateurBId].sort().join(':');
+}
+
 const DEMO_SALON_ID = 's1'; // général
-// Volontairement 'u3' (eva) et non 'u1' (sam) : le message dans #général doit
-// être visible que l'utilisateur simulé courant soit sam OU ariane. S'il
-// était envoyé par 'u1', un test fait en tant que sam ne verrait jamais ce
-// message comme non lu (on ne se notifie jamais soi-même, voir
-// NotifPrefs.estNonLu) — même chose pour le DM si son expéditeur était le
-// même que l'utilisateur simulé courant.
-const DEMO_SALON_EXPEDITEUR_ID = 'u3'; // eva
+// Les deux messages de démo sont désormais envoyés "de la part d'ariane"
+// (u2), à destination de la personne qui vient de se connecter via l'écran
+// de connexion (voir demarrerSimulationMessages ci-dessous) — et non plus
+// entre deux comptes de démo fixes (sam/eva) qui n'ont plus de lien avec la
+// session réellement ouverte. Comme le nouvel utilisateur est créé avec un
+// UUID frais à la connexion (voir LoginPage.tsx), il ne peut jamais être
+// 'u2' lui-même (le pseudo "ariane" est déjà pris par ce compte de seed —
+// voir pseudoDisponible), donc pas de risque de "notification à soi-même"
+// ici, contrairement à l'ancienne version testée en tant que sam/ariane sur
+// le dashboard ouvert directement.
+const DEMO_EXPEDITEUR_ID = 'u2'; // ariane
 
 let demoDmTimeoutId = null;
 let demoSalonTimeoutId = null;
@@ -585,12 +744,19 @@ function envoyerVersRenderer(canal, donnees) {
   }
 }
 
-function simulerMessagePrive() {
+function simulerMessagePrive(destinataireId) {
   try {
+    // S'assure que la conversation existe avant d'y écrire (le seed initial
+    // de MockGatewayRuntime ne connaît pas encore ce nouvel utilisateur) ;
+    // idempotent si elle existe déjà.
+    chatGateway.demarrerConversationPrivee({
+      utilisateurId: DEMO_EXPEDITEUR_ID,
+      autreUtilisateurId: destinataireId,
+    });
     const message = chatGateway.envoyerMessagePrive({
-      conversationId: DEMO_DM_ID,
-      utilisateurId: DEMO_DM_EXPEDITEUR_ID,
-      contenu: 'Message de démo (ariane → sam).',
+      conversationId: creerDmId(DEMO_EXPEDITEUR_ID, destinataireId),
+      utilisateurId: DEMO_EXPEDITEUR_ID,
+      contenu: 'Message de démo (ariane → vous).',
     });
     envoyerVersRenderer('notifications:message-simule', {
       type: 'prive',
@@ -605,8 +771,8 @@ function simulerMessageSalon() {
   try {
     const message = chatGateway.envoyerMessage({
       salonId: DEMO_SALON_ID,
-      utilisateurId: DEMO_SALON_EXPEDITEUR_ID,
-      contenu: 'Message de démo dans #général (eva).',
+      utilisateurId: DEMO_EXPEDITEUR_ID,
+      contenu: 'Message de démo dans #général (ariane).',
     });
     envoyerVersRenderer('notifications:message-simule', {
       type: 'salon',
@@ -620,13 +786,28 @@ function simulerMessageSalon() {
 
 function demarrerSimulationMessages() {
   arreterSimulationMessages();
-  // Jamais en production : voir le commentaire au-dessus de DEMO_DM_ID.
+  // Jamais en production : voir le commentaire au-dessus de DEMO_EXPEDITEUR_ID.
   // Sans ce garde-fou, chaque lancement de l'app empaquetée injecterait ces
   // deux messages fabriqués dans les conversations de tout le monde.
   if (!isDev) return;
+
+  // Le destinataire du DM de démo est l'utilisateur qui vient de se
+  // connecter via l'écran de connexion. Si personne ne s'est connecté par ce
+  // biais (ex. dashboard ouvert directement en dev, sans passer par le
+  // login), ou si c'est ariane elle-même (ne devrait pas arriver, voir plus
+  // haut, mais on se protège quand même), on n'envoie rien plutôt que de
+  // planter ou de se notifier soi-même.
+  const nouvelUtilisateurId = chatGateway.obtenirUtilisateurConnecte();
+  if (!nouvelUtilisateurId || nouvelUtilisateurId === DEMO_EXPEDITEUR_ID) {
+    return;
+  }
+
   // Un seul envoi par canal (setTimeout, pas setInterval) : plus de boucle
   // continue une fois les tests de notifications terminés.
-  demoDmTimeoutId = setTimeout(simulerMessagePrive, 5000);
+  demoDmTimeoutId = setTimeout(
+    () => simulerMessagePrive(nouvelUtilisateurId),
+    5000
+  );
   demoSalonTimeoutId = setTimeout(simulerMessageSalon, 10000);
 }
 
@@ -709,15 +890,18 @@ if (!gotSingleInstanceLock) {
   app.whenReady().then(() => {
     avertirSiWSL();
     Menu.setApplicationMenu(buildMenu());
+    configurerCsp();
     mainWindow = createWindow();
-    demarrerSimulationMessages();
+    // Pas d'appel à demarrerSimulationMessages() ici : à ce stade, la
+    // fenêtre affiche l'écran de connexion et personne n'est encore
+    // connecté. Voir le handler 'navigation:tableau-de-bord' plus haut, qui
+    // la déclenche au bon moment (juste après une connexion réussie).
 
     app.on('activate', () => {
       // Comportement standard macOS : l'app reste active dans le dock après
       // la fermeture de toutes les fenêtres, et on en recrée une au clic.
       if (BrowserWindow.getAllWindows().length === 0) {
         mainWindow = createWindow();
-        demarrerSimulationMessages();
       }
     });
   });
