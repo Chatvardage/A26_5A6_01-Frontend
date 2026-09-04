@@ -130,7 +130,7 @@ class MockGatewayRuntime {
         conversationId: 'u1-u2',
         auteurId: 'u2',
         contenu: 'C’est tout bon, pour 20h.',
-        envoi: now - 1 * 60000,
+        envoi: now - 60000,
       },
       {
         id: 'msg-dm-11',
