@@ -1,5 +1,5 @@
 // UI uniquement : toutes les opérations passent par l'API sécurisée du preload.
-let utilisateurActuelId = 'u1';
+let utilisateurActuelId = sessionStorage.getItem('currentUserId') ?? 'u1';
 let salonActifId = null;
 let etat = { utilisateurs: [], salons: [], invitations: [] };
 

@@ -268,9 +268,11 @@ window.addEventListener('DOMContentLoaded', async () => {
             }
 
             await window.electronAPI.envoyerMessagePrive(
-                state.activeConversationId,
-                content,
-                state.currentUserId
+                {
+                    conversationId: state.activeConversationId,
+                    contenu: content,
+                    utilisateurId: state.currentUserId
+                }
             );
             messageInput.value = '';
             await refreshConversations();

@@ -242,13 +242,12 @@ exposerCanal('salons:envoyer-message', (donnees) =>
 exposerCanal('obtenir-conversations-privees', ({ utilisateurId }) =>
   chatGateway.obtenirConversationsPrivees(utilisateurId)
 );
-ipcMain.handle(
-  'envoyer-message-prive',
-  (event, conversationId, contenu, utilisateurId) => {
-  verifierProvenance(event);
-  return chatGateway.envoyerMessagePrive(conversationId, contenu, utilisateurId);
-}
+
+exposerCanal('envoyer-message-prive', (donnees) =>
+  chatGateway.envoyerMessagePrive(donnees)
 );
+
+
 ipcMain.handle('navigate', (event, page) => {
   verifierProvenance(event);
   const pagePath = path.resolve(

@@ -370,7 +370,7 @@ class MockGatewayRuntime {
     return structuredClone(message);
   }
 
-  envoyerMessagePrive(conversationId, contenu, utilisateurId) {
+  envoyerMessagePrive({ conversationId, contenu, utilisateurId }) {
     const utilisateurActuelId = utilisateurId ?? 'u1';
     this.verifierUtilisateur(utilisateurActuelId);
     const conversation = this.conversationsPrivees.find(
