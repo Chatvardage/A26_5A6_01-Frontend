@@ -7,6 +7,7 @@ const {
 
 const chatGateway = new MockGatewayRuntime();
 
+
 const isDev = process.env.NODE_ENV === 'development';
 
 // Port du serveur de dev local (ex. Vite) : mettre à jour ici s'il change,
@@ -16,13 +17,8 @@ const DEV_SERVER_PORT = '5173';
 // Chemin absolu du point d'entrée de l'app, utilisé pour vérifier qu'une
 // navigation file:// reste bien à l'intérieur du bundle (et non, par ex.,
 // file:///etc/passwd ou un autre fichier arbitraire du disque).
-const APP_INDEX_PATH = path.resolve(
-  __dirname,
-  'src',
-  'presentation',
-  'pages',
-  'index.html'
-);
+const APP_PAGES_ROOT = path.resolve(__dirname, 'src', 'presentation', 'pages');
+const APP_INDEX_PATH = path.resolve(APP_PAGES_ROOT, 'index.html');
 
 // Icône personnalisée de l'app (mascotte de la maquette), utilisée à la
 // fois pour la fenêtre (barre des tâches/dock en dev) et comme base des
@@ -61,7 +57,7 @@ function isAppUrl(url) {
     } catch {
       return false;
     }
-    return filePath === APP_INDEX_PATH;
+    return filePath.startsWith(`${APP_PAGES_ROOT}${path.sep}`);
   }
 
   // Le serveur de dev local n'est autorisé qu'en développement, et seulement
@@ -229,6 +225,9 @@ function exposerCanal(nom, action) {
 exposerCanal('salons:etat', ({ utilisateurId }) =>
   chatGateway.obtenirEtat(utilisateurId)
 );
+exposerCanal('utilisateurs:lister', () =>
+  chatGateway.obtenirUtilisateurs()
+);
 exposerCanal('salons:creer', (donnees) => chatGateway.creerSalon(donnees));
 exposerCanal('salons:inviter', (donnees) => chatGateway.inviter(donnees));
 exposerCanal('salons:accepter-invitation', (donnees) =>
@@ -240,6 +239,29 @@ exposerCanal('salons:refuser-invitation', (donnees) =>
 exposerCanal('salons:envoyer-message', (donnees) =>
   chatGateway.envoyerMessage(donnees)
 );
+exposerCanal('obtenir-conversations-privees', ({ utilisateurId }) =>
+  chatGateway.obtenirConversationsPrivees(utilisateurId)
+);
+
+exposerCanal('envoyer-message-prive', (donnees) =>
+  chatGateway.envoyerMessagePrive(donnees)
+);
+
+
+ipcMain.handle('navigate', (event, page) => {
+  verifierProvenance(event);
+  const pagePath = path.resolve(
+    __dirname,
+    'src',
+    'presentation',
+    'pages',
+    page ?? ''
+  );
+  if (!pagePath.startsWith(`${APP_PAGES_ROOT}${path.sep}`)) {
+    throw new Error('Page de navigation invalide');
+  }
+  return BrowserWindow.fromWebContents(event.sender)?.loadFile(pagePath);
+});
 
 // --- Instance unique ---------------------------------------------------
 // Une appli de clavardage locale n'a pas de sens ouverte deux fois en

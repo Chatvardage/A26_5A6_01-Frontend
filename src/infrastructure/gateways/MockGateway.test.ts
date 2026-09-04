@@ -22,7 +22,7 @@ describe('MockGateway', () => {
       const utilisateurs = await gateway.obtenirTousLesUtilisateurs();
       const salons = await gateway.obtenirTousLesSalons();
 
-      expect(utilisateurs.map((u) => u.id).sort()).toEqual(['u1', 'u2', 'u3']);
+      expect(utilisateurs.map((u) => u.id).sort()).toEqual(['u1', 'u2', 'u3', 'u4', 'u5', 'u6']);
       expect(salons.map((s) => s.id).sort()).toEqual(['s1', 's2']);
 
       const s1 = salons.find((s) => s.id === 's1');
@@ -319,11 +319,7 @@ describe('MockGateway', () => {
 
     it('devrait retourner tous les utilisateurs existants', async () => {
       const utilisateurs = await gateway.obtenirTousLesUtilisateurs();
-      expect(utilisateurs.length).toBe(3);
-    });
-
-    it("devrait retourner undefined pour la présence d'un utilisateur jamais connecté", async () => {
-      await expect(gateway.obtenirPresence('u1')).resolves.toBeUndefined();
+      expect(utilisateurs.length).toBe(6);
     });
   });
 

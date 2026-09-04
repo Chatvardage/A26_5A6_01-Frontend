@@ -1,5 +1,5 @@
 // UI uniquement : toutes les opérations passent par l'API sécurisée du preload.
-let utilisateurActuelId = 'u1';
+let utilisateurActuelId = sessionStorage.getItem('currentUserId') ?? 'u1';
 let salonActifId = null;
 let etat = { utilisateurs: [], salons: [], invitations: [] };
 
@@ -107,6 +107,16 @@ function notifier(message, erreur = false) {
 
 function messageErreur(erreur) {
   return erreur instanceof Error ? erreur.message : String(erreur);
+}
+
+function remplirSelectUtilisateur(utilisateurs) {
+  const options = utilisateurs.map((item) =>
+    creerEl('option', {
+      texte: item.pseudo,
+      attrs: { value: item.id },
+    })
+  );
+  el.utilisateur.replaceChildren(...options);
 }
 
 /**
@@ -422,7 +432,34 @@ el.formulaire.addEventListener('submit', async (event) => {
 
 el.utilisateur.addEventListener('change', async (event) => {
   utilisateurActuelId = event.target.value;
-  await actualiser();
+sessionStorage.setItem('currentUserId', utilisateurActuelId);
+await actualiser();
 });
 
-actualiser();
+async function initialiserUtilisateurCourant() {
+  const utilisateurs = await window.electronAPI.obtenirUtilisateurs();
+  remplirSelectUtilisateur(utilisateurs);
+  utilisateurActuelId =
+    utilisateurs.find((item) => item.id === utilisateurActuelId)?.id ??
+    utilisateurs[0]?.id ??
+    '';
+  el.utilisateur.value = utilisateurActuelId;
+  sessionStorage.setItem('currentUserId', utilisateurActuelId);
+}
+
+async function initialiser() {
+  try {
+    await initialiserUtilisateurCourant();
+    await actualiser();
+  } catch (erreur) {
+    notifier(messageErreur(erreur), true);
+  }
+}
+
+initialiser();
+
+const btn = document.getElementById('message-prive-btn');
+
+btn?.addEventListener('click', () => {
+  window.electronAPI.navigate('message-prive.html');
+});
