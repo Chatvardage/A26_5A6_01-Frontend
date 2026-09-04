@@ -8,28 +8,66 @@
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ChatVardage — Messages privés</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="css/styles.css" />
     <link rel="stylesheet" href="css/message-prive.css" />
   </head>
   <body>
     <nav id="server-rail" aria-label="Navigation principale">
-      <img class="app-logo" src="../../../assets/icon.png" alt="ChatVardage" />
+      <button
+        id="home-btn"
+        title="Retour à l'accueil"
+        aria-label="Retour à l'accueil"
+      >
+        <img
+          class="app-logo"
+          src="../../../assets/icon.png"
+          alt="ChatVardage"
+        />
+      </button>
       <div class="rail-divider"></div>
-      <button class="server-icon" title="Projet" aria-label="Serveur : Projet">P</button>
-      <button class="server-icon" title="Ajouter un serveur" aria-label="Ajouter un serveur">+</button>
+      <button class="server-icon" title="Projet" aria-label="Serveur : Projet">
+        P
+      </button>
+      <button
+        class="server-icon"
+        title="Ajouter un serveur"
+        aria-label="Ajouter un serveur"
+      >
+        +
+      </button>
     </nav>
 
     <aside id="dm-sidebar">
-      <div class="sidebar-header">Messages privés</div>
-      <div class="friends-actions" aria-label="Filtres des messages privés">
-        <button type="button" class="filter-button active" data-filter="all">Tous</button>
-        <button type="button" class="filter-button" data-filter="online">En ligne</button>
+      <div class="sidebar-header">
+        <span>Messages privés</span>
+        <button
+          id="open-new-dm"
+          class="icon-action"
+          title="Nouveau message privé"
+          aria-label="Nouveau message privé"
+        >
+          +
+        </button>
       </div>
-      <ul id="conversation-list" aria-label="Liste des conversations privées"></ul>
+      <div class="friends-actions" aria-label="Filtres des messages privés">
+        <button type="button" class="filter-button active" data-filter="all">
+          Tous
+        </button>
+        <button type="button" class="filter-button" data-filter="online">
+          En ligne
+        </button>
+      </div>
+      <ul
+        id="conversation-list"
+        aria-label="Liste des conversations privées"
+      ></ul>
       <div id="user-panel">
         <div class="avatar"></div>
         <div>
-          <select id="current-user-select" aria-label="Utilisateur simulé"></select>
+          <select
+            id="current-user-select"
+            aria-label="Utilisateur simulé"
+          ></select>
           <div class="presence-label" id="current-user-presence">En ligne</div>
         </div>
       </div>
@@ -68,6 +106,26 @@
         </form>
       </div>
     </main>
+
+    <dialog id="dm-dialog">
+      <form method="dialog" id="dialog-form">
+        <div class="dialog-header">
+          <h2 id="dialog-title">Nouveau message privé</h2>
+          <button
+            value="cancel"
+            formnovalidate
+            class="close-button"
+            aria-label="Fermer"
+          >
+            ×
+          </button>
+        </div>
+        <div id="dialog-content"></div>
+      </form>
+    </dialog>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+
     <script type="module" src="javascript/message-prive.js"></script>
   </body>
 </html>

@@ -1,6 +1,23 @@
 'use strict';
 
 /**
+ * Crée un identifiant unique pour une conversation privée entre deux utilisateurs.
+ * Doit rester identique à `creerDmId` de src/domain/entities/ConversationPrivee.ts :
+ * les deux identifiants sont triés puis joints avec ':'. Ce fichier ne peut pas
+ * importer directement le module TypeScript (Electron l'exécute sans étape de
+ * compilation), d'où cette copie locale — toute modification du schéma d'ID doit
+ * être répercutée dans les deux fichiers.
+ *
+ * @param utilisateurAId ID du premier utilisateur
+ * @param utilisateurBId ID du deuxième utilisateur
+ *
+ * @returns Un identifiant unique pour la conversation privée entre les deux utilisateurs
+ */
+function creerDmId(utilisateurAId, utilisateurBId) {
+  return [utilisateurAId, utilisateurBId].sort().join(':');
+}
+
+/**
  * Mock d'exécution utilisé par Electron jusqu'à l'arrivée du backend réel.
  * L'UI n'accède jamais à cet objet directement : main.js l'expose par des
  * canaux IPC précis via preload.js.
@@ -31,7 +48,7 @@ class MockGatewayRuntime {
         visibilite: 'public',
         hoteId: 'u1',
         // Salon public : tous les utilisateurs en sont membres d'office.
-        membreIds: ['u1', 'u2', 'u3'],
+        membreIds: this.utilisateurs.map((item) => item.id),
         membresInvites: [],
         messages: [
           {
@@ -51,172 +68,134 @@ class MockGatewayRuntime {
         messages: [],
       },
     ];
+    // Mêmes paires DM que celles seedées dans MockGateway.ts, pour que les
+    // deux mocks exposent des données cohérentes.
     this.conversationsPrivees = [
-      { id: 'u1-u2', participantIds: ['u1', 'u2'] },
-      { id: 'u1-u3', participantIds: ['u1', 'u3'] },
-      { id: 'u1-u4', participantIds: ['u1', 'u4'] },
-      { id: 'u1-u5', participantIds: ['u1', 'u5'] },
-      { id: 'u2-u3', participantIds: ['u2', 'u3'] },
-      { id: 'u2-u5', participantIds: ['u2', 'u5'] },
-      { id: 'u2-u6', participantIds: ['u2', 'u6'] },
+      { id: creerDmId('u1', 'u2'), participantIds: ['u1', 'u2'] },
+      { id: creerDmId('u1', 'u3'), participantIds: ['u1', 'u3'] },
+      { id: creerDmId('u1', 'u4'), participantIds: ['u1', 'u4'] },
+      { id: creerDmId('u2', 'u5'), participantIds: ['u2', 'u5'] },
+      { id: creerDmId('u3', 'u6'), participantIds: ['u3', 'u6'] },
     ];
 
     this.messagesPrives = [
       {
         id: 'msg-dm-1',
-        conversationId: 'u1-u2',
+        conversationId: creerDmId('u1', 'u2'),
         auteurId: 'u1',
         contenu: 'Salut, on se voit ce soir ?',
-        envoi: now - 10 * 60000,
+        envoi: now - 16 * 60000,
       },
       {
         id: 'msg-dm-2',
-        conversationId: 'u1-u2',
+        conversationId: creerDmId('u1', 'u2'),
         auteurId: 'u2',
         contenu: 'Oui, vers 20h, ça marche.',
-        envoi: now - 9 * 60000,
+        envoi: now - 15 * 60000,
       },
       {
         id: 'msg-dm-3',
-        conversationId: 'u1-u3',
+        conversationId: creerDmId('u1', 'u3'),
         auteurId: 'u3',
         contenu: 'Tu as vu le dernier sprint ?',
-        envoi: now - 8 * 60000,
+        envoi: now - 14 * 60000,
       },
       {
         id: 'msg-dm-4',
-        conversationId: 'u1-u3',
+        conversationId: creerDmId('u1', 'u3'),
         auteurId: 'u1',
         contenu: 'Oui, je le valide demain.',
-        envoi: now - 7 * 60000,
+        envoi: now - 13 * 60000,
       },
       {
         id: 'msg-dm-5',
-        conversationId: 'u1-u4',
+        conversationId: creerDmId('u1', 'u4'),
         auteurId: 'u4',
         contenu: 'J’ai envoyé le document de synthèse.',
-        envoi: now - 6 * 60000,
+        envoi: now - 12 * 60000,
       },
       {
         id: 'msg-dm-6',
-        conversationId: 'u1-u4',
+        conversationId: creerDmId('u1', 'u4'),
         auteurId: 'u1',
         contenu: 'Parfait, je le relirai tout à l’heure.',
-        envoi: now - 5 * 60000,
-      },
-      {
-        id: 'msg-dm-7',
-        conversationId: 'u2-u5',
-        auteurId: 'u2',
-        contenu: 'Le rapport est prêt pour relecture.',
-        envoi: now - 4 * 60000,
-      },
-      {
-        id: 'msg-dm-8',
-        conversationId: 'u2-u5',
-        auteurId: 'u5',
-        contenu: 'Merci, je le regarde ce midi.',
-        envoi: now - 3 * 60000,
-      },
-      {
-        id: 'msg-dm-9',
-        conversationId: 'u1-u2',
-        auteurId: 'u1',
-        contenu: 'Tu as pu réserver la table ?',
-        envoi: now - 2 * 60000,
-      },
-      {
-        id: 'msg-dm-10',
-        conversationId: 'u1-u2',
-        auteurId: 'u2',
-        contenu: 'C’est tout bon, pour 20h.',
-        envoi: now - 60000,
-      },
-      {
-        id: 'msg-dm-11',
-        conversationId: 'u1-u5',
-        auteurId: 'u5',
-        contenu: 'On fait le point en début d’après-midi ?',
         envoi: now - 11 * 60000,
       },
       {
-        id: 'msg-dm-12',
-        conversationId: 'u1-u5',
-        auteurId: 'u1',
-        contenu: 'Oui, envoie-moi tes disponibilités.',
-        envoi: now - 10.5 * 60000,
-      },
-      {
-        id: 'msg-dm-13',
-        conversationId: 'u2-u3',
-        auteurId: 'u3',
-        contenu: 'Je te partage la maquette finale.',
-        envoi: now - 9.5 * 60000,
-      },
-      {
-        id: 'msg-dm-14',
-        conversationId: 'u2-u3',
+        id: 'msg-dm-7',
+        conversationId: creerDmId('u2', 'u5'),
         auteurId: 'u2',
-        contenu: 'Top, je vais la présenter à l’équipe.',
+        contenu: 'Le rapport est prêt pour relecture.',
+        envoi: now - 10 * 60000,
+      },
+      {
+        id: 'msg-dm-8',
+        conversationId: creerDmId('u2', 'u5'),
+        auteurId: 'u5',
+        contenu: 'Merci, je le regarde ce midi.',
         envoi: now - 9 * 60000,
       },
       {
-        id: 'msg-dm-15',
-        conversationId: 'u2-u6',
-        auteurId: 'u6',
-        contenu: 'Tu peux valider la demande de merge ?',
-        envoi: now - 8.5 * 60000,
-      },
-      {
-        id: 'msg-dm-16',
-        conversationId: 'u2-u6',
-        auteurId: 'u2',
-        contenu: 'Oui, je la traite juste après le stand-up.',
+        id: 'msg-dm-9',
+        conversationId: creerDmId('u1', 'u2'),
+        auteurId: 'u1',
+        contenu: 'Tu as pu réserver la table ?',
         envoi: now - 8 * 60000,
       },
       {
-        id: 'msg-dm-17',
-        conversationId: 'u1-u3',
-        auteurId: 'u1',
-        contenu: 'Pense à mettre à jour les estimations avant la réunion.',
-        envoi: now - 7.5 * 60000,
-      },
-      {
-        id: 'msg-dm-18',
-        conversationId: 'u1-u3',
-        auteurId: 'u3',
-        contenu: 'C’est noté, j’ajuste les cartes Jira.',
+        id: 'msg-dm-10',
+        conversationId: creerDmId('u1', 'u2'),
+        auteurId: 'u2',
+        contenu: 'C’est tout bon, pour 20h.',
         envoi: now - 7 * 60000,
       },
       {
-        id: 'msg-dm-19',
-        conversationId: 'u1-u4',
-        auteurId: 'u4',
-        contenu: 'Est-ce que le retour client a été pris en compte ?',
-        envoi: now - 6.5 * 60000,
-      },
-      {
-        id: 'msg-dm-20',
-        conversationId: 'u1-u4',
+        id: 'msg-dm-11',
+        conversationId: creerDmId('u1', 'u3'),
         auteurId: 'u1',
-        contenu: 'Oui, tout est intégré dans la dernière version.',
+        contenu: 'Pense à mettre à jour les estimations avant la réunion.',
         envoi: now - 6 * 60000,
       },
       {
-        id: 'msg-dm-21',
-        conversationId: 'u2-u6',
-        auteurId: 'u6',
-        contenu: 'Merge effectué, les tests CI passent tous au vert.',
-        envoi: now - 5.5 * 60000,
-      },
-      {
-        id: 'msg-dm-22',
-        conversationId: 'u2-u6',
-        auteurId: 'u2',
-        contenu: 'Super, merci pour ta réactivité !',
+        id: 'msg-dm-12',
+        conversationId: creerDmId('u1', 'u3'),
+        auteurId: 'u3',
+        contenu: 'C’est noté, j’ajuste les cartes Jira.',
         envoi: now - 5 * 60000,
       },
+      {
+        id: 'msg-dm-13',
+        conversationId: creerDmId('u1', 'u4'),
+        auteurId: 'u4',
+        contenu: 'Est-ce que le retour client a été pris en compte ?',
+        envoi: now - 4 * 60000,
+      },
+      {
+        id: 'msg-dm-14',
+        conversationId: creerDmId('u1', 'u4'),
+        auteurId: 'u1',
+        contenu: 'Oui, tout est intégré dans la dernière version.',
+        envoi: now - 3 * 60000,
+      },
+      {
+        id: 'msg-dm-15',
+        conversationId: creerDmId('u3', 'u6'),
+        auteurId: 'u6',
+        contenu: 'Tu as vu le dernier correctif ?',
+        envoi: now - 2 * 60000,
+      },
+      {
+        id: 'msg-dm-16',
+        conversationId: creerDmId('u3', 'u6'),
+        auteurId: 'u3',
+        contenu: 'Oui, il a déjà été validé.',
+        envoi: now - 60000,
+      },
     ];
+
+    // Compteur pour générer des ids de messages privés uniques (voir
+    // envoyerMessagePrive) sans dépendre de l'horloge système.
+    this.prochainMessagePriveIndex = this.messagesPrives.length;
   }
 
   verifierUtilisateur(utilisateurId) {
@@ -256,6 +235,33 @@ class MockGatewayRuntime {
     };
   }
 
+  // Construit le DTO exposé au renderer pour une conversation privée donnée,
+  // du point de vue de `utilisateurActuelId`. Partagé entre
+  // obtenirConversationsPrivees (liste existante) et demarrerConversationPrivee
+  // (nouvelle conversation ou conversation déjà existante) pour que les deux
+  // renvoient toujours la même forme de données.
+  construireConversationPriveeDTO(conversation, utilisateurActuelId) {
+    const otherUserId = conversation.participantIds.find(
+      (id) => id !== utilisateurActuelId
+    );
+    const otherUser = this.utilisateurs.find((u) => u.id === otherUserId);
+    const messages = this.messagesPrives
+      .filter((m) => m.conversationId === conversation.id)
+      .sort((a, b) => a.envoi - b.envoi);
+    const lastMessage = messages[messages.length - 1];
+    return {
+      id: conversation.id,
+      participantIds: [...conversation.participantIds],
+      otherUser: {
+        id: otherUser?.id ?? 'inconnu',
+        pseudo: otherUser?.pseudo ?? 'Utilisateur',
+        present: this.presences[otherUser?.id] === 'en-ligne',
+      },
+      messages: messages.map((m) => ({ ...m })),
+      lastMessage: lastMessage ? { ...lastMessage } : null,
+    };
+  }
+
   obtenirConversationsPrivees(utilisateurId) {
     const utilisateurActuelId = utilisateurId ?? 'u1';
     this.verifierUtilisateur(utilisateurActuelId);
@@ -263,27 +269,38 @@ class MockGatewayRuntime {
       .filter((conversation) =>
         conversation.participantIds.includes(utilisateurActuelId)
       )
-      .map((conversation) => {
-        const otherUserId = conversation.participantIds.find(
-          (id) => id !== utilisateurActuelId
-        );
-        const otherUser = this.utilisateurs.find((u) => u.id === otherUserId);
-        const messages = this.messagesPrives
-          .filter((m) => m.conversationId === conversation.id)
-          .sort((a, b) => a.envoi - b.envoi);
-        const lastMessage = messages[messages.length - 1];
-        return {
-          id: conversation.id,
-          participantIds: [...conversation.participantIds],
-          otherUser: {
-            id: otherUser?.id ?? 'inconnu',
-            pseudo: otherUser?.pseudo ?? 'Utilisateur',
-            present: this.presences[otherUser?.id] === 'en-ligne',
-          },
-          messages: messages.map((m) => ({ ...m })),
-          lastMessage: lastMessage ? { ...lastMessage } : null,
-        };
-      });
+      .map((conversation) =>
+        this.construireConversationPriveeDTO(conversation, utilisateurActuelId)
+      );
+  }
+
+  // Démarre une nouvelle conversation privée avec un autre utilisateur, ou
+  // retourne l'existante si les deux utilisateurs ont déjà un DM (même schéma
+  // d'ID que creerDmId : idempotent, jamais de doublon).
+  demarrerConversationPrivee({ utilisateurId, autreUtilisateurId }) {
+    const utilisateurActuelId = utilisateurId ?? 'u1';
+    this.verifierUtilisateur(utilisateurActuelId);
+    this.verifierUtilisateur(autreUtilisateurId);
+    if (utilisateurActuelId === autreUtilisateurId) {
+      throw new Error('Impossible de démarrer une conversation avec soi-même');
+    }
+
+    const conversationId = creerDmId(utilisateurActuelId, autreUtilisateurId);
+    let conversation = this.conversationsPrivees.find(
+      (item) => item.id === conversationId
+    );
+    if (!conversation) {
+      conversation = {
+        id: conversationId,
+        participantIds: [utilisateurActuelId, autreUtilisateurId],
+      };
+      this.conversationsPrivees.push(conversation);
+    }
+
+    return this.construireConversationPriveeDTO(
+      conversation,
+      utilisateurActuelId
+    );
   }
 
   creerSalon({ nom, prive, utilisateurId }) {
@@ -383,8 +400,9 @@ class MockGatewayRuntime {
     const texte =
       typeof contenu === 'string' ? contenu.trim().slice(0, 2000) : '';
     if (!texte) throw new Error('Le message est vide');
+    this.prochainMessagePriveIndex += 1;
     const message = {
-      id: `mp-${Date.now()}`,
+      id: `mp-${this.prochainMessagePriveIndex}`,
       conversationId,
       auteurId: utilisateurActuelId,
       contenu: texte,
