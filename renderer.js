@@ -1,4 +1,38 @@
 // UI uniquement : toutes les opérations passent par l'API sécurisée du preload.
+//
+// Pas de require() ici : nodeIntegration est désactivé (à raison, voir
+// main.js) donc ce fichier n'a accès ni à Node ni au module i18n.js utilisé
+// par main.js/preload.js. Le dictionnaire de traductions est demandé UNE
+// FOIS au démarrage via IPC (voir initialiser() plus bas), puis mis en
+// cache ici pour des lookups synchrones — pas d'aller-retour IPC par
+// traduction. Même logique que src/i18n/i18n.js et src/i18n/i18n-web.ts
+// (voir leurs commentaires respectifs) : la fonction est dupliquée par
+// nécessité entre les environnements du projet, mais translations.json
+// reste l'unique source des textes eux-mêmes.
+let dictionnaires = null; // rempli par initialiser() avant le premier rendu
+let langueActuelle = 'fr';
+
+function t(cle, params) {
+  const dictionnaire =
+    (dictionnaires && dictionnaires[langueActuelle]) ||
+    (dictionnaires && dictionnaires.fr) ||
+    {};
+  const brut = cle
+    .split('.')
+    .reduce(
+      (acc, partie) =>
+        acc && typeof acc === 'object' ? acc[partie] : undefined,
+      dictionnaire
+    );
+  let texte = typeof brut === 'string' ? brut : cle;
+  if (params) {
+    for (const cleParam of Object.keys(params)) {
+      texte = texte.split(`{${cleParam}}`).join(String(params[cleParam]));
+    }
+  }
+  return texte;
+}
+
 // NotifPrefs vient de notif-prefs.js, un script classique chargé avant celui-ci
 // (voir index.html) qui expose window.NotifPrefs comme global — cette référence
 // locale évite les erreurs ESLint no-undef (comme le fait déjà message-prive.js
@@ -60,6 +94,7 @@ const el = {
   invitations: document.querySelector('#open-invitations'),
   compteur: document.querySelector('#invitation-count'),
   utilisateur: document.querySelector('#current-user-select'),
+  langue: document.querySelector('#language-select'),
   dialogue: document.querySelector('#app-dialog'),
   titreDialogue: document.querySelector('#dialog-title'),
   contenuDialogue: document.querySelector('#dialog-content'),
@@ -129,7 +164,12 @@ function creerIconeCadenas() {
   return svg;
 }
 
-/** Remplit un élément avec l'icône (salon privé) ou "#" (salon public) suivi du nom. */
+/**
+ * Remplit un élément avec l'icône (salon privé) ou "#" (salon public) suivi
+ * du nom du salon. Le NOM du salon lui-même (ex. "général") est une donnée
+ * saisie par un utilisateur — il n'est jamais traduit, seul le "#"/cadenas
+ * qui l'entoure est de l'UI.
+ */
 function remplirLabelSalon(element, salon) {
   if (salon.visibilite === 'prive') {
     element.replaceChildren(
@@ -148,8 +188,33 @@ function notifier(message, erreur = false) {
   window.setTimeout(() => el.toast.classList.remove('visible'), 2600);
 }
 
+/**
+ * Traduit une erreur venant du processus main (via IPC) en texte lisible
+ * dans la langue courante. Deux couches à défaire : (1) le préfixe
+ * qu'Electron ajoute automatiquement à toute erreur IPC, et (2) le CODE
+ * stable que MockGatewayRuntime lève (ex. "ERR_ACCES_REFUSE_SALON", ou
+ * "ERR_PSEUDO_PRIS|alice" avec un paramètre) plutôt qu'un texte déjà en
+ * français — la couche métier ne doit pas connaître la langue choisie par
+ * l'utilisateur, donc la traduction se fait ici, à la frontière IPC/UI.
+ */
 function messageErreur(erreur) {
-  return erreur instanceof Error ? erreur.message : String(erreur);
+  const brutAvecPrefixe =
+    erreur instanceof Error ? erreur.message : String(erreur);
+  const brut = brutAvecPrefixe.replace(
+    /^Error invoking remote method '[^']+': (?:Error: )?/,
+    ''
+  );
+
+  const [code, ...params] = brut.split('|');
+  const cle = `errors.${code}`;
+  const traduit = t(cle);
+
+  if (traduit === cle) {
+    // Code non reconnu (ex. message déjà en clair) : on garde tel quel
+    // plutôt que d'afficher une clé technique à l'utilisateur.
+    return brut;
+  }
+  return params.length ? traduit.replace('{pseudo}', params[0]) : traduit;
 }
 
 function remplirSelectUtilisateur(utilisateurs) {
@@ -173,6 +238,29 @@ function ouvrirDialogue(titre, contenu) {
     ...(Array.isArray(contenu) ? contenu : [contenu])
   );
   el.dialogue.showModal();
+}
+
+/**
+ * Retraduit tout le texte STATIQUE du HTML (aria-labels, titres, libellés
+ * de boutons qui ne dépendent d'aucune donnée dynamique) via les attributs
+ * data-i18n / data-i18n-title / data-i18n-aria-label. Les textes construits
+ * dynamiquement (messages, dialogues, toasts...) sont eux traduits
+ * directement dans les fonctions qui les génèrent.
+ */
+function appliquerTraductionsStatiques() {
+  document.documentElement.lang = langueActuelle;
+  document.querySelectorAll('[data-i18n]').forEach((element) => {
+    element.textContent = t(element.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach((element) => {
+    element.setAttribute('title', t(element.dataset.i18nTitle));
+  });
+  document.querySelectorAll('[data-i18n-aria-label]').forEach((element) => {
+    element.setAttribute('aria-label', t(element.dataset.i18nAriaLabel));
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((element) => {
+    element.setAttribute('placeholder', t(element.dataset.i18nPlaceholder));
+  });
 }
 
 /**
@@ -291,7 +379,7 @@ function derniereActiviteSalon(salon) {
 
 function afficherSalons() {
   el.salons.replaceChildren(
-    creerEl('li', { classe: 'category', texte: 'Salons' })
+    creerEl('li', { classe: 'category', texte: t('channels.categorySalons') })
   );
   const afficherRonds = NotifPrefs.afficheRonds(utilisateurActuelId);
   let auMoinsUnSalonNonLu = false;
@@ -334,7 +422,7 @@ function afficherMessages() {
   const salon = salonActif();
   el.messages.replaceChildren();
   if (!salon) {
-    el.nomSalon.textContent = 'Aucun salon accessible';
+    el.nomSalon.textContent = t('channels.noChannelAccessible');
     el.prive.hidden = true;
     el.message.disabled = true;
     definirConversationActivePourNotifs(null);
@@ -361,18 +449,21 @@ function afficherMessages() {
   remplirLabelSalon(el.nomSalon, salon);
   el.prive.hidden = salon.visibilite !== 'prive';
   el.message.disabled = false;
-  el.message.placeholder = `Envoyez un message dans #${salon.nom}`;
+  el.message.placeholder = t('channels.sendMessagePlaceholder', {
+    name: salon.nom,
+  });
   if (!salon.messages.length) {
     el.messages.replaceChildren(
       creerEl('p', {
         classe: 'empty-state',
-        texte: 'Aucun message dans ce salon.',
+        texte: t('channels.noMessages'),
       })
     );
     return;
   }
   salon.messages.forEach((message) => {
-    const auteur = utilisateur(message.auteurId)?.pseudo ?? 'Système';
+    const auteur =
+      utilisateur(message.auteurId)?.pseudo ?? t('channels.system');
     const estMessagePersonnel = message.auteurId === utilisateurActuelId;
     const article = creerEl('article', {
       classe: estMessagePersonnel ? 'message-row own' : 'message-row',
@@ -387,7 +478,9 @@ function afficherMessages() {
                 creerEl('span', { classe: 'author', texte: auteur }),
                 creerEl('span', {
                   classe: 'timestamp',
-                  texte: new Date(message.date).toLocaleString('fr-CA'),
+                  texte: new Date(message.date).toLocaleString(
+                    langueActuelle === 'en' ? 'en-CA' : 'fr-CA'
+                  ),
                 }),
               ],
             }),
@@ -413,6 +506,7 @@ function afficherActions() {
 }
 
 function afficherTout() {
+  appliquerTraductionsStatiques();
   synchroniserSelecteurUtilisateur();
   afficherMessages();
   afficherSalons();
@@ -433,17 +527,23 @@ el.creer.addEventListener('click', () => {
   const champPrive = creerEl('input', { attrs: { type: 'checkbox' } });
   const boutonConfirmer = creerEl('button', {
     classe: 'primary-button full-width',
-    texte: 'Créer',
+    texte: t('channels.create'),
     attrs: { type: 'button' },
   });
 
-  ouvrirDialogue('Créer un salon', [
+  ouvrirDialogue(t('channels.createChannelTitle'), [
     creerEl('label', {
-      enfants: [document.createTextNode('Nom du salon'), champNom],
+      enfants: [
+        document.createTextNode(t('channels.channelNameLabel')),
+        champNom,
+      ],
     }),
     creerEl('label', {
       classe: 'checkbox-row',
-      enfants: [champPrive, document.createTextNode(' Salon privé')],
+      enfants: [
+        champPrive,
+        document.createTextNode(` ${t('channels.privateChannelLabel')}`),
+      ],
     }),
     boutonConfirmer,
   ]);
@@ -458,7 +558,7 @@ el.creer.addEventListener('click', () => {
       salonActifId = salon.id;
       el.dialogue.close();
       await actualiser();
-      notifier('Salon créé.');
+      notifier(t('channels.channelCreated'));
     } catch (erreur) {
       notifier(messageErreur(erreur), true);
     }
@@ -475,12 +575,14 @@ el.inviter.addEventListener('click', () => {
       !salon.membresInvites.includes(item.id)
   );
 
+  const titreDialogue = t('channels.inviteInto', { name: salon.nom });
+
   if (!candidats.length) {
     ouvrirDialogue(
-      `Inviter dans #${salon.nom}`,
+      titreDialogue,
       creerEl('p', {
         classe: 'empty-state',
-        texte: 'Tous les utilisateurs sont déjà membres ou invités.',
+        texte: t('channels.allUsersAlreadyMembers'),
       })
     );
     return;
@@ -494,7 +596,7 @@ el.inviter.addEventListener('click', () => {
       dataset: { userId: item.id },
       enfants: [
         document.createTextNode(item.pseudo),
-        creerEl('span', { texte: 'Inviter' }),
+        creerEl('span', { texte: t('channels.invite') }),
       ],
     });
     bouton.addEventListener('click', async () => {
@@ -506,7 +608,7 @@ el.inviter.addEventListener('click', () => {
         });
         el.dialogue.close();
         await actualiser();
-        notifier('Invitation envoyée.');
+        notifier(t('channels.invitationSent'));
       } catch (erreur) {
         notifier(messageErreur(erreur), true);
       }
@@ -514,16 +616,16 @@ el.inviter.addEventListener('click', () => {
     liste.appendChild(bouton);
   });
 
-  ouvrirDialogue(`Inviter dans #${salon.nom}`, liste);
+  ouvrirDialogue(titreDialogue, liste);
 });
 
 el.invitations.addEventListener('click', () => {
   if (!etat.invitations.length) {
     ouvrirDialogue(
-      'Mes invitations',
+      t('channels.myInvitations'),
       creerEl('p', {
         classe: 'empty-state',
-        texte: 'Tu n\u2019as aucune invitation en attente.',
+        texte: t('channels.noInvitationsPending'),
       })
     );
     return;
@@ -534,7 +636,7 @@ el.invitations.addEventListener('click', () => {
     const boutonAccepter = creerEl('button', {
       classe: 'accept-invite',
       attrs: { type: 'button' },
-      texte: 'Accepter',
+      texte: t('channels.accept'),
     });
     boutonAccepter.addEventListener('click', () =>
       repondreInvitation(salon.id, true)
@@ -543,7 +645,7 @@ el.invitations.addEventListener('click', () => {
     const boutonRefuser = creerEl('button', {
       classe: 'reject-invite',
       attrs: { type: 'button' },
-      texte: 'Refuser',
+      texte: t('channels.decline'),
     });
     boutonRefuser.addEventListener('click', () =>
       repondreInvitation(salon.id, false)
@@ -556,7 +658,11 @@ el.invitations.addEventListener('click', () => {
           enfants: [
             creerEl('strong', { texte: `# ${salon.nom}` }),
             creerEl('small', {
-              texte: `Invité par ${utilisateur(salon.hoteId)?.pseudo ?? 'Inconnu'}`,
+              texte: t('channels.invitedBy', {
+                host:
+                  utilisateur(salon.hoteId)?.pseudo ??
+                  t('channels.unknownUser'),
+              }),
             }),
           ],
         }),
@@ -566,7 +672,7 @@ el.invitations.addEventListener('click', () => {
     liste.appendChild(carte);
   });
 
-  ouvrirDialogue('Mes invitations', liste);
+  ouvrirDialogue(t('channels.myInvitations'), liste);
 });
 
 async function repondreInvitation(salonId, accepter) {
@@ -578,7 +684,11 @@ async function repondreInvitation(salonId, accepter) {
     if (accepter) salonActifId = salonId;
     el.dialogue.close();
     await actualiser();
-    notifier(accepter ? 'Invitation acceptée.' : 'Invitation refusée.');
+    notifier(
+      accepter
+        ? t('channels.invitationAccepted')
+        : t('channels.invitationDeclined')
+    );
   } catch (erreur) {
     notifier(messageErreur(erreur), true);
   }
@@ -601,12 +711,14 @@ el.membres.addEventListener('click', () => {
         creerEl('span', { texte: membre.pseudo }),
       ];
       if (membre.id === salon.hoteId) {
-        enfants.push(creerEl('span', { classe: 'owner-label', texte: 'Hôte' }));
+        enfants.push(
+          creerEl('span', { classe: 'owner-label', texte: t('channels.host') })
+        );
       }
       liste.appendChild(creerEl('div', { classe: 'member-row', enfants }));
     });
 
-  ouvrirDialogue(`Membres de #${salon.nom}`, liste);
+  ouvrirDialogue(t('channels.membersOf', { name: salon.nom }), liste);
 });
 
 el.formulaire.addEventListener('submit', async (event) => {
@@ -633,6 +745,21 @@ el.utilisateur.addEventListener('change', async (event) => {
   await actualiser();
 });
 
+if (el.langue) {
+  el.langue.addEventListener('change', async (event) => {
+    try {
+      langueActuelle = await window.electronAPI.definirLangue(
+        event.target.value
+      );
+    } catch {
+      // Repli silencieux : la langue affichée reste celle d'avant si le
+      // canal échoue.
+    }
+    el.langue.value = langueActuelle;
+    afficherTout();
+  });
+}
+
 async function initialiserUtilisateurCourant() {
   const utilisateurs = await window.electronAPI.obtenirUtilisateurs();
   remplirSelectUtilisateur(utilisateurs);
@@ -655,6 +782,18 @@ async function initialiserUtilisateurCourant() {
 }
 
 async function initialiser() {
+  try {
+    dictionnaires = await window.electronAPI.obtenirDictionnairesI18n();
+  } catch {
+    // t() se rabat sur la clé brute si dictionnaires reste `null`.
+  }
+  try {
+    langueActuelle = await window.electronAPI.obtenirLangue();
+    if (el.langue) el.langue.value = langueActuelle;
+  } catch {
+    // Repli sur 'fr' (valeur initiale).
+  }
+
   try {
     await initialiserUtilisateurCourant();
     // À ce stade, le script s'est déjà mis en pause une fois (l'await
@@ -832,7 +971,7 @@ elNotifMenu?.querySelectorAll('input[name="notif-mode"]').forEach((radio) => {
     fermerMenuNotif();
     afficherTout();
     actualiserBadgeMessagesPrives();
-    notifier('Préférence de notification mise à jour.');
+    notifier(t('notifications.preferenceUpdated'));
   });
 });
 
@@ -840,10 +979,3 @@ document.addEventListener('click', fermerMenuNotif);
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') fermerMenuNotif();
 });
-
-// `index.html` est pour l'instant une
-// coquille statique (voir le commentaire en tête de src/presentation/pages/
-// index.html). Le rendu des salons/messages/présence, et l'envoi de
-// messages via #message-form, arriveront avec le ChatGateway (mock puis
-// réel), en ajoutant les méthodes correspondantes à `electronAPI` dans
-// preload.js plutôt qu'un accès direct à ipcRenderer.

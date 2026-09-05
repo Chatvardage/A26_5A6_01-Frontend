@@ -1,3 +1,47 @@
+// Pas de require() ici : nodeIntegration est désactivé, comme pour
+// renderer.js (voir son commentaire équivalent en tête de fichier pour le
+// pourquoi complet). Cache local du dictionnaire, rempli une fois au
+// démarrage via IPC.
+let dictionnaires = null;
+let langueActuelle = 'fr';
+
+function t(cle, params) {
+  const dictionnaire =
+    (dictionnaires && dictionnaires[langueActuelle]) ||
+    (dictionnaires && dictionnaires.fr) ||
+    {};
+  const brut = cle
+    .split('.')
+    .reduce(
+      (acc, partie) =>
+        acc && typeof acc === 'object' ? acc[partie] : undefined,
+      dictionnaire
+    );
+  let texte = typeof brut === 'string' ? brut : cle;
+  if (params) {
+    for (const cleParam of Object.keys(params)) {
+      texte = texte.split(`{${cleParam}}`).join(String(params[cleParam]));
+    }
+  }
+  return texte;
+}
+
+function appliquerTraductionsStatiques() {
+  document.documentElement.lang = langueActuelle;
+  document.querySelectorAll('[data-i18n]').forEach((element) => {
+    element.textContent = t(element.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach((element) => {
+    element.setAttribute('title', t(element.dataset.i18nTitle));
+  });
+  document.querySelectorAll('[data-i18n-aria-label]').forEach((element) => {
+    element.setAttribute('aria-label', t(element.dataset.i18nAriaLabel));
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((element) => {
+    element.setAttribute('placeholder', t(element.dataset.i18nPlaceholder));
+  });
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   const listElement = document.getElementById('conversation-list');
   const messageList = document.getElementById('message-list');
@@ -9,12 +53,43 @@ window.addEventListener('DOMContentLoaded', async () => {
   const typingIndicator = document.getElementById('typing-indicator');
   const filterButtons = document.querySelectorAll('.filter-button');
   const currentUserSelect = document.getElementById('current-user-select');
+  const langueSelect = document.getElementById('language-select');
   const openNewDmBtn = document.getElementById('open-new-dm');
   const dmDialog = document.getElementById('dm-dialog');
   const dmDialogContent = document.getElementById('dialog-content');
   const toastElement = document.getElementById('toast');
   const notifBtn = document.getElementById('open-notif-settings');
   const notifMenu = document.getElementById('notif-menu');
+
+  try {
+    dictionnaires = await window.electronAPI.obtenirDictionnairesI18n();
+  } catch {
+    // t() se rabat sur la clé brute si dictionnaires reste `null`.
+  }
+  try {
+    langueActuelle = await window.electronAPI.obtenirLangue();
+    if (langueSelect) langueSelect.value = langueActuelle;
+  } catch {
+    // Repli sur 'fr' (valeur initiale).
+  }
+  appliquerTraductionsStatiques();
+
+  if (langueSelect) {
+    langueSelect.addEventListener('change', async (event) => {
+      try {
+        langueActuelle = await window.electronAPI.definirLangue(
+          event.target.value
+        );
+      } catch {
+        // Repli silencieux : la langue affichée reste celle d'avant si le
+        // canal échoue.
+      }
+      langueSelect.value = langueActuelle;
+      appliquerTraductionsStatiques();
+      renderConversationList();
+      await renderActiveConversation();
+    });
+  }
 
   // window.NotifPrefs vient de notif-prefs.js, un script classique chargé
   // avant ce module (voir message-prive.html) — voir ce fichier pour le
@@ -147,7 +222,17 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   function messageErreur(erreur) {
-    return erreur instanceof Error ? erreur.message : String(erreur);
+    const brutAvecPrefixe =
+      erreur instanceof Error ? erreur.message : String(erreur);
+    const brut = brutAvecPrefixe.replace(
+      /^Error invoking remote method '[^']+': (?:Error: )?/,
+      ''
+    );
+    const [code, ...params] = brut.split('|');
+    const cle = `errors.${code}`;
+    const traduit = t(cle);
+    if (traduit === cle) return brut;
+    return params.length ? traduit.replace('{pseudo}', params[0]) : traduit;
   }
 
   function getFilteredConversations() {
@@ -242,8 +327,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       const li = document.createElement('li');
       const otherUser = conversation.otherUser;
       const isActive = conversation.id === state.activeConversationId;
-      const lastMessage = conversation.lastMessage?.contenu ?? 'Aucun message';
-      const statusLabel = otherUser?.present ? 'En ligne' : 'Hors ligne';
+      const lastMessage =
+        conversation.lastMessage?.contenu ?? t('dm.noMessage');
+      const statusLabel = otherUser?.present ? t('dm.online') : t('dm.offline');
       const subtitle = conversation.lastMessage ? lastMessage : statusLabel;
 
       li.classList.add('conversation');
@@ -278,7 +364,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
       const username = document.createElement('div');
       username.classList.add('username');
-      username.textContent = otherUser?.pseudo ?? 'Utilisateur';
+      username.textContent = otherUser?.pseudo ?? t('dm.defaultUser');
 
       const lastMessageEl = document.createElement('div');
       lastMessageEl.classList.add('last-message');
@@ -351,10 +437,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     const otherUser = conversation.otherUser;
 
     if (topbarName) {
-      topbarName.textContent = otherUser?.pseudo ?? 'Utilisateur';
+      topbarName.textContent = otherUser?.pseudo ?? t('dm.defaultUser');
     }
     if (topbarStatus) {
-      topbarStatus.textContent = otherUser?.present ? 'En ligne' : 'Hors ligne';
+      topbarStatus.textContent = otherUser?.present
+        ? t('dm.online')
+        : t('dm.offline');
       topbarStatus.classList.toggle('online', Boolean(otherUser?.present));
       topbarStatus.classList.toggle('offline', !otherUser?.present);
     }
@@ -363,8 +451,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     if (typingIndicator) {
       typingIndicator.textContent = otherUser?.present
-        ? `${otherUser.pseudo} est en ligne`
-        : 'Hors ligne';
+        ? t('dm.userOnline', { pseudo: otherUser.pseudo })
+        : t('dm.offline');
     }
 
     messageList.innerHTML = '';
@@ -378,7 +466,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
       const text = document.createElement('p');
       text.classList.add('text');
-      text.textContent = 'Aucun message pour le moment.';
+      text.textContent = t('dm.noMessagesYet');
 
       body.appendChild(text);
       row.appendChild(body);
@@ -389,10 +477,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     messages.forEach((message) => {
       const row = document.createElement('article');
       const isOwn = message.auteurId === state.currentUserId;
-      const author =
-        message.auteurId === state.currentUserId
-          ? 'Moi'
-          : (otherUser?.pseudo ?? 'Utilisateur');
+      const author = isOwn
+        ? t('dm.me')
+        : (otherUser?.pseudo ?? t('dm.defaultUser'));
       const timeLabel = new Date(message.envoi).toLocaleTimeString([], {
         hour: '2-digit',
         minute: '2-digit',
@@ -448,7 +535,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (candidats.length === 0) {
       const empty = document.createElement('p');
       empty.classList.add('empty-state');
-      empty.textContent = 'Aucun autre utilisateur disponible.';
+      empty.textContent = t('dm.noOtherUsers');
       dmDialogContent.appendChild(empty);
       return;
     }
@@ -469,7 +556,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       nom.textContent = user.pseudo;
 
       const action = document.createElement('span');
-      action.textContent = dejaOuverte ? 'Ouvrir' : 'Nouveau';
+      action.textContent = dejaOuverte
+        ? t('dm.openExisting')
+        : t('dm.newLabel');
 
       bouton.append(nom, action);
 
@@ -664,7 +753,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       const salons = await obtenirSalonsActuels().catch(() => []);
       actualiserBadgeSalons(salons);
       mettreAJourBadgeApplication(salons);
-      notifier('Préférence de notification mise à jour.');
+      notifier(t('notifications.preferenceUpdated'));
     });
   });
 

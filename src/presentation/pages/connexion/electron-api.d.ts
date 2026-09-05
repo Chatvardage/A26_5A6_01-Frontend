@@ -38,6 +38,16 @@ declare global {
        * par ce biais (ex. dashboard ouvert directement en développement).
        */
       obtenirUtilisateurConnecte: () => Promise<string | null>;
+      /** Retourne la langue actuellement sélectionnée ('fr' ou 'en'). */
+      obtenirLangue: () => Promise<string>;
+      /**
+       * Change la langue de l'app (partagée entre connexion et dashboard,
+       * voir main.js). Retourne la langue effectivement appliquée (repli
+       * silencieux sur l'ancienne si la langue demandée n'est pas
+       * supportée) — toujours utiliser cette valeur de retour plutôt que
+       * supposer que la langue demandée a été acceptée telle quelle.
+       */
+      definirLangue: (langue: string) => Promise<string>;
     };
   }
 }

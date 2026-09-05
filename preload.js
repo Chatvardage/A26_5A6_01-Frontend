@@ -73,6 +73,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('session:utilisateur-connecte'),
   allerAuTableauDeBord: () => ipcRenderer.invoke('navigation:tableau-de-bord'),
 
+  obtenirLangue: () => ipcRenderer.invoke('langue:obtenir'),
+  definirLangue: (langue) => ipcRenderer.invoke('langue:definir', { langue }),
+  obtenirDictionnairesI18n: () => ipcRenderer.invoke('i18n:dictionnaires'),
+
   obtenirEtatSalons: (utilisateurId) =>
     ipcRenderer.invoke('salons:etat', { utilisateurId }),
   creerSalon: (donnees) => ipcRenderer.invoke('salons:creer', donnees),

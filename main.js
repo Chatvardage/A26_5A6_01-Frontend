@@ -13,10 +13,20 @@ const { fileURLToPath } = require('url');
 const {
   MockGatewayRuntime,
 } = require('./src/infrastructure/gateways/MockGatewayRuntime.js');
+const { t, LANGUE_PAR_DEFAUT, LANGUES_SUPPORTEES } = require('./src/i18n/i18n.js');
+const translations = require('./src/i18n/translations.json');
 
 const chatGateway = new MockGatewayRuntime();
 
 const isDev = process.env.NODE_ENV === 'development';
+
+// Langue courante de l'application. Volontairement RÉINITIALISÉE À CHAQUE
+// LANCEMENT (pas de persistance sur disque) : l'app doit toujours démarrer
+// en français par défaut. Partagée entre la page de connexion et le
+// dashboard via les canaux IPC 'langue:obtenir'/'langue:definir' (voir plus
+// bas) — même principe que chatGateway, une instance/état unique côté
+// main, pas un par page.
+let langueActuelle = LANGUE_PAR_DEFAUT;
 
 // Active les logs de diagnostic liés aux notifications (avertissement WSL,
 // décisions de showMessageNotification, transitions minimize/restore/
@@ -111,30 +121,50 @@ function isAppUrl(url) {
 // --- Menu applicatif minimal et maîtrisé -----------------------------------
 // L'énoncé interdit les menus par défaut non contrôlés en production.
 // On construit ici un menu volontairement réduit (pas d'onglets Node/Debug
-// exposés en production).
+// exposés en production), avec un `label` explicite sur CHAQUE entrée
+// (y compris celles avec un `role`) : les libellés par défaut d'Electron
+// pour un `role` suivent la langue du système d'exploitation, pas la
+// langue choisie dans l'app — on ne peut pas s'y fier pour l'i18n.
 function buildMenu() {
   const template = [
     ...(process.platform === 'darwin'
-      ? [{ label: app.getName(), submenu: [{ role: 'quit' }] }]
+      ? [
+        {
+          label: app.getName(),
+          submenu: [{ role: 'quit', label: t(langueActuelle, 'menu.quit') }],
+        },
+      ]
       : []),
     {
-      label: 'Fichier',
+      label: t(langueActuelle, 'menu.file'),
       submenu: [
-        process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' },
+        process.platform === 'darwin'
+          ? { role: 'close', label: t(langueActuelle, 'menu.close') }
+          : { role: 'quit', label: t(langueActuelle, 'menu.quit') },
       ],
     },
     {
-      label: 'Édition',
-      submenu: [{ role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }],
+      label: t(langueActuelle, 'menu.edit'),
+      submenu: [
+        { role: 'copy', label: t(langueActuelle, 'menu.copy') },
+        { role: 'paste', label: t(langueActuelle, 'menu.paste') },
+        { role: 'selectAll', label: t(langueActuelle, 'menu.selectAll') },
+      ],
     },
     // DevTools uniquement en développement : jamais exposé en production.
     ...(isDev
       ? [
-          {
-            label: 'Développement',
-            submenu: [{ role: 'toggleDevTools' }, { role: 'reload' }],
-          },
-        ]
+        {
+          label: t(langueActuelle, 'menu.development'),
+          submenu: [
+            {
+              role: 'toggleDevTools',
+              label: t(langueActuelle, 'menu.toggleDevTools'),
+            },
+            { role: 'reload', label: t(langueActuelle, 'menu.reload') },
+          ],
+        },
+      ]
       : []),
   ];
   return Menu.buildFromTemplate(template);
@@ -199,17 +229,17 @@ function avertirSiWSL() {
   if (!estProbablementWSL()) return;
   logDebugNotif(
     '[notifications] Exécution détectée sous WSL. Les notifications système ' +
-      'passent par libnotify (D-Bus), relayé par WSLg vers le Centre de ' +
-      'notifications Windows — mais seulement si un bus D-Bus de session est ' +
-      'actif dans la distribution. Si les logs disent "notification ' +
-      'affichée" sans que rien ne s\'affiche : (1) vérifier que WSL est à jour ' +
-      '(wsl --update, puis wsl --shutdown, depuis PowerShell), (2) activer ' +
-      'systemd dans /etc/wsl.conf ([boot]\\nsystemd=true) puis relancer WSL, ' +
-      '(3) tester `notify-send "test" "hello"` dans le terminal WSL — si ' +
-      "ça n'affiche rien non plus côté Windows, le problème est dans " +
-      "l'environnement WSL, pas dans cette app. Sur un Windows, un macOS ou " +
-      'un Linux natif (avec un vrai bureau/démon de notifications), ce code ' +
-      'fonctionne sans configuration supplémentaire.'
+    'passent par libnotify (D-Bus), relayé par WSLg vers le Centre de ' +
+    'notifications Windows — mais seulement si un bus D-Bus de session est ' +
+    'actif dans la distribution. Si les logs disent "notification ' +
+    'affichée" sans que rien ne s\'affiche : (1) vérifier que WSL est à jour ' +
+    '(wsl --update, puis wsl --shutdown, depuis PowerShell), (2) activer ' +
+    'systemd dans /etc/wsl.conf ([boot]\\nsystemd=true) puis relancer WSL, ' +
+    '(3) tester `notify-send "test" "hello"` dans le terminal WSL — si ' +
+    "ça n'affiche rien non plus côté Windows, le problème est dans " +
+    "l'environnement WSL, pas dans cette app. Sur un Windows, un macOS ou " +
+    'un Linux natif (avec un vrai bureau/démon de notifications), ce code ' +
+    'fonctionne sans configuration supplémentaire.'
   );
 }
 
@@ -612,6 +642,27 @@ exposerCanal('session:connexion', (utilisateur) =>
 exposerCanal('session:utilisateur-connecte', () =>
   chatGateway.obtenirUtilisateurConnecte()
 );
+
+// --- Langue (i18n) -------------------------------------------------------
+// 'langue:obtenir' : lue par la page de connexion et le dashboard au
+// démarrage pour afficher la bonne langue dès le premier rendu.
+// 'langue:definir' : appelée quand l'utilisateur change de langue (voir le
+// sélecteur dans LoginPage.tsx / renderer.js). Reconstruit aussi le menu
+// natif immédiatement, sans redémarrer l'app.
+// 'i18n:dictionnaires' : le dashboard (renderer.js) n'a pas accès à
+// require() (nodeIntegration: false, comme il se doit) donc ne peut pas
+// charger translations.json lui-même ; ce canal lui fournit tout le
+// dictionnaire (fr + en) EN UNE FOIS au démarrage, mis en cache côté
+// renderer, plutôt qu'un aller-retour IPC par traduction.
+exposerCanal('langue:obtenir', () => langueActuelle);
+exposerCanal('langue:definir', ({ langue }) => {
+  if (LANGUES_SUPPORTEES.includes(langue)) {
+    langueActuelle = langue;
+    Menu.setApplicationMenu(buildMenu());
+  }
+  return langueActuelle;
+});
+exposerCanal('i18n:dictionnaires', () => translations);
 
 // --- Salons ------------------------------------------------------------
 ipcMain.handle(

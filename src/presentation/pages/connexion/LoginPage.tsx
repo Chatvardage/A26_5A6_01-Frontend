@@ -12,6 +12,7 @@ import {
 } from '../../../domain/entities/Utilisateur';
 import mascotLogo from '../../../../maquette/logo.png';
 import type { ChatGateway } from '../../../infrastructure/gateways/ChatGateway';
+import { t, LANGUES_SUPPORTEES } from '../../../i18n/i18n-web';
 
 /**
  * Sous-ensemble de ChatGateway réellement nécessaire à cet écran (principe
@@ -28,6 +29,10 @@ export type GatewaySession = Pick<
 
 interface LoginPageProps {
   gateway: GatewaySession;
+  /** Langue actuelle ('fr' ou 'en'), pilotée par le composant parent (voir main.tsx). */
+  langue: string;
+  /** Demande un changement de langue ; le parent est responsable de le confirmer via l'IPC. */
+  changerLangue: (langue: string) => void;
   /** Appelé une fois la session établie ; par défaut, redirige vers le tableau de bord via electronAPI. */
   onSessionEtablie?: () => void;
 }
@@ -44,25 +49,12 @@ interface ErreurSoumission {
   message: string;
 }
 
-/**
- * Message affiché pour un format de pseudo invalide. Les règles exactes
- * (longueur, caractères permis) sont dans `validationPseudo` (domaine) —
- * ce message reste volontairement générique pour ne pas dupliquer la
- * règle ici et risquer de désynchroniser les deux.
- */
-const MESSAGE_FORMAT_INVALIDE =
-  'Le pseudo doit contenir entre 3 et 20 caractères (lettres, chiffres, _ ou -).';
-
-/**
- * Délai maximal accordé à `gateway.pseudoDisponible` avant de considérer la
- * vérification comme en échec. Sans cette borne, un appel qui ne se résout
- * jamais (IPC bloqué, implémentation réseau future qui ne répond pas) laisse
- * le champ indéfiniment sur "Vérification…", puisque ni `disponibilite` ni
- * `erreurSoumission` ne sont alors mis à jour.
- */
-const DELAI_VERIFICATION_MS = 5000;
-
-export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
+export function LoginPage({
+  gateway,
+  langue,
+  changerLangue,
+  onSessionEtablie,
+}: LoginPageProps) {
   const [pseudo, setPseudo] = useState('');
   const [disponibilite, setDisponibilite] = useState<Disponibilite | null>(
     null
@@ -78,63 +70,21 @@ export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
 
   // Vérification d'unicité "au fil de la frappe" (anti-rafale + jeton pour
   // ignorer une réponse obsolète). Le seul setState dans cet effet se
-  // produit dans les callbacks async (synchronisation avec le gateway),
+  // produit dans le callback async (synchronisation avec le gateway),
   // jamais de façon synchrone dans le corps de l'effet.
   useEffect(() => {
     if (!formatValide) return;
 
     const jeton = ++jetonVerification.current;
     const pseudoVerifie = pseudo.trim();
-    let delaiDepasse: ReturnType<typeof setTimeout> | undefined;
 
-    const debounce = setTimeout(() => {
-      // Borne l'attente : sans ce minuteur, un appel qui ne se résout jamais
-      // (voir DELAI_VERIFICATION_MS) laissait le champ bloqué indéfiniment
-      // sur "Vérification…", car ni `disponibilite` ni `erreurSoumission`
-      // n'étaient alors jamais mis à jour (voir le calcul de `etat` plus bas).
-      delaiDepasse = setTimeout(() => {
-        if (jeton !== jetonVerification.current) return; // réponse obsolète
-        setErreurSoumission({
-          pseudo: pseudoVerifie,
-          message:
-            'Impossible de vérifier la disponibilité du pseudo (délai dépassé).',
-        });
-      }, DELAI_VERIFICATION_MS);
-
-      gateway
-        .pseudoDisponible(pseudoVerifie)
-        .then((disponible) => {
-          if (jeton !== jetonVerification.current) return; // réponse obsolète
-          clearTimeout(delaiDepasse);
-          setDisponibilite({ pseudo: pseudoVerifie, disponible });
-          // Une vérification aboutie pour ce pseudo invalide toute erreur
-          // précédente associée au MÊME pseudo (ex. un timeout ou un rejet
-          // antérieur) : sans ça, `etat` restait bloqué sur 'error' même
-          // après un succès, puisque `erreurSoumission` est prioritaire
-          // dans son calcul plus bas.
-          setErreurSoumission((actuelle) =>
-            actuelle && actuelle.pseudo === pseudoVerifie ? null : actuelle
-          );
-        })
-        .catch((err) => {
-          // Sans ce catch, un appel IPC qui rejette laissait le champ
-          // bloqué sur "Vérification de la disponibilité…" indéfiniment.
-          if (jeton !== jetonVerification.current) return; // réponse obsolète
-          clearTimeout(delaiDepasse);
-          setErreurSoumission({
-            pseudo: pseudoVerifie,
-            message:
-              err instanceof Error
-                ? err.message
-                : 'Impossible de vérifier la disponibilité du pseudo.',
-          });
-        });
+    const debounce = setTimeout(async () => {
+      const disponible = await gateway.pseudoDisponible(pseudoVerifie);
+      if (jeton !== jetonVerification.current) return; // réponse obsolète
+      setDisponibilite({ pseudo: pseudoVerifie, disponible });
     }, 300);
 
-    return () => {
-      clearTimeout(debounce);
-      clearTimeout(delaiDepasse);
-    };
+    return () => clearTimeout(debounce);
   }, [pseudo, formatValide, gateway]);
 
   // --- État affiché, dérivé au rendu (pas de setState synchrone requis) ---
@@ -149,15 +99,15 @@ export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
     etat = 'idle';
   } else if (!formatValide) {
     etat = 'error';
-    message = MESSAGE_FORMAT_INVALIDE;
+    message = t(langue, 'auth.invalidFormat');
   } else if (disponibilite && disponibilite.pseudo === pseudoActuel) {
     etat = disponibilite.disponible ? 'ok' : 'error';
     message = disponibilite.disponible
-      ? 'Pseudo disponible.'
-      : 'Ce pseudo est déjà pris, choisissez-en un autre.';
+      ? t(langue, 'auth.available')
+      : t(langue, 'auth.taken');
   } else {
     etat = 'checking';
-    message = 'Vérification de la disponibilité…';
+    message = t(langue, 'auth.checking');
   }
 
   const handleSubmit = useCallback(
@@ -168,7 +118,7 @@ export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
       if (!validationPseudo(valeur)) {
         setErreurSoumission({
           pseudo: valeur,
-          message: MESSAGE_FORMAT_INVALIDE,
+          message: t(langue, 'auth.invalidFormat'),
         });
         inputRef.current?.focus();
         return;
@@ -186,19 +136,35 @@ export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
         }
       } catch (err) {
         const texte =
-          err instanceof Error
-            ? err.message
-            : 'Impossible de créer la session.';
+          err instanceof Error ? err.message : t(langue, 'errors.generic');
         setErreurSoumission({ pseudo: valeur, message: texte });
         setEnCours(false);
         inputRef.current?.focus();
       }
     },
-    [pseudo, gateway, onSessionEtablie]
+    [pseudo, gateway, onSessionEtablie, langue]
   );
 
   return (
     <div className="screen-login">
+      <div
+        className="language-switch"
+        role="group"
+        aria-label={t(langue, 'auth.languageLabel')}
+      >
+        {LANGUES_SUPPORTEES.map((code) => (
+          <button
+            key={code}
+            type="button"
+            className={`lang-btn ${code === langue ? 'active' : ''}`}
+            onClick={() => changerLangue(code)}
+            aria-pressed={code === langue}
+          >
+            {code.toUpperCase()}
+          </button>
+        ))}
+      </div>
+
       <div className="login-brand">ChatVardage</div>
       <form className="login-card" onSubmit={handleSubmit} noValidate>
         <img
@@ -208,10 +174,10 @@ export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
           aria-hidden="true"
         />
 
-        <label htmlFor="pseudo-input">Pseudo local</label>
+        <label htmlFor="pseudo-input">{t(langue, 'auth.fieldLabel')}</label>
         <div className="login-card-header">
-          <span>Nom d&apos;utilisateur</span>
-          <span>Local</span>
+          <span>{t(langue, 'auth.headerUsername')}</span>
+          <span>{t(langue, 'auth.headerLocal')}</span>
         </div>
 
         <input
@@ -219,7 +185,7 @@ export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
           name="pseudo"
           type="text"
           autoComplete="off"
-          placeholder="Nom d'utilisateur"
+          placeholder={t(langue, 'auth.usernamePlaceholder')}
           maxLength={20}
           value={pseudo}
           onChange={(event) => setPseudo(event.target.value)}
@@ -236,12 +202,10 @@ export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
         </p>
 
         <button type="submit" disabled={enCours}>
-          {enCours ? 'Connexion…' : 'Rejoindre le clavardage'}
+          {enCours ? t(langue, 'auth.connecting') : t(langue, 'auth.join')}
         </button>
 
-        <p className="login-hint">
-          Unique sur cet appareil · aucun mot de passe
-        </p>
+        <p className="login-hint">{t(langue, 'auth.hint')}</p>
       </form>
     </div>
   );
