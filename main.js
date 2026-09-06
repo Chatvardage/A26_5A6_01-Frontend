@@ -458,7 +458,6 @@ function createWindow() {
     win.loadURL(`http://localhost:${DEV_SERVER_PORT}/`);
   } else {
     win.loadFile(APP_LOGIN_PATH);
-    win.webContents.openDevTools();
   }
 
   return win;
