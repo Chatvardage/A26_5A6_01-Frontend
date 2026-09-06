@@ -852,6 +852,14 @@ exposerCanal('demarrer-conversation-privee', (donnees) =>
   chatGateway.demarrerConversationPrivee(donnees)
 );
 
+exposerCanal('modifier-etat-saisie', (donnees) =>
+  chatGateway.modifierEtatSaisie(donnees)
+);
+
+exposerCanal('obtenir-etats-saisie', (donnees) =>
+  chatGateway.obtenirEtatsSaisie(donnees)
+);
+
 ipcMain.handle('navigate', (event, page) => {
   verifierProvenance(event);
   const pagePath = path.resolve(

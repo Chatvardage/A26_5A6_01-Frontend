@@ -1,5 +1,6 @@
 'use strict';
 
+
 /**
  * Crée un identifiant unique pour une conversation privée entre deux utilisateurs.
  * Doit rester identique à `creerDmId` de src/domain/entities/ConversationPrivee.ts :
@@ -33,6 +34,9 @@ class MockGatewayRuntime {
       { id: 'u5', pseudo: 'lili-rose' },
       { id: 'u6', pseudo: 'fiona' },
     ];
+
+    this.etatsSaisie = [];
+
     this.presences = {
       u1: 'en-ligne',
       u2: 'hors-ligne',
@@ -482,6 +486,67 @@ class MockGatewayRuntime {
     };
     this.messagesPrives.push(message);
     return { ...message };
+  }
+
+  obtenirEtatsSaisie(param) {
+    const id = typeof param === 'string' ? param : param?.conversationId;
+
+    if (!id) return [];
+
+    return this.etatsSaisie
+      .filter((item) => item.conversationId === id)
+      .map((item) => ({ ...item }));
+  }
+
+  modifierEtatSaisie({ conversationId, utilisateurId, est_saisie }) {
+    this.verifierUtilisateur(utilisateurId);
+
+    // 1. Chercher si la cible est un DM ou un Salon
+    const dm = this.conversationsPrivees.find(
+      (item) => item.id === conversationId
+    );
+    const salon = this.salons.find((item) => item.id === conversationId);
+
+    if (!dm && !salon) {
+      throw new Error('Conversation ou salon introuvable');
+    }
+
+    // 2. Vérifier les autorisations selon le type de conversation
+    if (dm && !dm.participantIds.includes(utilisateurId)) {
+      throw new Error('Accès refusé à cette conversation');
+    }
+
+    if (salon) {
+      // Pour les salons publics, tout le monde est membre d'office
+      const estMembre =
+        salon.visibilite === 'public' ||
+        salon.membreIds.includes(utilisateurId);
+
+      if (!estMembre) {
+        throw new Error('Accès refusé à ce salon');
+      }
+    }
+
+    // 3. Mettre à jour l'état de saisie
+    const etatSaisie = {
+      conversationId,
+      utilisateurId,
+      est_saisie: Boolean(est_saisie),
+    };
+
+    const etatExistantIndex = this.etatsSaisie.findIndex(
+      (item) =>
+        item.conversationId === conversationId &&
+        item.utilisateurId === utilisateurId
+    );
+
+    if (etatExistantIndex !== -1) {
+      this.etatsSaisie[etatExistantIndex] = etatSaisie;
+    } else {
+      this.etatsSaisie.push(etatSaisie);
+    }
+
+    return { ...etatSaisie };
   }
 }
 
