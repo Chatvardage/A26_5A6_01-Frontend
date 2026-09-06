@@ -95,4 +95,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('envoyer-message-prive', donnees),
   demarrerConversationPrivee: (donnees) =>
     ipcRenderer.invoke('demarrer-conversation-privee', donnees),
+  modifierEtatSaisie: (donnees) =>
+    ipcRenderer.invoke('modifier-etat-saisie', donnees),
+  obtenirEtatsSaisie: (donnees) =>
+    ipcRenderer.invoke('obtenir-etats-saisie', donnees),
 });

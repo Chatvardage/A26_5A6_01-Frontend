@@ -91,8 +91,6 @@
       "noActiveConversation": "Aucune conversation active",
       "noConversationSelected": "Aucune conversation sélectionnée.",
       "writeMessagePlaceholder": "Écrire un message privé",
-      "noActivity": "Aucune activité",
-      "userOnline": "{pseudo} est en ligne",
       "offline": "Hors ligne",
       "online": "En ligne",
       "defaultUser": "Utilisateur",
@@ -102,6 +100,12 @@
       "noOtherUsers": "Aucun autre utilisateur disponible.",
       "openExisting": "Ouvrir",
       "newLabel": "Nouveau"
+    },
+    "typing": {
+      "suffix": " est en train d'écrire...",
+      "someone": "Quelqu'un",
+      "and": " et ",
+      "andOthers": " et {count} autres"
     },
     "errors": {
       "generic": "Une erreur est survenue.",
@@ -113,7 +117,11 @@
       "ERR_SEUL_HOTE_PEUT_INVITER": "Seul l'hôte peut inviter.",
       "ERR_INVITATION_INTROUVABLE": "Invitation introuvable.",
       "ERR_ACCES_REFUSE_SALON": "Accès refusé à ce salon.",
-      "ERR_MESSAGE_VIDE": "Le message est vide."
+      "ERR_MESSAGE_VIDE": "Le message est vide.",
+      "ERR_CONVERSATION_AVEC_SOI_MEME": "Impossible de démarrer une conversation avec soi-même.",
+      "ERR_CONVERSATION_PRIVEE_INTROUVABLE": "Conversation privée introuvable.",
+      "ERR_ACCES_REFUSE_CONVERSATION": "Accès refusé à cette conversation.",
+      "ERR_CONVERSATION_OU_SALON_INTROUVABLE": "Conversation ou salon introuvable."
     }
   },
   "en": {
@@ -208,8 +216,6 @@
       "noActiveConversation": "No active conversation",
       "noConversationSelected": "No conversation selected.",
       "writeMessagePlaceholder": "Write a private message",
-      "noActivity": "No activity",
-      "userOnline": "{pseudo} is online",
       "offline": "Offline",
       "online": "Online",
       "defaultUser": "User",
@@ -219,6 +225,12 @@
       "noOtherUsers": "No other users available.",
       "openExisting": "Open",
       "newLabel": "New"
+    },
+    "typing": {
+      "suffix": " is typing...",
+      "someone": "Someone",
+      "and": " and ",
+      "andOthers": " and {count} others"
     },
     "errors": {
       "generic": "An error occurred.",
@@ -230,7 +242,11 @@
       "ERR_SEUL_HOTE_PEUT_INVITER": "Only the host can invite.",
       "ERR_INVITATION_INTROUVABLE": "Invitation not found.",
       "ERR_ACCES_REFUSE_SALON": "Access denied to this channel.",
-      "ERR_MESSAGE_VIDE": "The message is empty."
+      "ERR_MESSAGE_VIDE": "The message is empty.",
+      "ERR_CONVERSATION_AVEC_SOI_MEME": "You cannot start a conversation with yourself.",
+      "ERR_CONVERSATION_PRIVEE_INTROUVABLE": "Private conversation not found.",
+      "ERR_ACCES_REFUSE_CONVERSATION": "Access denied to this conversation.",
+      "ERR_CONVERSATION_OU_SALON_INTROUVABLE": "Conversation or channel not found."
     }
   }
 }

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import './connexion.css';
 import { LoginPage, type GatewaySession } from './LoginPage';
-import { t, LANGUE_PAR_DEFAUT } from '../../../i18n/i18n-web';
+import { LANGUE_PAR_DEFAUT } from '../../../i18n/i18n-web';
 
 // Composition root : c'est le SEUL endroit qui construit l'implémentation
 // du contrat GatewaySession (voir la règle documentée dans ChatGateway.ts).
@@ -19,36 +19,20 @@ import { t, LANGUE_PAR_DEFAUT } from '../../../i18n/i18n-web';
 /**
  * Electron préfixe systématiquement toute erreur venant d'un handler IPC
  * avec "Error invoking remote method '<canal>': ", peu importe le message
- * qu'on a levé côté main.js. Le message lui-même est un CODE stable (ex.
- * "ERR_PSEUDO_PRIS|alice", voir MockGatewayRuntime.connexion) plutôt qu'un
- * texte déjà en français : la couche métier ne doit pas connaître la
- * langue choisie par l'utilisateur, donc la traduction se fait ici, à la
- * frontière IPC, dans la langue courante — pour que LoginPage.tsx affiche
- * un message propre et déjà traduit sans avoir à connaître ce détail.
+ * qu'on a levé côté main.js. On retire UNIQUEMENT ce préfixe ici — on ne
+ * traduit PAS le code restant (ex. "ERR_PSEUDO_PRIS|alice") : la traduction
+ * doit se faire au moment du RENDU, dans LoginPage.tsx, avec la langue
+ * COURANTE à cet instant. La traduire ici, une fois pour toutes au moment
+ * de l'erreur, la fige dans la langue d'alors — un changement de langue
+ * après coup n'aurait plus aucun effet sur ce message déjà affiché (bug
+ * observé : le message d'erreur restait en anglais après être repassé en
+ * français).
  */
-function nettoyerErreurIpc(err: unknown, langue: string): Error {
-  if (!(err instanceof Error)) {
-    return new Error(t(langue, 'errors.generic'));
-  }
-
-  const brut = err.message.replace(
+function nettoyerPrefixeIpc(err: unknown): string {
+  if (!(err instanceof Error)) return '';
+  return err.message.replace(
     /^Error invoking remote method '[^']+': (?:Error: )?/,
     ''
-  );
-
-  const [code, ...params] = brut.split('|');
-  const cle = `errors.${code}`;
-  const traduit = t(langue, cle);
-
-  if (traduit === cle) {
-    // Code non reconnu par le dictionnaire (ex. message déjà en clair,
-    // erreur inattendue) : on garde le texte brut plutôt que d'afficher
-    // la clé technique à l'utilisateur.
-    return new Error(brut);
-  }
-
-  return new Error(
-    params.length ? traduit.replace('{pseudo}', params[0]) : traduit
   );
 }
 
@@ -79,9 +63,9 @@ function App() {
       });
   }, []);
 
-  // Reconstruit l'adaptateur quand la langue change, pour que les erreurs
-  // renvoyées par gateway.connexion() soient traduites dans la langue
-  // affichée AU MOMENT de l'erreur (pas celle du premier rendu).
+  // Aucune dépendance sur `langue` ici : l'adaptateur ne traduit plus rien
+  // lui-même (voir nettoyerPrefixeIpc ci-dessus), donc il n'a pas besoin
+  // d'être reconstruit quand la langue change.
   const gateway: GatewaySession = useMemo(
     () => ({
       pseudoDisponible: (pseudo) => window.electronAPI.pseudoDisponible(pseudo),
@@ -92,11 +76,11 @@ function App() {
             pseudo: utilisateur.pseudo,
           });
         } catch (err) {
-          throw nettoyerErreurIpc(err, langue);
+          throw new Error(nettoyerPrefixeIpc(err));
         }
       },
     }),
-    [langue]
+    []
   );
 
   return (

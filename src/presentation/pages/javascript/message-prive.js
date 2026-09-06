@@ -60,6 +60,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   const toastElement = document.getElementById('toast');
   const notifBtn = document.getElementById('open-notif-settings');
   const notifMenu = document.getElementById('notif-menu');
+  const isTypingNom = document.getElementById('is-typing-nom');
 
   try {
     dictionnaires = await window.electronAPI.obtenirDictionnairesI18n();
@@ -197,6 +198,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     currentFilter: 'all',
     currentUserId: null,
     utilisateurs: [],
+    etatsSaisie: {},
   };
   // Consomme une éventuelle cible laissée par renderer.js avant une
   // navigation vers cette page suite au clic sur une notification de
@@ -245,6 +247,40 @@ window.addEventListener('DOMContentLoaded', async () => {
     return state.conversations;
   }
 
+  setInterval(async () => {
+    await actualiserIndicateurSaisie();
+  }, 1500);
+
+  async function actualiserIndicateurSaisie() {
+    if (!state.activeConversationId) {
+      if (typingIndicator) {
+        typingIndicator.hidden = true;
+        typingIndicator.style.setProperty('display', 'none', 'important');
+      }
+      return;
+    }
+
+    const etats = await window.electronAPI.obtenirEtatsSaisie(
+      state.activeConversationId
+    );
+    state.etatsSaisie = Array.isArray(etats) ? etats : [];
+
+    const autreUtilisateurEcrit = (state.etatsSaisie || []).some(
+      (item) =>
+        item.utilisateurId !== state.currentUserId && item.est_saisie === true
+    );
+
+    if (typingIndicator) {
+      if (autreUtilisateurEcrit) {
+        typingIndicator.hidden = false;
+        typingIndicator.style.setProperty('display', 'flex', 'important');
+      } else {
+        typingIndicator.hidden = true;
+        typingIndicator.style.setProperty('display', 'none', 'important');
+      }
+    }
+  }
+
   async function refreshConversations() {
     const conversations = await window.electronAPI.obtenirConversationsPrivees(
       state.currentUserId
@@ -258,6 +294,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (!state.activeConversationId && state.conversations.length > 0) {
       state.activeConversationId = state.conversations[0].id;
     }
+
+    state.etatsSaisie = await window.electronAPI.obtenirEtatsSaisie(
+      state.activeConversationId
+    );
 
     if (
       state.currentFilter === 'online' &&
@@ -282,6 +322,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     await renderActiveConversation();
     renderConversationList();
     mettreAJourBadgeApplication();
+    actualiserIndicateurSaisie();
   }
 
   async function initialiserUtilisateurCourant() {
@@ -298,16 +339,35 @@ window.addEventListener('DOMContentLoaded', async () => {
       currentUserSelect.addEventListener('change', async (event) => {
         sessionStorage.setItem('currentUserId', event.target.value);
         state.currentUserId = event.target.value;
+        if (messageInput) messageInput.value = '';
         fermerMenuNotif();
         await refreshConversations();
         await actualiserBadgeSalons();
+        await actualiserIndicateurSaisie();
       });
     }
     const selectedUserId = sessionStorage.getItem('currentUserId');
+    let utilisateurResolu = utilisateurs.find(
+      (u) => u.id === selectedUserId
+    )?.id;
+
+    if (!utilisateurResolu) {
+      // sessionStorage ne survit pas forcément à la navigation entre deux
+      // pages file:// distinctes (index.html -> message-prive.html) — même
+      // incident que "connecté en tant qu'alice par défaut" déjà rencontré
+      // sur index.html (voir renderer.js, initialiserUtilisateurCourant, et
+      // session:utilisateur-connecte dans main.js), qui applique déjà ce
+      // même repli. Sans lui, cette page retombe systématiquement sur le
+      // premier utilisateur de la liste plutôt que la personne réellement
+      // connectée.
+      utilisateurResolu = await window.electronAPI.obtenirUtilisateurConnecte();
+    }
+
     state.currentUserId =
-      utilisateurs.find((u) => u.id === selectedUserId)?.id ??
+      utilisateurs.find((u) => u.id === utilisateurResolu)?.id ??
       utilisateurs[0]?.id ??
       'u1';
+    sessionStorage.setItem('currentUserId', state.currentUserId);
     if (currentUserSelect) {
       currentUserSelect.value = state.currentUserId;
     }
@@ -375,11 +435,11 @@ window.addEventListener('DOMContentLoaded', async () => {
 
       li.addEventListener('click', async () => {
         state.activeConversationId = conversation.id;
-        // Voir le commentaire dans refreshConversations() : marquer comme lu
-        // doit se faire avant de recalculer les ronds de notification.
+        if (messageInput) messageInput.value = '';
         await renderActiveConversation();
         renderConversationList();
         mettreAJourBadgeApplication();
+        await actualiserIndicateurSaisie();
       });
 
       listElement.appendChild(li);
@@ -449,10 +509,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (topbarAvatar) {
       topbarAvatar.classList.toggle('offline', !otherUser?.present);
     }
-    if (typingIndicator) {
-      typingIndicator.textContent = otherUser?.present
-        ? t('dm.userOnline', { pseudo: otherUser.pseudo })
-        : t('dm.offline');
+    if (typingIndicator && isTypingNom) {
+      // Dans un DM, une seule autre personne peut potentiellement écrire
+      // (contrairement à un salon) — son nom est donc fixé une fois ici, à
+      // l'ouverture de la conversation, plutôt que recalculé à chaque
+      // battement de actualiserIndicateurSaisie() (qui ne gère, lui, que le
+      // show/hide selon l'état de saisie réel — voir plus bas).
+      isTypingNom.textContent = otherUser?.pseudo ?? t('dm.defaultUser');
     }
 
     messageList.innerHTML = '';
@@ -620,6 +683,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
+  const timersArretSaisieDm = {};
+
   if (messageForm && messageInput) {
     messageForm.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -628,13 +693,70 @@ window.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
+      const auteurId = state.currentUserId;
+      const conversationId = state.activeConversationId;
+
+      // 1. Annule le timer d'inactivité de cet utilisateur s'il existe
+      if (timersArretSaisieDm[auteurId]) {
+        clearTimeout(timersArretSaisieDm[auteurId]);
+        delete timersArretSaisieDm[auteurId];
+      }
+
+      // 2. Réinitialise immédiatement l'état de saisie
+      await window.electronAPI.modifierEtatSaisie({
+        conversationId,
+        utilisateurId: auteurId,
+        est_saisie: false,
+      });
+
+      // 3. Envoie le message
       await window.electronAPI.envoyerMessagePrive({
-        conversationId: state.activeConversationId,
+        conversationId,
         contenu: content,
-        utilisateurId: state.currentUserId,
+        utilisateurId: auteurId,
       });
       messageInput.value = '';
       await refreshConversations();
+    });
+
+    messageInput.addEventListener('input', async (event) => {
+      const aDuTexte = event.target.value.trim().length > 0;
+      const auteurId = state.currentUserId;
+      const conversationId = state.activeConversationId;
+
+      if (!auteurId || !conversationId) return;
+
+      // Annule le timer précédent de cet utilisateur
+      if (timersArretSaisieDm[auteurId]) {
+        clearTimeout(timersArretSaisieDm[auteurId]);
+        delete timersArretSaisieDm[auteurId];
+      }
+
+      if (aDuTexte) {
+        await window.electronAPI.modifierEtatSaisie({
+          conversationId,
+          utilisateurId: auteurId,
+          est_saisie: true,
+        });
+
+        // Coupe l'état de saisie après 10 secondes sans frappe
+        timersArretSaisieDm[auteurId] = setTimeout(async () => {
+          delete timersArretSaisieDm[auteurId];
+          await window.electronAPI.modifierEtatSaisie({
+            conversationId,
+            utilisateurId: auteurId,
+            est_saisie: false,
+          });
+          await actualiserIndicateurSaisie();
+        }, 10000);
+      } else {
+        await window.electronAPI.modifierEtatSaisie({
+          conversationId,
+          utilisateurId: auteurId,
+          est_saisie: false,
+        });
+        await actualiserIndicateurSaisie();
+      }
     });
   }
 

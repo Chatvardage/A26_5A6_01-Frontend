@@ -33,6 +33,9 @@ class MockGatewayRuntime {
       { id: 'u5', pseudo: 'lili-rose' },
       { id: 'u6', pseudo: 'fiona' },
     ];
+
+    this.etatsSaisie = [];
+
     this.presences = {
       u1: 'en-ligne',
       u2: 'hors-ligne',
@@ -209,7 +212,7 @@ class MockGatewayRuntime {
 
   verifierUtilisateur(utilisateurId) {
     if (!this.utilisateurs.some((item) => item.id === utilisateurId)) {
-      throw new Error('Utilisateur invalide');
+      throw new Error('ERR_UTILISATEUR_INVALIDE');
     }
   }
 
@@ -219,7 +222,7 @@ class MockGatewayRuntime {
 
   trouverSalon(salonId) {
     const salon = this.salons.find((item) => item.id === salonId);
-    if (!salon) throw new Error('Salon introuvable');
+    if (!salon) throw new Error('ERR_SALON_INTROUVABLE');
     return salon;
   }
 
@@ -252,7 +255,13 @@ class MockGatewayRuntime {
     const dejaEnregistre = this.utilisateurs.some((item) => item.id === id);
     if (!dejaEnregistre) {
       if (!this.pseudoDisponible(pseudo)) {
-        throw new Error(`Le pseudo "${pseudo}" est déjà utilisé.`);
+        // Code stable plutôt qu'un message figé en français : la traduction
+        // se fait à la frontière présentation (voir main.tsx
+        // nettoyerErreurIpc), pas ici dans la couche métier, qui ne doit pas
+        // connaître la langue choisie par l'utilisateur. Convention
+        // "CODE|param" : le seul moyen simple de faire voyager un paramètre
+        // dans un message d'erreur à travers l'IPC.
+        throw new Error(`ERR_PSEUDO_PRIS|${pseudo}`);
       }
       this.utilisateurs.push({ id, pseudo });
     }
@@ -341,7 +350,7 @@ class MockGatewayRuntime {
     this.verifierUtilisateur(utilisateurActuelId);
     this.verifierUtilisateur(autreUtilisateurId);
     if (utilisateurActuelId === autreUtilisateurId) {
-      throw new Error('Impossible de démarrer une conversation avec soi-même');
+      throw new Error('ERR_CONVERSATION_AVEC_SOI_MEME');
     }
 
     const conversationId = creerDmId(utilisateurActuelId, autreUtilisateurId);
@@ -365,7 +374,7 @@ class MockGatewayRuntime {
   creerSalon({ nom, prive, utilisateurId }) {
     this.verifierUtilisateur(utilisateurId);
     const nomNettoye = typeof nom === 'string' ? nom.trim().slice(0, 40) : '';
-    if (!nomNettoye) throw new Error('Le nom du salon est obligatoire');
+    if (!nomNettoye) throw new Error('ERR_NOM_SALON_REQUIS');
     const visibilite = prive ? 'prive' : 'public';
     const salon = {
       id: `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -390,11 +399,9 @@ class MockGatewayRuntime {
     this.verifierUtilisateur(hoteId);
     const salon = this.trouverSalon(salonId);
     if (salon.visibilite === 'public') {
-      throw new Error(
-        'Les invitations sont désactivées pour les salons publics : tous les utilisateurs y sont déjà membres'
-      );
+      throw new Error('ERR_INVITATIONS_DESACTIVEES_PUBLIC');
     }
-    if (salon.hoteId !== hoteId) throw new Error("Seul l'hôte peut inviter");
+    if (salon.hoteId !== hoteId) throw new Error('ERR_SEUL_HOTE_PEUT_INVITER');
     if (salon.membreIds.includes(utilisateurId)) return structuredClone(salon);
     if (!salon.membresInvites.includes(utilisateurId)) {
       salon.membresInvites.push(utilisateurId);
@@ -406,7 +413,7 @@ class MockGatewayRuntime {
     this.verifierUtilisateur(utilisateurId);
     const salon = this.trouverSalon(salonId);
     if (!salon.membresInvites.includes(utilisateurId)) {
-      throw new Error('Invitation introuvable');
+      throw new Error('ERR_INVITATION_INTROUVABLE');
     }
     salon.membresInvites = salon.membresInvites.filter(
       (id) => id !== utilisateurId
@@ -421,7 +428,7 @@ class MockGatewayRuntime {
     this.verifierUtilisateur(utilisateurId);
     const salon = this.trouverSalon(salonId);
     if (!salon.membresInvites.includes(utilisateurId)) {
-      throw new Error('Invitation introuvable');
+      throw new Error('ERR_INVITATION_INTROUVABLE');
     }
     salon.membresInvites = salon.membresInvites.filter(
       (id) => id !== utilisateurId
@@ -445,11 +452,11 @@ class MockGatewayRuntime {
       salon.membreIds.push(utilisateurId);
     }
     if (!salon.membreIds.includes(utilisateurId)) {
-      throw new Error('Accès refusé à ce salon');
+      throw new Error('ERR_ACCES_REFUSE_SALON');
     }
     const texte =
       typeof contenu === 'string' ? contenu.trim().slice(0, 2000) : '';
-    if (!texte) throw new Error('Le message est vide');
+    if (!texte) throw new Error('ERR_MESSAGE_VIDE');
     const message = {
       auteurId: utilisateurId,
       contenu: texte,
@@ -465,13 +472,13 @@ class MockGatewayRuntime {
     const conversation = this.conversationsPrivees.find(
       (item) => item.id === conversationId
     );
-    if (!conversation) throw new Error('Conversation privée introuvable');
+    if (!conversation) throw new Error('ERR_CONVERSATION_PRIVEE_INTROUVABLE');
     if (!conversation.participantIds.includes(utilisateurActuelId)) {
-      throw new Error('Accès refusé à cette conversation');
+      throw new Error('ERR_ACCES_REFUSE_CONVERSATION');
     }
     const texte =
       typeof contenu === 'string' ? contenu.trim().slice(0, 2000) : '';
-    if (!texte) throw new Error('Le message est vide');
+    if (!texte) throw new Error('ERR_MESSAGE_VIDE');
     this.prochainMessagePriveIndex += 1;
     const message = {
       id: `mp-${this.prochainMessagePriveIndex}`,
@@ -482,6 +489,67 @@ class MockGatewayRuntime {
     };
     this.messagesPrives.push(message);
     return { ...message };
+  }
+
+  obtenirEtatsSaisie(param) {
+    const id = typeof param === 'string' ? param : param?.conversationId;
+
+    if (!id) return [];
+
+    return this.etatsSaisie
+      .filter((item) => item.conversationId === id)
+      .map((item) => ({ ...item }));
+  }
+
+  modifierEtatSaisie({ conversationId, utilisateurId, est_saisie }) {
+    this.verifierUtilisateur(utilisateurId);
+
+    // 1. Chercher si la cible est un DM ou un Salon
+    const dm = this.conversationsPrivees.find(
+      (item) => item.id === conversationId
+    );
+    const salon = this.salons.find((item) => item.id === conversationId);
+
+    if (!dm && !salon) {
+      throw new Error('ERR_CONVERSATION_OU_SALON_INTROUVABLE');
+    }
+
+    // 2. Vérifier les autorisations selon le type de conversation
+    if (dm && !dm.participantIds.includes(utilisateurId)) {
+      throw new Error('ERR_ACCES_REFUSE_CONVERSATION');
+    }
+
+    if (salon) {
+      // Pour les salons publics, tout le monde est membre d'office
+      const estMembre =
+        salon.visibilite === 'public' ||
+        salon.membreIds.includes(utilisateurId);
+
+      if (!estMembre) {
+        throw new Error('ERR_ACCES_REFUSE_SALON');
+      }
+    }
+
+    // 3. Mettre à jour l'état de saisie
+    const etatSaisie = {
+      conversationId,
+      utilisateurId,
+      est_saisie: Boolean(est_saisie),
+    };
+
+    const etatExistantIndex = this.etatsSaisie.findIndex(
+      (item) =>
+        item.conversationId === conversationId &&
+        item.utilisateurId === utilisateurId
+    );
+
+    if (etatExistantIndex !== -1) {
+      this.etatsSaisie[etatExistantIndex] = etatSaisie;
+    } else {
+      this.etatsSaisie.push(etatSaisie);
+    }
+
+    return { ...etatSaisie };
   }
 }
 

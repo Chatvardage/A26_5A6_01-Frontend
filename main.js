@@ -13,7 +13,11 @@ const { fileURLToPath } = require('url');
 const {
   MockGatewayRuntime,
 } = require('./src/infrastructure/gateways/MockGatewayRuntime.js');
-const { t, LANGUE_PAR_DEFAUT, LANGUES_SUPPORTEES } = require('./src/i18n/i18n.js');
+const {
+  t,
+  LANGUE_PAR_DEFAUT,
+  LANGUES_SUPPORTEES,
+} = require('./src/i18n/i18n.js');
 const translations = require('./src/i18n/translations.json');
 
 const chatGateway = new MockGatewayRuntime();
@@ -129,11 +133,11 @@ function buildMenu() {
   const template = [
     ...(process.platform === 'darwin'
       ? [
-        {
-          label: app.getName(),
-          submenu: [{ role: 'quit', label: t(langueActuelle, 'menu.quit') }],
-        },
-      ]
+          {
+            label: app.getName(),
+            submenu: [{ role: 'quit', label: t(langueActuelle, 'menu.quit') }],
+          },
+        ]
       : []),
     {
       label: t(langueActuelle, 'menu.file'),
@@ -154,17 +158,17 @@ function buildMenu() {
     // DevTools uniquement en développement : jamais exposé en production.
     ...(isDev
       ? [
-        {
-          label: t(langueActuelle, 'menu.development'),
-          submenu: [
-            {
-              role: 'toggleDevTools',
-              label: t(langueActuelle, 'menu.toggleDevTools'),
-            },
-            { role: 'reload', label: t(langueActuelle, 'menu.reload') },
-          ],
-        },
-      ]
+          {
+            label: t(langueActuelle, 'menu.development'),
+            submenu: [
+              {
+                role: 'toggleDevTools',
+                label: t(langueActuelle, 'menu.toggleDevTools'),
+              },
+              { role: 'reload', label: t(langueActuelle, 'menu.reload') },
+            ],
+          },
+        ]
       : []),
   ];
   return Menu.buildFromTemplate(template);
@@ -229,17 +233,17 @@ function avertirSiWSL() {
   if (!estProbablementWSL()) return;
   logDebugNotif(
     '[notifications] Exécution détectée sous WSL. Les notifications système ' +
-    'passent par libnotify (D-Bus), relayé par WSLg vers le Centre de ' +
-    'notifications Windows — mais seulement si un bus D-Bus de session est ' +
-    'actif dans la distribution. Si les logs disent "notification ' +
-    'affichée" sans que rien ne s\'affiche : (1) vérifier que WSL est à jour ' +
-    '(wsl --update, puis wsl --shutdown, depuis PowerShell), (2) activer ' +
-    'systemd dans /etc/wsl.conf ([boot]\\nsystemd=true) puis relancer WSL, ' +
-    '(3) tester `notify-send "test" "hello"` dans le terminal WSL — si ' +
-    "ça n'affiche rien non plus côté Windows, le problème est dans " +
-    "l'environnement WSL, pas dans cette app. Sur un Windows, un macOS ou " +
-    'un Linux natif (avec un vrai bureau/démon de notifications), ce code ' +
-    'fonctionne sans configuration supplémentaire.'
+      'passent par libnotify (D-Bus), relayé par WSLg vers le Centre de ' +
+      'notifications Windows — mais seulement si un bus D-Bus de session est ' +
+      'actif dans la distribution. Si les logs disent "notification ' +
+      'affichée" sans que rien ne s\'affiche : (1) vérifier que WSL est à jour ' +
+      '(wsl --update, puis wsl --shutdown, depuis PowerShell), (2) activer ' +
+      'systemd dans /etc/wsl.conf ([boot]\\nsystemd=true) puis relancer WSL, ' +
+      '(3) tester `notify-send "test" "hello"` dans le terminal WSL — si ' +
+      "ça n'affiche rien non plus côté Windows, le problème est dans " +
+      "l'environnement WSL, pas dans cette app. Sur un Windows, un macOS ou " +
+      'un Linux natif (avec un vrai bureau/démon de notifications), ce code ' +
+      'fonctionne sans configuration supplémentaire.'
   );
 }
 
@@ -901,6 +905,14 @@ exposerCanal('envoyer-message-prive', (donnees) =>
 );
 exposerCanal('demarrer-conversation-privee', (donnees) =>
   chatGateway.demarrerConversationPrivee(donnees)
+);
+
+exposerCanal('modifier-etat-saisie', (donnees) =>
+  chatGateway.modifierEtatSaisie(donnees)
+);
+
+exposerCanal('obtenir-etats-saisie', (donnees) =>
+  chatGateway.obtenirEtatsSaisie(donnees)
 );
 
 ipcMain.handle('navigate', (event, page) => {

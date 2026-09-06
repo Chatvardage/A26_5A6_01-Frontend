@@ -46,7 +46,37 @@ interface Disponibilite {
 
 interface ErreurSoumission {
   pseudo: string;
-  message: string;
+  /** Clé de traduction (ex. "auth.invalidFormat") ou code brut venant du
+   * backend (ex. "ERR_PSEUDO_PRIS|alice") — jamais un texte déjà traduit,
+   * pour que le message affiché se retraduise tout seul si la langue
+   * change après coup (voir traduireErreurSoumission ci-dessous). */
+  cle: string;
+  params?: Record<string, string>;
+}
+
+/**
+ * Traduit erreurSoumission.cle dans la langue COURANTE (recalculé à chaque
+ * rendu, jamais mis en cache) : (1) une clé de validation locale connue
+ * (ex. "auth.invalidFormat"), ou (2) un code d'erreur backend au format
+ * "errors.CODE" avec un paramètre optionnel (voir nettoyerPrefixeIpc dans
+ * main.tsx, qui ne traduit plus rien lui-même). Repli sur un message
+ * générique traduit si le code est inconnu, plutôt qu'afficher une clé
+ * technique brute à l'utilisateur.
+ */
+function traduireErreurSoumission(
+  langue: string,
+  erreur: ErreurSoumission
+): string {
+  if (erreur.cle.startsWith('auth.')) {
+    return t(langue, erreur.cle);
+  }
+  const [code, ...params] = erreur.cle.split('|');
+  const cleTraduction = `errors.${code}`;
+  const traduit = t(langue, cleTraduction);
+  if (traduit === cleTraduction) {
+    return t(langue, 'errors.generic');
+  }
+  return params.length ? traduit.replace('{pseudo}', params[0]) : traduit;
 }
 
 export function LoginPage({
@@ -94,7 +124,7 @@ export function LoginPage({
 
   if (erreurSoumission && erreurSoumission.pseudo === pseudoActuel) {
     etat = 'error';
-    message = erreurSoumission.message;
+    message = traduireErreurSoumission(langue, erreurSoumission);
   } else if (pseudoActuel.length === 0) {
     etat = 'idle';
   } else if (!formatValide) {
@@ -118,7 +148,7 @@ export function LoginPage({
       if (!validationPseudo(valeur)) {
         setErreurSoumission({
           pseudo: valeur,
-          message: t(langue, 'auth.invalidFormat'),
+          cle: 'auth.invalidFormat',
         });
         inputRef.current?.focus();
         return;
@@ -135,14 +165,13 @@ export function LoginPage({
           await window.electronAPI.allerAuTableauDeBord();
         }
       } catch (err) {
-        const texte =
-          err instanceof Error ? err.message : t(langue, 'errors.generic');
-        setErreurSoumission({ pseudo: valeur, message: texte });
+        const cle = err instanceof Error ? err.message : '';
+        setErreurSoumission({ pseudo: valeur, cle });
         setEnCours(false);
         inputRef.current?.focus();
       }
     },
-    [pseudo, gateway, onSessionEtablie, langue]
+    [pseudo, gateway, onSessionEtablie]
   );
 
   return (

@@ -165,7 +165,22 @@
 
   <div id="message-list" aria-live="polite"></div>
 
-  <div id="typing-indicator"></div>
+  <div
+    id="typing-indicator"
+    class="typing-indicator"
+    aria-live="polite"
+    hidden
+  >
+        <span class="typing-dots" aria-hidden="true">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </span>
+    <span id="typing-text" class="typing-text"
+    ><strong id="is-typing-nom"></strong
+    ><span data-i18n="typing.suffix"> est en train d'écrire...</span></span
+    >
+  </div>
 
   <div id="composer">
     <form id="message-form">
