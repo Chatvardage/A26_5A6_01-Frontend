@@ -418,6 +418,7 @@ function afficherTout() {
   afficherSalons();
   afficherActions();
   mettreAJourBadgeApplication();
+  actualiserIndicateurSaisie();
 }
 
 // --- Initialisation au démarrage -----
@@ -613,10 +614,27 @@ el.formulaire.addEventListener('submit', async (event) => {
   event.preventDefault();
   const contenu = el.message.value;
   if (!salonActifId || !contenu.trim()) return;
+
+  const auteurId = utilisateurActuelId;
+  const salonId = salonActifId;
+
+  // 1. Annule le timer actif de cet utilisateur s'il existe
+  if (timersArretSaisie[auteurId]) {
+    clearTimeout(timersArretSaisie[auteurId]);
+    delete timersArretSaisie[auteurId];
+  }
+
+  // 2. Réinitialise immédiatement l'état de saisie côté backend
+  await window.electronAPI.modifierEtatSaisie({
+    conversationId: salonId,
+    utilisateurId: auteurId,
+    est_saisie: false,
+  });
+
   try {
     await window.electronAPI.envoyerMessageSalon({
-      salonId: salonActifId,
-      utilisateurId: utilisateurActuelId,
+      salonId,
+      utilisateurId: auteurId,
       contenu,
     });
     el.message.value = '';
@@ -847,3 +865,99 @@ document.addEventListener('keydown', (event) => {
 // messages via #message-form, arriveront avec le ChatGateway (mock puis
 // réel), en ajoutant les méthodes correspondantes à `electronAPI` dans
 // preload.js plutôt qu'un accès direct à ipcRenderer.
+
+// Variable locale pour stocker les états du salon actif
+let etatsSaisieSalon = [];
+
+const elTypingIndicator = document.getElementById('typing-indicator');
+const elIsTypingNom = document.getElementById('is-typing-nom');
+
+async function actualiserIndicateurSaisie() {
+  if (!salonActifId) {
+    if (elTypingIndicator) elTypingIndicator.hidden = true;
+    return;
+  }
+
+  try {
+    const etats = await window.electronAPI.obtenirEtatsSaisie(salonActifId);
+    etatsSaisieSalon = Array.isArray(etats) ? etats : [];
+
+    const autresQuiEcrivent = etatsSaisieSalon.filter(
+      (item) => item.utilisateurId !== utilisateurActuelId && item.est_saisie === true
+    );
+
+    if (!elTypingIndicator) return;
+
+    if (autresQuiEcrivent.length > 0) {
+      const noms = autresQuiEcrivent
+        .map((item) => utilisateur(item.utilisateurId)?.pseudo ?? 'Quelqu’un')
+        .filter(Boolean);
+
+      if (elIsTypingNom) {
+        if (noms.length === 1) {
+          elIsTypingNom.textContent = noms[0];
+        } else if (noms.length === 2) {
+          elIsTypingNom.textContent = `${noms[0]} et ${noms[1]}`;
+        } else {
+          elIsTypingNom.textContent = `${noms[0]} et ${noms.length - 1} autres`;
+        }
+      }
+
+      elTypingIndicator.hidden = false;
+      elTypingIndicator.style.setProperty('display', 'flex', 'important');
+    } else {
+      elTypingIndicator.hidden = true;
+      elTypingIndicator.style.setProperty('display', 'none', 'important');
+    }
+  } catch (err) {
+    console.error('[actualiserIndicateurSaisie] Erreur:', err);
+  }
+}
+
+setInterval(async () => {
+  await actualiserIndicateurSaisie();
+}, 1500);
+
+
+const timersArretSaisie = {};
+
+el.message.addEventListener('input', async (event) => {
+  const aDuTexte = event.target.value.trim().length > 0;
+  const auteurId = utilisateurActuelId;
+  const salonId = salonActifId;
+
+  if (!auteurId || !salonId) return;
+
+  // Annule uniquement le timer actif DE CET UTILISATEUR précis
+  if (timersArretSaisie[auteurId]) {
+    clearTimeout(timersArretSaisie[auteurId]);
+    delete timersArretSaisie[auteurId];
+  }
+
+  if (aDuTexte) {
+    await window.electronAPI.modifierEtatSaisie({
+      conversationId: salonId,
+      utilisateurId: auteurId,
+      est_saisie: true,
+    });
+
+    // Programme l'arrêt pour cet utilisateur
+    timersArretSaisie[auteurId] = setTimeout(async () => {
+      delete timersArretSaisie[auteurId];
+      await window.electronAPI.modifierEtatSaisie({
+        conversationId: salonId,
+        utilisateurId: auteurId,
+        est_saisie: false,
+      });
+      // Force une mise à jour immédiate si ce salon est toujours affiché
+      await actualiserIndicateurSaisie();
+    }, 10000);
+  } else {
+    await window.electronAPI.modifierEtatSaisie({
+      conversationId: salonId,
+      utilisateurId: auteurId,
+      est_saisie: false,
+    });
+    await actualiserIndicateurSaisie();
+  }
+});

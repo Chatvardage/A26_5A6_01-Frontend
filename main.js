@@ -458,6 +458,7 @@ function createWindow() {
     win.loadURL(`http://localhost:${DEV_SERVER_PORT}/`);
   } else {
     win.loadFile(APP_LOGIN_PATH);
+    win.webContents.openDevTools();
   }
 
   return win;
@@ -850,6 +851,14 @@ exposerCanal('envoyer-message-prive', (donnees) =>
 );
 exposerCanal('demarrer-conversation-privee', (donnees) =>
   chatGateway.demarrerConversationPrivee(donnees)
+);
+
+exposerCanal('modifier-etat-saisie', (donnees) =>
+  chatGateway.modifierEtatSaisie(donnees)
+);
+
+exposerCanal('obtenir-etats-saisie', (donnees) =>
+  chatGateway.obtenirEtatsSaisie(donnees)
 );
 
 ipcMain.handle('navigate', (event, page) => {

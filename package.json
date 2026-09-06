@@ -21,7 +21,7 @@
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "@vitejs/plugin-react": "^4.7.0",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^2.1.9",
     "cross-env": "^7.0.3",
     "electron": "^44.0.0",
     "eslint": "^8.56.0",
@@ -30,7 +30,7 @@
     "prettier": "^3.0.0",
     "typescript": "^5.9.3",
     "vite": "^6.4.3",
-    "vitest": "^4.1.11"
+    "vitest": "^2.1.9"
   },
   "description": "Application pour communiquer par des chats - ChatVardage",
   "keywords": [
