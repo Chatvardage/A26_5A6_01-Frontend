@@ -417,18 +417,18 @@ class MockGatewayRuntime {
   // page récente remonte déjà jusqu'au tout premier message du salon (rien
   // de plus ancien à proposer de charger).
   construireSalonDTO(salon) {
-    const salonClone = structuredClone(salon);
-    const messagesTries = [...salonClone.messages].sort(
-      (a, b) => a.date - b.date
-    );
+    const { messages, ...salonSansMessages } = salon;
+    const messagesTries = [...messages].sort((a, b) => a.date - b.date);
     const { page, finHistorique } = this.paginerMessages(
       messagesTries,
       undefined,
       TAILLE_PAGE_MESSAGES
     );
-    salonClone.messages = page;
-    salonClone.finHistorique = finHistorique;
-    return salonClone;
+    return {
+      ...structuredClone(salonSansMessages),
+      messages: structuredClone(page),
+      finHistorique,
+    };
   }
 
   obtenirEtat(utilisateurId) {

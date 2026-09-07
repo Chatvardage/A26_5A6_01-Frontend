@@ -698,6 +698,9 @@ async function chargerMessagesPlusAnciensSalon() {
       utilisateurId: utilisateurActuelId,
       avantId: plusAncienCharge?.id,
     });
+    if (etatHistoriqueSalon.salonId !== salon.id) {
+      return;
+    }
     etatHistoriqueSalon.messagesAnciens = fusionnerHistorique(
       etatHistoriqueSalon.messagesAnciens,
       resultat.messages,
@@ -707,8 +710,10 @@ async function chargerMessagesPlusAnciensSalon() {
   } catch (erreur) {
     notifier(messageErreur(erreur), true);
   } finally {
-    etatHistoriqueSalon.enChargement = false;
-    afficherMessages({ conserverPositionScroll: true });
+    if (etatHistoriqueSalon.salonId === salon.id) {
+      etatHistoriqueSalon.enChargement = false;
+      afficherMessages({ conserverPositionScroll: true });
+    }
   }
 }
 

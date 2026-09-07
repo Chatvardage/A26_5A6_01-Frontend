@@ -722,6 +722,8 @@ window.addEventListener('DOMContentLoaded', async () => {
       // pourquoi de ce recalcul.
       messageList.scrollTop =
         messageList.scrollHeight - hauteurAvant + scrollAvant;
+    } else {
+      messageList.scrollTop = messageList.scrollHeight;
     }
   }
 
@@ -760,6 +762,9 @@ window.addEventListener('DOMContentLoaded', async () => {
         utilisateurId: state.currentUserId,
         avantId: plusAncienCharge?.id,
       });
+      if (etatHistoriqueDm.conversationId !== conversation.id) {
+        return;
+      }
       etatHistoriqueDm.messagesAnciens = fusionnerHistoriqueDm(
         etatHistoriqueDm.messagesAnciens,
         resultat.messages
@@ -768,8 +773,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     } catch (erreur) {
       notifier(messageErreur(erreur), true);
     } finally {
-      etatHistoriqueDm.enChargement = false;
-      await renderActiveConversation({ conserverPositionScroll: true });
+      if (etatHistoriqueDm.conversationId === conversation.id) {
+        etatHistoriqueDm.enChargement = false;
+        await renderActiveConversation({ conserverPositionScroll: true });
+      }
     }
   }
 
