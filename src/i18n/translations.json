@@ -108,6 +108,11 @@
       "and": " et ",
       "andOthers": " et {count} autres"
     },
+    "history": {
+      "loadOlder": "Charger les messages plus anciens",
+      "loading": "Chargement des messages…",
+      "endOfHistory": "Fin de l'historique"
+    },
     "errors": {
       "generic": "Une erreur est survenue.",
       "ERR_UTILISATEUR_INVALIDE": "Utilisateur invalide.",
@@ -233,6 +238,11 @@
       "someone": "Someone",
       "and": " and ",
       "andOthers": " and {count} others"
+    },
+    "history": {
+      "loadOlder": "Load older messages",
+      "loading": "Loading messages…",
+      "endOfHistory": "End of history"
     },
     "errors": {
       "generic": "An error occurred.",

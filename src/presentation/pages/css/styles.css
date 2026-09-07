@@ -17,6 +17,50 @@
   box-sizing: border-box;
 }
 
+/* --- Barres de défilement -------------------------------------------------
+   Electron (Chromium) affiche par défaut la barre de défilement native du
+   système sur toute zone en overflow — grise, épaisse, hors thème, et
+   d'autant plus visible depuis l'ajout du défilement pour charger l'historique
+   des messages (voir #message-list plus bas). On la restyle ici pour les
+   listes défilantes de l'app (messages, salons, conversations privées),
+   partagée entre styles.css et message-prive.css puisque ce fichier est
+   chargé par les deux pages. `scrollbar-color`/`scrollbar-width` couvrent un
+   moteur non basé sur Chromium (repli, sans effet ici) ; les pseudo-éléments
+   ::-webkit-scrollbar-* ci-dessous sont ceux qu'Electron applique réellement. */
+#message-list,
+#channel-list,
+#conversation-list {
+  scrollbar-color: var(--bg-bubble) transparent;
+  scrollbar-width: thin;
+}
+
+#message-list::-webkit-scrollbar,
+#channel-list::-webkit-scrollbar,
+#conversation-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+#message-list::-webkit-scrollbar-track,
+#channel-list::-webkit-scrollbar-track,
+#conversation-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#message-list::-webkit-scrollbar-thumb,
+#channel-list::-webkit-scrollbar-thumb,
+#conversation-list::-webkit-scrollbar-thumb {
+  background-color: var(--bg-bubble);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+#message-list::-webkit-scrollbar-thumb:hover,
+#channel-list::-webkit-scrollbar-thumb:hover,
+#conversation-list::-webkit-scrollbar-thumb:hover {
+  background-color: var(--accent-end);
+}
+
 html,
 body {
   height: 100%;
@@ -193,6 +237,11 @@ button {
 .icone-cadenas {
   vertical-align: -1px;
   margin-right: 2px;
+}
+
+.icone-main {
+  vertical-align: -2px;
+  margin: 0 1px;
 }
 
 #channel-list li button.active {
@@ -374,6 +423,37 @@ button {
   flex-direction: column;
   gap: 18px;
   min-height: 0;
+}
+
+/* --- Historique et pagination des messages ------------------------------ */
+/* Barre affichée en haut de la liste des messages (#message-list, mais
+   partagée avec message-prive.css/#message-list) pour représenter l'état de
+   l'historique : chargement en cours, historique épuisé, ou bouton pour en
+   charger davantage (voir creerStatutHistorique dans renderer.js et
+   creerStatutHistoriqueDm dans message-prive.js). */
+.historique-statut {
+  flex: 0 0 auto;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  padding: 6px 12px;
+}
+
+button.historique-statut.historique-statut--bouton {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel-alt);
+  cursor: pointer;
+  align-self: center;
+  font-weight: 600;
+}
+
+button.historique-statut.historique-statut--bouton:hover {
+  background: var(--bg-bubble);
+}
+
+.historique-statut--chargement {
+  font-style: italic;
 }
 
 .message-row {

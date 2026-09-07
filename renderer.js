@@ -102,6 +102,80 @@ const el = {
 const salonActif = () => etat.salons.find((salon) => salon.id === salonActifId);
 const utilisateur = (id) => etat.utilisateurs.find((item) => item.id === id);
 
+// --- Historique et pagination des messages (salons) -----------------------
+// `salons:etat` (voir actualiser()) ne renvoie déjà plus que la page de
+// messages la plus récente d'un salon (voir construireSalonDTO côté
+// MockGatewayRuntime.js) : cet état garde en mémoire, PAR-DESSUS cette page
+// récente, les pages plus anciennes chargées à la demande (voir
+// chargerMessagesPlusAnciensSalon) pour le salon actuellement affiché.
+// Volontairement réinitialisé au changement de salon actif (voir
+// afficherMessages()) : contrairement aux messages reçus/envoyés, l'historique
+// remonté manuellement n'a pas de raison de survivre à un changement de
+// conversation.
+let etatHistoriqueSalon = {
+  salonId: null,
+  messagesAnciens: [],
+  finHistorique: false,
+  enChargement: false,
+};
+
+/**
+ * Fusionne les messages déjà remontés manuellement (plus anciens) avec la
+ * page récente renvoyée par le serveur, en dédoublonnant par `id` puis en
+ * triant par date d'envoi croissante. La déduplication par id (plutôt qu'une
+ * simple concaténation) protège contre un chevauchement entre les deux
+ * listes : la page "récente" glisse à chaque actualisation (nouveau message
+ * envoyé/reçu), donc son message le plus ancien peut très bien être déjà
+ * présent dans `messagesAnciens` selon le moment où chaque page a été
+ * demandée.
+ *
+ * @param {Array<{id: string}>} messagesAnciens
+ * @param {Array<{id: string}>} messagesRecents
+ * @param {string} champDate Nom du champ date sur ces messages ('date' pour
+ *   un salon, 'envoi' pour une conversation privée — voir fusionnerHistorique
+ *   dans message-prive.js pour l'équivalent DM).
+ */
+function fusionnerHistorique(messagesAnciens, messagesRecents, champDate) {
+  const parId = new Map();
+  [...messagesAnciens, ...messagesRecents].forEach((message) => {
+    parId.set(message.id, message);
+  });
+  return Array.from(parId.values()).sort((a, b) => a[champDate] - b[champDate]);
+}
+
+/**
+ * Construit l'élément affiché en haut de la liste des messages pour
+ * représenter l'état de l'historique : en cours de chargement, épuisé (début
+ * de la conversation), ou disponible (bouton "charger plus ancien" — voir
+ * aussi le déclenchement automatique au défilement dans el.messages
+ * ('scroll') plus bas).
+ *
+ * @param {{enChargement: boolean, finHistorique: boolean}} etatHistorique
+ * @param {() => void} surClicChargerPlus
+ */
+function creerStatutHistorique(etatHistorique, surClicChargerPlus) {
+  if (etatHistorique.enChargement) {
+    return creerEl('div', {
+      classe: 'historique-statut historique-statut--chargement',
+      texte: t('history.loading'),
+      attrs: { 'aria-live': 'polite' },
+    });
+  }
+  if (etatHistorique.finHistorique) {
+    return creerEl('div', {
+      classe: 'historique-statut historique-statut--fin',
+      texte: t('history.endOfHistory'),
+    });
+  }
+  const bouton = creerEl('button', {
+    classe: 'historique-statut historique-statut--bouton',
+    texte: t('history.loadOlder'),
+    attrs: { type: 'button' },
+  });
+  bouton.addEventListener('click', surClicChargerPlus);
+  return bouton;
+}
+
 // Aucun HTML n'est jamais construit sous forme de chaîne dans ce fichier :
 // tout est créé via document.createElement / textContent, donc il n'y a
 // structurellement rien à échapper — pas d'innerHTML, pas de risque de XSS
@@ -160,6 +234,65 @@ function creerIconeCadenas() {
   );
   svg.appendChild(path);
   return svg;
+}
+
+// Icône de main qui salue, même logique que creerIconeCadenas ci-dessus :
+// l'emoji 👋 est lui aussi une tofu box sur certains systèmes (voir le
+// signalement dans #22), donc on le remplace par ce SVG inline plutôt que
+// de dépendre d'une police d'émojis installée sur la machine.
+function creerIconeMain() {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'icone-main');
+  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('width', '14');
+  svg.setAttribute('height', '14');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const groupe = document.createElementNS(NS, 'g');
+  groupe.setAttribute('fill', 'currentColor');
+  const paume = document.createElementNS(NS, 'circle');
+  paume.setAttribute('cx', '8');
+  paume.setAttribute('cy', '10');
+  paume.setAttribute('r', '4');
+  groupe.appendChild(paume);
+  for (const angle of [-30, -10, 10, 30]) {
+    const doigt = document.createElementNS(NS, 'rect');
+    doigt.setAttribute('x', '-1');
+    doigt.setAttribute('y', '-6');
+    doigt.setAttribute('width', '2');
+    doigt.setAttribute('height', '5');
+    doigt.setAttribute('rx', '1');
+    doigt.setAttribute('transform', `translate(8 6) rotate(${angle})`);
+    groupe.appendChild(doigt);
+  }
+  svg.appendChild(groupe);
+  return svg;
+}
+
+// Table des emoji connus pour ne pas s'afficher de façon fiable en Electron
+// (tofu box) et remplacés par un SVG inline équivalent. Étendre cette table
+// (plutôt que d'ajouter du texte emoji brut ailleurs) si d'autres emoji sont
+// utilisés plus tard dans les messages.
+const EMOJI_VERS_ICONE = { '👋': creerIconeMain };
+
+/**
+ * Remplit `element` avec le texte d'un message, en remplaçant au passage
+ * tout emoji connu de EMOJI_VERS_ICONE par son icône SVG (voir
+ * creerIconeCadenas/creerIconeMain) : le reste du texte passe par
+ * createTextNode, donc aucun risque XSS (jamais d'innerHTML).
+ */
+function remplirTexteMessage(element, texte) {
+  element.replaceChildren();
+  const emojiConnus = Object.keys(EMOJI_VERS_ICONE);
+  const decoupage = new RegExp(`(${emojiConnus.join('|')})`, 'gu');
+  for (const segment of texte.split(decoupage)) {
+    if (!segment) continue;
+    const creerIcone = EMOJI_VERS_ICONE[segment];
+    element.appendChild(
+      creerIcone ? creerIcone() : document.createTextNode(segment)
+    );
+  }
 }
 
 /**
@@ -364,10 +497,11 @@ function afficherSalons() {
   });
 }
 
-function afficherMessages() {
+function afficherMessages(options = {}) {
+  const { conserverPositionScroll = false } = options;
   const salon = salonActif();
-  el.messages.replaceChildren();
   if (!salon) {
+    el.messages.replaceChildren();
     el.nomSalon.textContent = t('channels.noChannelAccessible');
     el.prive.hidden = true;
     el.message.disabled = true;
@@ -380,7 +514,34 @@ function afficherMessages() {
     // accessible.
     el.message.placeholder = t('channels.noChannelAccessible');
     definirConversationActivePourNotifs(null);
+    // Plus aucun salon affiché : l'historique manuellement remonté n'a plus
+    // de sens à conserver (voir sa déclaration plus haut).
+    etatHistoriqueSalon = {
+      salonId: null,
+      messagesAnciens: [],
+      finHistorique: false,
+      enChargement: false,
+    };
     return;
+  }
+
+  // Changement de salon actif : on repart d'un historique manuel vide (voir
+  // la déclaration de etatHistoriqueSalon plus haut). `finHistorique` part de
+  // la page récente tout juste reçue (salon.finHistorique, voir
+  // construireSalonDTO côté MockGatewayRuntime.js).
+  if (etatHistoriqueSalon.salonId !== salon.id) {
+    etatHistoriqueSalon = {
+      salonId: salon.id,
+      messagesAnciens: [],
+      finHistorique: Boolean(salon.finHistorique),
+      enChargement: false,
+    };
+  } else if (etatHistoriqueSalon.messagesAnciens.length === 0) {
+    // Même salon, mais rien d'ancien encore chargé manuellement : c'est
+    // toujours la page récente qui fait foi pour finHistorique (une fois au
+    // moins une page plus ancienne chargée, c'est chargerMessagesPlusAnciensSalon
+    // qui la met à jour à sa place, voir plus bas).
+    etatHistoriqueSalon.finHistorique = Boolean(salon.finHistorique);
   }
   // Le salon affiché est "lu" par l'utilisateur courant — mais SEULEMENT si
   // la fenêtre a effectivement le focus en ce moment (fenetreEstFocusee) :
@@ -406,47 +567,162 @@ function afficherMessages() {
   el.message.placeholder = t('channels.sendMessagePlaceholder', {
     name: salon.nom,
   });
-  if (!salon.messages.length) {
-    el.messages.replaceChildren(
+
+  // Page récente (salon.messages) + historique manuellement remonté (voir
+  // chargerMessagesPlusAnciensSalon) : voir fusionnerHistorique plus haut.
+  const tousLesMessages = fusionnerHistorique(
+    etatHistoriqueSalon.messagesAnciens,
+    salon.messages,
+    'date'
+  );
+
+  // Mémorise la position de défilement AVANT de reconstruire la liste : sans
+  // ça, remplacer le contenu de #message-list (replaceChildren) réinitialise
+  // implicitement son scroll, ce qui ferait sauter la vue tout en haut à
+  // chaque chargement de messages plus anciens (voir conserverPositionScroll
+  // ci-dessous et chargerMessagesPlusAnciensSalon).
+  const hauteurAvant = el.messages.scrollHeight;
+  const scrollAvant = el.messages.scrollTop;
+
+  el.messages.replaceChildren();
+
+  if (!tousLesMessages.length) {
+    // Conversation réellement vide (rien à charger, ni de récent ni
+    // d'ancien) : la barre d'historique ("Fin de l'historique"/bouton)
+    // n'apporte rien de plus que l'état vide ci-dessous, donc on ne l'affiche
+    // pas dans ce cas précis.
+    el.messages.appendChild(
       creerEl('p', {
         classe: 'empty-state',
         texte: t('channels.noMessages'),
       })
     );
+  } else {
+    el.messages.appendChild(
+      creerStatutHistorique(
+        etatHistoriqueSalon,
+        chargerMessagesPlusAnciensSalon
+      )
+    );
+    tousLesMessages.forEach((message) => {
+      const auteur =
+        utilisateur(message.auteurId)?.pseudo ?? t('channels.system');
+      const estMessagePersonnel = message.auteurId === utilisateurActuelId;
+      const texteEl = creerEl('p', { classe: 'text' });
+      remplirTexteMessage(texteEl, message.contenu);
+      const article = creerEl('article', {
+        classe: estMessagePersonnel ? 'message-row own' : 'message-row',
+        enfants: [
+          creerEl('div', {
+            classe: 'avatar',
+            texte: auteur[0].toUpperCase(),
+          }),
+          creerEl('div', {
+            classe: 'message-body',
+            enfants: [
+              creerEl('div', {
+                classe: 'message-meta',
+                enfants: [
+                  creerEl('span', { classe: 'author', texte: auteur }),
+                  creerEl('span', {
+                    classe: 'timestamp',
+                    // Heure courte (ex. "14:32") plutôt que toLocaleString(),
+                    // qui produit une date+heure complète très longue
+                    // ("2026-09-07 14 h 32 min 58 s" en fr-CA) : cette
+                    // longueur forçait la bulle entière à s'élargir pour
+                    // accueillir la ligne meta, même pour un message très
+                    // court comme "À plus tard !" (voir #22 - bug rapporté).
+                    // On aligne ici sur le format déjà utilisé côté messages
+                    // privés (voir timeLabel dans message-prive.js).
+                    texte: new Date(message.date).toLocaleTimeString(
+                      I18n.obtenirLangue() === 'en' ? 'en-CA' : 'fr-CA',
+                      { hour: '2-digit', minute: '2-digit' }
+                    ),
+                  }),
+                ],
+              }),
+              texteEl,
+            ],
+          }),
+        ],
+      });
+      el.messages.appendChild(article);
+    });
+  }
+
+  if (conserverPositionScroll) {
+    // Charger plus ancien insère du contenu EN HAUT de la liste : on
+    // recale le scroll pour que les messages déjà lus restent exactement où
+    // ils étaient à l'écran, plutôt que de laisser le navigateur (qui remet
+    // scrollTop à 0 après un replaceChildren) faire sauter la vue tout en
+    // haut, sur les tout nouveaux messages plus anciens.
+    el.messages.scrollTop =
+      el.messages.scrollHeight - hauteurAvant + scrollAvant;
+  } else {
+    el.messages.scrollTop = el.messages.scrollHeight;
+  }
+}
+
+/**
+ * Charge la page de messages plus anciens qui précède ceux déjà affichés
+ * pour le salon actif (pagination "charger plus ancien" — voir
+ * obtenirMessagesSalonAvant côté MockGatewayRuntime.js), et les fusionne
+ * dans etatHistoriqueSalon avant de redemander un rendu qui préserve la
+ * position de défilement (voir afficherMessages({ conserverPositionScroll })).
+ * Sans effet si un chargement est déjà en cours, si l'historique du salon
+ * actif est déjà entièrement remonté, ou si aucun salon n'est actif —
+ * appelée aussi bien par le bouton (voir creerStatutHistorique) que par le
+ * défilement automatique près du haut de la liste (voir l'écouteur 'scroll'
+ * plus bas).
+ */
+async function chargerMessagesPlusAnciensSalon() {
+  const salon = salonActif();
+  if (
+    !salon ||
+    etatHistoriqueSalon.salonId !== salon.id ||
+    etatHistoriqueSalon.enChargement ||
+    etatHistoriqueSalon.finHistorique
+  ) {
     return;
   }
-  salon.messages.forEach((message) => {
-    const auteur =
-      utilisateur(message.auteurId)?.pseudo ?? t('channels.system');
-    const estMessagePersonnel = message.auteurId === utilisateurActuelId;
-    const article = creerEl('article', {
-      classe: estMessagePersonnel ? 'message-row own' : 'message-row',
-      enfants: [
-        creerEl('div', { classe: 'avatar', texte: auteur[0].toUpperCase() }),
-        creerEl('div', {
-          classe: 'message-body',
-          enfants: [
-            creerEl('div', {
-              classe: 'message-meta',
-              enfants: [
-                creerEl('span', { classe: 'author', texte: auteur }),
-                creerEl('span', {
-                  classe: 'timestamp',
-                  texte: new Date(message.date).toLocaleString(
-                    I18n.obtenirLangue() === 'en' ? 'en-CA' : 'fr-CA'
-                  ),
-                }),
-              ],
-            }),
-            creerEl('p', { classe: 'text', texte: message.contenu }),
-          ],
-        }),
-      ],
+
+  const plusAncienCharge =
+    etatHistoriqueSalon.messagesAnciens[0] ?? salon.messages[0];
+
+  etatHistoriqueSalon.enChargement = true;
+  afficherMessages({ conserverPositionScroll: true });
+
+  try {
+    const resultat = await window.electronAPI.obtenirMessagesSalonAvant({
+      salonId: salon.id,
+      utilisateurId: utilisateurActuelId,
+      avantId: plusAncienCharge?.id,
     });
-    el.messages.appendChild(article);
-  });
-  el.messages.scrollTop = el.messages.scrollHeight;
+    etatHistoriqueSalon.messagesAnciens = fusionnerHistorique(
+      etatHistoriqueSalon.messagesAnciens,
+      resultat.messages,
+      'date'
+    );
+    etatHistoriqueSalon.finHistorique = resultat.finHistorique;
+  } catch (erreur) {
+    notifier(messageErreur(erreur), true);
+  } finally {
+    etatHistoriqueSalon.enChargement = false;
+    afficherMessages({ conserverPositionScroll: true });
+  }
 }
+
+// Déclenchement automatique du chargement de l'historique plus ancien en
+// s'approchant du haut de la liste (défilement "progressif", en plus du
+// bouton explicite — voir creerStatutHistorique) : chargerMessagesPlusAnciensSalon
+// est déjà protégée contre les appels superflus (chargement en cours,
+// historique déjà épuisé, aucun salon actif), donc pas de garde
+// supplémentaire nécessaire ici.
+el.messages.addEventListener('scroll', () => {
+  if (el.messages.scrollTop < 80) {
+    chargerMessagesPlusAnciensSalon();
+  }
+});
 
 function afficherActions() {
   const salon = salonActif();

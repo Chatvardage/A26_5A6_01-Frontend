@@ -18,6 +18,70 @@ function creerDmId(utilisateurAId, utilisateurBId) {
 }
 
 /**
+ * Taille par défaut d'une page d'historique de messages (salon ou DM), voir
+ * `paginerMessages` ci-dessous. Utilisée à la fois pour la page "récente"
+ * initiale (obtenirEtat / obtenirConversationsPrivees) et pour chaque page
+ * "plus ancienne" demandée ensuite (obtenirMessagesSalonAvant /
+ * obtenirMessagesPriveesAvant), sauf si l'appelant précise sa propre taille.
+ */
+const TAILLE_PAGE_MESSAGES = 15;
+
+/**
+ * Historique de démonstration pour #général (salon public 's1') :
+ * volontairement long (largement plus que TAILLE_PAGE_MESSAGES) pour pouvoir
+ * tester "charger les messages plus anciens" / "fin de l'historique" dès le
+ * lancement de l'app, sans avoir à envoyer des dizaines de messages à la
+ * main. Chaque entrée est `[auteurId, contenu]` ; les dates sont générées
+ * dans le constructeur (une minute d'écart entre chaque message, en
+ * remontant depuis `now`), voir plus bas.
+ */
+const HISTORIQUE_DEMO_GENERAL = [
+  ['u1', 'Bienvenue dans ChatVardage !'],
+  ['u1', "Ce salon sert à jaser de tout et de rien, sentez-vous à l'aise."],
+  ['u2', 'Salut tout le monde 👋'],
+  ['u3', 'Hey ! Contente de rejoindre le salon.'],
+  ['u4', 'Allo ! Ça va bien vous autres ?'],
+  ['u2', 'Ça va super, merci ! Et toi Logan ?'],
+  ['u4', "Pas pire, un peu occupé cette semaine avec l'école."],
+  ['u5', 'Salut la gang !'],
+  ['u6', 'Yo 👋'],
+  ['u1', "Est-ce que tout le monde a réussi à installer l'appli ?"],
+  ['u3', 'Oui, ça fonctionne bien de mon côté.'],
+  ['u5', 'Pareil, aucun problème.'],
+  ['u6', "Moi j'ai eu un petit bug au lancement mais ça s'est réglé."],
+  ['u1', 'Bon à savoir, merci Fiona.'],
+  ['u2', "Quelqu'un a des nouvelles du prochain sprint ?"],
+  ['u4', "On dirait que ça avance bien, j'ai vu passer plusieurs PR."],
+  ['u3', "Oui, j'ai vu ça aussi. Ça sent bon pour la démo."],
+  ['u1', 'On devrait faire un point rapide demain matin.'],
+  ['u5', 'Ça marche pour moi.'],
+  ['u6', 'Moi aussi, ça me va.'],
+  ['u2', 'Parfait, je vais envoyer une invitation.'],
+  ['u4', 'Merci Ariane !'],
+  ['u3', "Sinon, quelqu'un a testé les nouvelles notifications ?"],
+  ['u1', "Oui, ça fonctionne bien, même le badge sur l'icône."],
+  ['u5', "Cool, j'irai jeter un oeil."],
+  ['u6', 'Est-ce que le mode sombre est prévu un jour ?'],
+  ['u2', 'Bonne idée, je vais noter ça dans le backlog.'],
+  ['u4', 'En attendant, le thème actuel est déjà pas mal joli.'],
+  ['u3', "Je suis d'accord, les couleurs sont agréables."],
+  ['u1', 'Merci, on a mis du temps à peaufiner ça.'],
+  ['u5', "Est-ce que quelqu'un peut relire ma dernière PR ?"],
+  ['u6', 'Je peux regarder ça après le dîner.'],
+  ['u5', 'Merci beaucoup Fiona !'],
+  ['u2', "N'oubliez pas la réunion d'équipe à 14h."],
+  ['u4', 'Merci du rappel.'],
+  ['u3', "J'y serai."],
+  ['u1', 'Bonne journée à tous !'],
+  ['u6', 'Bonne journée !'],
+  ['u5', 'À plus tard 👋'],
+  ['u2', 'On se reparle bientôt.'],
+  ['u4', "C'est noté, à tantôt."],
+  ['u1', 'Petit rappel : le build de démonstration est prévu vendredi.'],
+  ['u3', "Merci, je vais m'assurer que tout est prêt de mon côté."],
+];
+
+/**
  * Mock d'exécution utilisé par Electron jusqu'à l'arrivée du backend réel.
  * L'UI n'accède jamais à cet objet directement : main.js l'expose par des
  * canaux IPC précis via preload.js.
@@ -25,6 +89,16 @@ function creerDmId(utilisateurAId, utilisateurBId) {
 class MockGatewayRuntime {
   constructor() {
     const now = Date.now();
+    // Dates croissantes, une minute d'écart, la dernière entrée de
+    // HISTORIQUE_DEMO_GENERAL se retrouvant la plus proche de `now` — voir
+    // sa déclaration plus haut pour le pourquoi de cet historique volumineux.
+    const messagesGeneral = HISTORIQUE_DEMO_GENERAL.map(
+      ([auteurId, contenu], index) => ({
+        auteurId,
+        contenu,
+        date: now - (HISTORIQUE_DEMO_GENERAL.length - index) * 60000,
+      })
+    );
     this.utilisateurs = [
       { id: 'u1', pseudo: 'sam' },
       { id: 'u2', pseudo: 'ariane' },
@@ -53,13 +127,7 @@ class MockGatewayRuntime {
         // Salon public : tous les utilisateurs en sont membres d'office.
         membreIds: this.utilisateurs.map((item) => item.id),
         membresInvites: [],
-        messages: [
-          {
-            auteurId: 'u1',
-            contenu: 'Bienvenue dans ChatVardage !',
-            date: Date.now(),
-          },
-        ],
+        messages: messagesGeneral,
       },
       {
         id: 's2',
@@ -71,6 +139,20 @@ class MockGatewayRuntime {
         messages: [],
       },
     ];
+
+    // Compteur pour générer des ids de messages de salon uniques (voir
+    // envoyerMessage), même principe que prochainMessagePriveIndex plus bas
+    // pour les DM. Les messages de salon n'avaient auparavant pas d'id du
+    // tout (rien n'en dépendait) : la pagination par curseur (voir
+    // paginerMessages) a besoin d'un id stable par message pour désigner
+    // "le message avant lequel charger la page suivante" (avantId), d'où
+    // cette assignation rétroactive aux messages déjà seedés ci-dessus.
+    this.prochainMessageSalonIndex = 0;
+    this.salons.forEach((salon) => {
+      salon.messages.forEach((message) => {
+        message.id = `msg-s-${this.prochainMessageSalonIndex++}`;
+      });
+    });
 
     // Mêmes paires DM que celles seedées dans MockGateway.ts, pour que les
     // deux mocks exposent des données cohérentes.
@@ -210,6 +292,41 @@ class MockGatewayRuntime {
     this.utilisateurConnecteId = null;
   }
 
+  /**
+   * Pagine `messagesTries` (déjà triés du plus ancien au plus récent) avant
+   * le message d'identifiant `avantId`, en retournant au plus `taille`
+   * messages qui le précèdent immédiatement — pagination "charger plus
+   * ancien". Même logique que `paginerAvant` du domaine
+   * (src/domain/entities/Message.ts), dupliquée ici pour la même raison que
+   * `creerDmId` ci-dessus (ce fichier est exécuté par Electron sans étape de
+   * compilation, donc ne peut pas importer directement un module TS).
+   *
+   * Si `avantId` est absent, pagine à partir de la fin (page la plus
+   * récente, utilisée pour le chargement initial). Si `avantId` ne
+   * correspond à aucun message (ex. déjà retiré), retombe aussi sur la fin
+   * plutôt que de planter.
+   *
+   * @param {Array<{id: string}>} messagesTries
+   * @param {string|undefined} avantId
+   * @param {number} taille
+   * @returns {{ page: Array, finHistorique: boolean }} `finHistorique` est
+   *   vrai quand cette page remonte jusqu'au tout premier message de la
+   *   conversation (plus rien de plus ancien à charger).
+   */
+  paginerMessages(messagesTries, avantId, taille) {
+    const indexFin = avantId
+      ? messagesTries.findIndex((m) => m.id === avantId)
+      : messagesTries.length;
+    const finSure = indexFin === -1 ? messagesTries.length : indexFin;
+    const tailleSure =
+      Number.isFinite(taille) && taille > 0 ? taille : TAILLE_PAGE_MESSAGES;
+    const debut = Math.max(0, finSure - tailleSure);
+    return {
+      page: messagesTries.slice(debut, finSure),
+      finHistorique: debut === 0,
+    };
+  }
+
   verifierUtilisateur(utilisateurId) {
     if (!this.utilisateurs.some((item) => item.id === utilisateurId)) {
       throw new Error('ERR_UTILISATEUR_INVALIDE');
@@ -293,6 +410,27 @@ class MockGatewayRuntime {
     return this.utilisateurConnecteId ?? null;
   }
 
+  // Construit le DTO exposé au renderer pour un salon donné : ses messages
+  // sont limités à la page la plus récente (voir paginerMessages), pas
+  // l'historique complet — l'historique plus ancien se charge ensuite à la
+  // demande via obtenirMessagesSalonAvant. `finHistorique` indique si cette
+  // page récente remonte déjà jusqu'au tout premier message du salon (rien
+  // de plus ancien à proposer de charger).
+  construireSalonDTO(salon) {
+    const salonClone = structuredClone(salon);
+    const messagesTries = [...salonClone.messages].sort(
+      (a, b) => a.date - b.date
+    );
+    const { page, finHistorique } = this.paginerMessages(
+      messagesTries,
+      undefined,
+      TAILLE_PAGE_MESSAGES
+    );
+    salonClone.messages = page;
+    salonClone.finHistorique = finHistorique;
+    return salonClone;
+  }
+
   obtenirEtat(utilisateurId) {
     this.verifierUtilisateur(utilisateurId);
     return {
@@ -303,7 +441,7 @@ class MockGatewayRuntime {
             salon.visibilite === 'public' ||
             salon.membreIds.includes(utilisateurId)
         )
-        .map((salon) => structuredClone(salon)),
+        .map((salon) => this.construireSalonDTO(salon)),
       invitations: this.salons
         .filter((salon) => salon.membresInvites.includes(utilisateurId))
         .map((salon) => ({
@@ -312,6 +450,31 @@ class MockGatewayRuntime {
           hoteId: salon.hoteId,
         })),
     };
+  }
+
+  /**
+   * Retourne une page plus ancienne de l'historique d'un salon (pagination
+   * "charger plus ancien" — voir paginerMessages), une fois la page récente
+   * initiale déjà affichée (voir construireSalonDTO/obtenirEtat).
+   *
+   * @param {{salonId: string, utilisateurId: string, avantId?: string, taille?: number}} param0
+   * @returns {{ messages: Array, finHistorique: boolean }}
+   */
+  obtenirMessagesSalonAvant({ salonId, utilisateurId, avantId, taille }) {
+    this.verifierUtilisateur(utilisateurId);
+    const salon = this.trouverSalon(salonId);
+    const estMembre =
+      salon.visibilite === 'public' || salon.membreIds.includes(utilisateurId);
+    if (!estMembre) {
+      throw new Error('ERR_ACCES_REFUSE_SALON');
+    }
+    const messagesTries = [...salon.messages].sort((a, b) => a.date - b.date);
+    const { page, finHistorique } = this.paginerMessages(
+      messagesTries,
+      avantId,
+      taille
+    );
+    return { messages: structuredClone(page), finHistorique };
   }
 
   // Construit le DTO exposé au renderer pour une conversation privée donnée,
@@ -328,6 +491,17 @@ class MockGatewayRuntime {
       .filter((m) => m.conversationId === conversation.id)
       .sort((a, b) => a.envoi - b.envoi);
     const lastMessage = messages[messages.length - 1];
+    // `messages` n'expose que la page la plus récente (voir paginerMessages),
+    // pas l'historique complet de la conversation — l'historique plus ancien
+    // se charge ensuite à la demande via obtenirMessagesPriveesAvant.
+    // `lastMessage` reste calculé sur la liste complète triée ci-dessus (pas
+    // sur la page), même si en pratique il en fait toujours partie (c'est le
+    // tout dernier message).
+    const { page: messagesRecents, finHistorique } = this.paginerMessages(
+      messages,
+      undefined,
+      TAILLE_PAGE_MESSAGES
+    );
     return {
       id: conversation.id,
       participantIds: [...conversation.participantIds],
@@ -336,9 +510,45 @@ class MockGatewayRuntime {
         pseudo: otherUser?.pseudo ?? 'Utilisateur',
         present: this.presences[otherUser?.id] === 'en-ligne',
       },
-      messages: messages.map((m) => ({ ...m })),
+      messages: messagesRecents.map((m) => ({ ...m })),
+      finHistorique,
       lastMessage: lastMessage ? { ...lastMessage } : null,
     };
+  }
+
+  /**
+   * Retourne une page plus ancienne de l'historique d'une conversation
+   * privée (pagination "charger plus ancien" — voir paginerMessages), une
+   * fois la page récente initiale déjà affichée (voir
+   * construireConversationPriveeDTO/obtenirConversationsPrivees).
+   *
+   * @param {{conversationId: string, utilisateurId: string, avantId?: string, taille?: number}} param0
+   * @returns {{ messages: Array, finHistorique: boolean }}
+   */
+  obtenirMessagesPriveesAvant({
+    conversationId,
+    utilisateurId,
+    avantId,
+    taille,
+  }) {
+    const utilisateurActuelId = utilisateurId ?? 'u1';
+    this.verifierUtilisateur(utilisateurActuelId);
+    const conversation = this.conversationsPrivees.find(
+      (item) => item.id === conversationId
+    );
+    if (!conversation) throw new Error('ERR_CONVERSATION_PRIVEE_INTROUVABLE');
+    if (!conversation.participantIds.includes(utilisateurActuelId)) {
+      throw new Error('ERR_ACCES_REFUSE_CONVERSATION');
+    }
+    const messages = this.messagesPrives
+      .filter((m) => m.conversationId === conversationId)
+      .sort((a, b) => a.envoi - b.envoi);
+    const { page, finHistorique } = this.paginerMessages(
+      messages,
+      avantId,
+      taille
+    );
+    return { messages: page.map((m) => ({ ...m })), finHistorique };
   }
 
   obtenirConversationsPrivees(utilisateurId) {
@@ -402,7 +612,7 @@ class MockGatewayRuntime {
       messages: [],
     };
     this.salons.push(salon);
-    return structuredClone(salon);
+    return this.construireSalonDTO(salon);
   }
 
   inviter({ salonId, utilisateurId, hoteId }) {
@@ -413,11 +623,13 @@ class MockGatewayRuntime {
       throw new Error('ERR_INVITATIONS_DESACTIVEES_PUBLIC');
     }
     if (salon.hoteId !== hoteId) throw new Error('ERR_SEUL_HOTE_PEUT_INVITER');
-    if (salon.membreIds.includes(utilisateurId)) return structuredClone(salon);
+    if (salon.membreIds.includes(utilisateurId)) {
+      return this.construireSalonDTO(salon);
+    }
     if (!salon.membresInvites.includes(utilisateurId)) {
       salon.membresInvites.push(utilisateurId);
     }
-    return structuredClone(salon);
+    return this.construireSalonDTO(salon);
   }
 
   accepterInvitation({ salonId, utilisateurId }) {
@@ -432,7 +644,7 @@ class MockGatewayRuntime {
     if (!salon.membreIds.includes(utilisateurId)) {
       salon.membreIds.push(utilisateurId);
     }
-    return structuredClone(salon);
+    return this.construireSalonDTO(salon);
   }
 
   refuserInvitation({ salonId, utilisateurId }) {
@@ -469,6 +681,7 @@ class MockGatewayRuntime {
       typeof contenu === 'string' ? contenu.trim().slice(0, 2000) : '';
     if (!texte) throw new Error('ERR_MESSAGE_VIDE');
     const message = {
+      id: `msg-s-${this.prochainMessageSalonIndex++}`,
       auteurId: utilisateurId,
       contenu: texte,
       date: Date.now(),
