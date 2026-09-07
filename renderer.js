@@ -10,12 +10,19 @@
 // nécessité entre les environnements du projet, mais translations.json
 // reste l'unique source des textes eux-mêmes.
 let dictionnaires = null; // rempli par initialiser() avant le premier rendu
+// 'fr' ici n'est qu'un repli de tout dernier recours pour la toute première
+// fraction de seconde avant qu'initialiser() n'ait pu joindre le processus
+// main (pas d'IPC synchrone possible à ce stade) : dès que 'i18n:langue-par-
+// defaut' répond, langueParDefaut est réaligné sur LANGUE_PAR_DEFAUT
+// (src/i18n/i18n.js), la vraie source de vérité — évite de dupliquer cette
+// constante en dur ici sans lien avec l'original.
 let langueActuelle = 'fr';
+let langueParDefaut = 'fr';
 
 function t(cle, params) {
   const dictionnaire =
     (dictionnaires && dictionnaires[langueActuelle]) ||
-    (dictionnaires && dictionnaires.fr) ||
+    (dictionnaires && dictionnaires[langueParDefaut]) ||
     {};
   const brut = cle
     .split('.')
@@ -207,14 +214,24 @@ function messageErreur(erreur) {
 
   const [code, ...params] = brut.split('|');
   const cle = `errors.${code}`;
-  const traduit = t(cle);
+  // Passe le paramètre à t() plutôt que de refaire la substitution ici :
+  // un futur code d'erreur "CODE|param" dont le texte utilise un autre nom
+  // de paramètre que {pseudo} (ex. {host}) fonctionnerait quand même.
+  const traduit = t(cle, params.length ? { pseudo: params[0] } : undefined);
 
   if (traduit === cle) {
-    // Code non reconnu (ex. message déjà en clair) : on garde tel quel
-    // plutôt que d'afficher une clé technique à l'utilisateur.
+    // Code non reconnu : on garde le texte brut plutôt qu'un message
+    // générique. Différence assumée avec LoginPage.tsx (qui, lui, retombe
+    // sur "errors.generic") : ce tableau de bord est l'outil de test/démo
+    // (utilisateurs simulés, voir #current-user-select) où voir le détail
+    // exact d'une erreur inattendue — y compris une erreur JS qui n'a
+    // jamais été un CODE reconnu — aide à diagnostiquer plus vite qu'un
+    // message vague, alors que l'écran de connexion est la première chose
+    // vue par une personne qui n'a pas encore de raison de faire confiance
+    // à un détail technique brut.
     return brut;
   }
-  return params.length ? traduit.replace('{pseudo}', params[0]) : traduit;
+  return traduit;
 }
 
 function remplirSelectUtilisateur(utilisateurs) {
@@ -759,6 +776,10 @@ el.formulaire.addEventListener('submit', async (event) => {
 el.utilisateur.addEventListener('change', async (event) => {
   utilisateurActuelId = event.target.value;
   sessionStorage.setItem('currentUserId', utilisateurActuelId);
+  // Le brouillon en cours appartenait à l'utilisateur précédent : il ne
+  // doit pas apparaître dans le champ de l'utilisateur simulé qu'on vient
+  // de sélectionner (voir le même réflexe dans message-prive.js).
+  el.message.value = '';
   fermerMenuNotif();
   await actualiser();
 });
@@ -800,16 +821,36 @@ async function initialiserUtilisateurCourant() {
 }
 
 async function initialiser() {
-  try {
-    dictionnaires = await window.electronAPI.obtenirDictionnairesI18n();
-  } catch {
-    // t() se rabat sur la clé brute si dictionnaires reste `null`.
+  // Les trois canaux ci-dessous sont indépendants (aucun n'a besoin du
+  // résultat d'un autre) : les lancer en parallèle plutôt qu'en série évite
+  // trois allers-retours IPC successifs au démarrage. allSettled (plutôt que
+  // Promise.all) conserve le même comportement qu'avant — chaque échec est
+  // géré indépendamment, un canal qui échoue ne doit pas empêcher les autres
+  // de s'appliquer.
+  const [resultatDictionnaires, resultatLangue, resultatLangueParDefaut] =
+    await Promise.allSettled([
+      window.electronAPI.obtenirDictionnairesI18n(),
+      window.electronAPI.obtenirLangue(),
+      window.electronAPI.obtenirLangueParDefaut(),
+    ]);
+
+  if (resultatDictionnaires.status === 'fulfilled') {
+    dictionnaires = resultatDictionnaires.value;
   }
-  try {
-    langueActuelle = await window.electronAPI.obtenirLangue();
+  // sinon, t() se rabat sur la clé brute si dictionnaires reste `null`.
+
+  if (resultatLangueParDefaut.status === 'fulfilled') {
+    langueParDefaut = resultatLangueParDefaut.value;
+  }
+  // sinon, repli sur 'fr' (valeur initiale, voir sa déclaration plus haut).
+
+  if (resultatLangue.status === 'fulfilled') {
+    langueActuelle = resultatLangue.value;
     if (el.langue) el.langue.value = langueActuelle;
-  } catch {
-    // Repli sur 'fr' (valeur initiale).
+  } else {
+    // Repli sur langueParDefaut (lui-même 'fr' si le canal ci-dessus a aussi
+    // échoué) plutôt que rester sur la valeur initiale codée en dur.
+    langueActuelle = langueParDefaut;
   }
 
   try {

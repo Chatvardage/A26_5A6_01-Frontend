@@ -37,6 +37,15 @@ interface LoginPageProps {
   onSessionEtablie?: () => void;
 }
 
+/**
+ * Délai maximal accordé à `gateway.pseudoDisponible` avant de considérer la
+ * vérification comme en échec. Sans cette borne, un appel qui ne se résout
+ * jamais (IPC bloqué, implémentation réseau future qui ne répond pas) laisse
+ * le champ indéfiniment sur "Vérification…", puisque ni `disponibilite` ni
+ * `erreurSoumission` ne sont alors mis à jour.
+ */
+const DELAI_VERIFICATION_MS = 5000;
+
 type EtatChamp = 'idle' | 'checking' | 'error' | 'ok';
 
 interface Disponibilite {
@@ -72,11 +81,15 @@ function traduireErreurSoumission(
   }
   const [code, ...params] = erreur.cle.split('|');
   const cleTraduction = `errors.${code}`;
-  const traduit = t(langue, cleTraduction);
-  if (traduit === cleTraduction) {
-    return t(langue, 'errors.generic');
-  }
-  return params.length ? traduit.replace('{pseudo}', params[0]) : traduit;
+  // Passe le paramètre à t() plutôt que de refaire la substitution ici :
+  // un futur code d'erreur "CODE|param" dont le texte utilise un autre
+  // nom de paramètre que {pseudo} (ex. {host}) fonctionnerait quand même.
+  const traduit = t(
+    langue,
+    cleTraduction,
+    params.length ? { pseudo: params[0] } : undefined
+  );
+  return traduit === cleTraduction ? t(langue, 'errors.generic') : traduit;
 }
 
 export function LoginPage({
@@ -107,14 +120,52 @@ export function LoginPage({
 
     const jeton = ++jetonVerification.current;
     const pseudoVerifie = pseudo.trim();
+    let delaiDepasse: ReturnType<typeof setTimeout> | undefined;
 
-    const debounce = setTimeout(async () => {
-      const disponible = await gateway.pseudoDisponible(pseudoVerifie);
-      if (jeton !== jetonVerification.current) return; // réponse obsolète
-      setDisponibilite({ pseudo: pseudoVerifie, disponible });
+    const debounce = setTimeout(() => {
+      // Borne l'attente : sans ce minuteur, un appel qui ne se résout jamais
+      // (voir DELAI_VERIFICATION_MS) laissait le champ bloqué indéfiniment
+      // sur "Vérification…", car ni `disponibilite` ni `erreurSoumission`
+      // n'étaient alors jamais mis à jour (voir le calcul de `etat` plus bas).
+      delaiDepasse = setTimeout(() => {
+        if (jeton !== jetonVerification.current) return; // réponse obsolète
+        setErreurSoumission({
+          pseudo: pseudoVerifie,
+          cle: 'auth.checkTimeout',
+        });
+      }, DELAI_VERIFICATION_MS);
+
+      gateway
+        .pseudoDisponible(pseudoVerifie)
+        .then((disponible) => {
+          if (jeton !== jetonVerification.current) return; // réponse obsolète
+          clearTimeout(delaiDepasse);
+          setDisponibilite({ pseudo: pseudoVerifie, disponible });
+          // Une vérification aboutie pour ce pseudo invalide toute erreur
+          // précédente associée au MÊME pseudo (ex. un timeout ou un rejet
+          // antérieur) : sans ça, `etat` restait bloqué sur 'error' même
+          // après un succès, puisque `erreurSoumission` est prioritaire
+          // dans son calcul plus bas.
+          setErreurSoumission((actuelle) =>
+            actuelle && actuelle.pseudo === pseudoVerifie ? null : actuelle
+          );
+        })
+        .catch(() => {
+          // Sans ce catch, un appel IPC qui rejette laissait le champ
+          // bloqué sur "Vérification de la disponibilité…" indéfiniment.
+          if (jeton !== jetonVerification.current) return; // réponse obsolète
+          clearTimeout(delaiDepasse);
+          setErreurSoumission({
+            pseudo: pseudoVerifie,
+            cle: 'auth.checkFailed',
+          });
+        });
     }, 300);
 
-    return () => clearTimeout(debounce);
+    return () => {
+      clearTimeout(debounce);
+      clearTimeout(delaiDepasse);
+    };
   }, [pseudo, formatValide, gateway]);
 
   // --- État affiché, dérivé au rendu (pas de setState synchrone requis) ---

@@ -76,6 +76,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   obtenirLangue: () => ipcRenderer.invoke('langue:obtenir'),
   definirLangue: (langue) => ipcRenderer.invoke('langue:definir', { langue }),
   obtenirDictionnairesI18n: () => ipcRenderer.invoke('i18n:dictionnaires'),
+  obtenirLangueParDefaut: () => ipcRenderer.invoke('i18n:langue-par-defaut'),
 
   obtenirEtatSalons: (utilisateurId) =>
     ipcRenderer.invoke('salons:etat', { utilisateurId }),

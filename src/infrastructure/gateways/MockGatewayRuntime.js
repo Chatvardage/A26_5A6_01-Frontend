@@ -260,7 +260,15 @@ class MockGatewayRuntime {
         // nettoyerErreurIpc), pas ici dans la couche métier, qui ne doit pas
         // connaître la langue choisie par l'utilisateur. Convention
         // "CODE|param" : le seul moyen simple de faire voyager un paramètre
-        // dans un message d'erreur à travers l'IPC.
+        // dans un message d'erreur à travers l'IPC — fragile si `pseudo`
+        // contenait lui-même un '|' (le premier '|' ferait alors office de
+        // séparateur côté présentation, tronquant le pseudo affiché).
+        // `validationPseudo` (domaine) l'interdit déjà en amont, mais cette
+        // couche ne doit pas dépendre silencieusement d'une règle définie
+        // ailleurs : on revérifie ici, en défense en profondeur.
+        if (String(pseudo).includes('|')) {
+          throw new Error('ERR_UTILISATEUR_INVALIDE');
+        }
         throw new Error(`ERR_PSEUDO_PRIS|${pseudo}`);
       }
       this.utilisateurs.push({ id, pseudo });

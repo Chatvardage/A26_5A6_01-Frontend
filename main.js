@@ -667,6 +667,11 @@ exposerCanal('langue:definir', ({ langue }) => {
   return langueActuelle;
 });
 exposerCanal('i18n:dictionnaires', () => translations);
+// Permet à renderer.js/message-prive.js (pas de require(), voir plus haut)
+// de dériver leur propre repli initial de LA MÊME constante que le reste de
+// l'app, plutôt que de recopier 'fr' en dur indépendamment dans chaque
+// fichier — évite une dérive silencieuse si LANGUE_PAR_DEFAUT change un jour.
+exposerCanal('i18n:langue-par-defaut', () => LANGUE_PAR_DEFAUT);
 
 // --- Salons ------------------------------------------------------------
 ipcMain.handle(

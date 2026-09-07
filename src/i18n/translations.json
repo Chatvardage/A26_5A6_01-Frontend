@@ -24,6 +24,8 @@
       "checking": "Vérification de la disponibilité…",
       "available": "Pseudo disponible.",
       "taken": "Ce pseudo est déjà pris, choisissez-en un autre.",
+      "checkTimeout": "Impossible de vérifier la disponibilité du pseudo (délai dépassé).",
+      "checkFailed": "Impossible de vérifier la disponibilité du pseudo.",
       "languageLabel": "Langue"
     },
     "nav": {
@@ -149,6 +151,8 @@
       "checking": "Checking availability…",
       "available": "Username available.",
       "taken": "This username is already taken, choose another one.",
+      "checkTimeout": "Couldn't check username availability (request timed out).",
+      "checkFailed": "Couldn't check username availability.",
       "languageLabel": "Language"
     },
     "nav": {

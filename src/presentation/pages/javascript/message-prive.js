@@ -3,12 +3,20 @@
 // pourquoi complet). Cache local du dictionnaire, rempli une fois au
 // démarrage via IPC.
 let dictionnaires = null;
+// 'fr' ici n'est qu'un repli de tout dernier recours pour la toute première
+// fraction de seconde avant que l'initialisation n'ait pu joindre le
+// processus main (pas d'IPC synchrone possible à ce stade) : dès que
+// 'i18n:langue-par-defaut' répond, langueParDefaut est réaligné sur
+// LANGUE_PAR_DEFAUT (src/i18n/i18n.js), la vraie source de vérité — évite de
+// dupliquer cette constante en dur ici sans lien avec l'original (voir le
+// même commentaire dans renderer.js).
 let langueActuelle = 'fr';
+let langueParDefaut = 'fr';
 
 function t(cle, params) {
   const dictionnaire =
     (dictionnaires && dictionnaires[langueActuelle]) ||
-    (dictionnaires && dictionnaires.fr) ||
+    (dictionnaires && dictionnaires[langueParDefaut]) ||
     {};
   const brut = cle
     .split('.')
@@ -62,16 +70,36 @@ window.addEventListener('DOMContentLoaded', async () => {
   const notifMenu = document.getElementById('notif-menu');
   const isTypingNom = document.getElementById('is-typing-nom');
 
-  try {
-    dictionnaires = await window.electronAPI.obtenirDictionnairesI18n();
-  } catch {
-    // t() se rabat sur la clé brute si dictionnaires reste `null`.
+  // Les trois canaux ci-dessous sont indépendants (aucun n'a besoin du
+  // résultat d'un autre) : les lancer en parallèle plutôt qu'en série évite
+  // trois allers-retours IPC successifs au démarrage. allSettled (plutôt que
+  // Promise.all) conserve le même comportement qu'avant — chaque échec est
+  // géré indépendamment, un canal qui échoue ne doit pas empêcher les autres
+  // de s'appliquer.
+  const [resultatDictionnaires, resultatLangue, resultatLangueParDefaut] =
+    await Promise.allSettled([
+      window.electronAPI.obtenirDictionnairesI18n(),
+      window.electronAPI.obtenirLangue(),
+      window.electronAPI.obtenirLangueParDefaut(),
+    ]);
+
+  if (resultatDictionnaires.status === 'fulfilled') {
+    dictionnaires = resultatDictionnaires.value;
   }
-  try {
-    langueActuelle = await window.electronAPI.obtenirLangue();
+  // sinon, t() se rabat sur la clé brute si dictionnaires reste `null`.
+
+  if (resultatLangueParDefaut.status === 'fulfilled') {
+    langueParDefaut = resultatLangueParDefaut.value;
+  }
+  // sinon, repli sur 'fr' (valeur initiale, voir sa déclaration plus haut).
+
+  if (resultatLangue.status === 'fulfilled') {
+    langueActuelle = resultatLangue.value;
     if (langueSelect) langueSelect.value = langueActuelle;
-  } catch {
-    // Repli sur 'fr' (valeur initiale).
+  } else {
+    // Repli sur langueParDefaut (lui-même 'fr' si le canal ci-dessus a aussi
+    // échoué) plutôt que rester sur la valeur initiale codée en dur.
+    langueActuelle = langueParDefaut;
   }
   appliquerTraductionsStatiques();
 
@@ -232,9 +260,15 @@ window.addEventListener('DOMContentLoaded', async () => {
     );
     const [code, ...params] = brut.split('|');
     const cle = `errors.${code}`;
-    const traduit = t(cle);
+    // Passe le paramètre à t() plutôt que de refaire la substitution ici :
+    // un futur code d'erreur "CODE|param" dont le texte utilise un autre nom
+    // de paramètre que {pseudo} (ex. {host}) fonctionnerait quand même.
+    const traduit = t(cle, params.length ? { pseudo: params[0] } : undefined);
+    // Code non reconnu : on garde le texte brut plutôt qu'un message
+    // générique, comme dans renderer.js (voir son commentaire équivalent
+    // pour le pourquoi de cette différence assumée avec LoginPage.tsx).
     if (traduit === cle) return brut;
-    return params.length ? traduit.replace('{pseudo}', params[0]) : traduit;
+    return traduit;
   }
 
   function getFilteredConversations() {

@@ -26,8 +26,8 @@ body {
   margin: 0;
   overflow: hidden;
   font-family:
-          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
-          sans-serif;
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
   color: var(--text-primary);
   background: var(--bg-panel);
   display: flex;
@@ -71,9 +71,9 @@ button {
   cursor: pointer;
   position: relative;
   transition:
-          border-radius 0.15s ease,
-          background 0.15s ease,
-          transform 0.15s ease;
+    border-radius 0.15s ease,
+    background 0.15s ease,
+    transform 0.15s ease;
 }
 
 #message-prive-btn:hover,
@@ -112,9 +112,9 @@ button {
   justify-content: center;
   position: relative;
   transition:
-          border-radius 0.15s ease,
-          background 0.15s ease,
-          color 0.15s ease;
+    border-radius 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .server-icon:hover,
@@ -221,6 +221,28 @@ button {
 
 #user-panel .pseudo {
   font-weight: 600;
+}
+
+/* Colonne d'infos (nom d'utilisateur simulé + ligne de statut/langue) :
+   avant, le sélecteur de langue était un simple <select> jeté à la suite
+   de #current-user-select, avec exactement le même style — au premier
+   coup d'œil on aurait dit un deuxième sélecteur d'utilisateur plutôt
+   qu'un réglage de langue. Regrouper le statut de présence et la langue
+   sur leur propre ligne, sous le nom d'utilisateur, sépare clairement
+   "qui je suis" (au-dessus) de "réglages secondaires" (en dessous). */
+.user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.user-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 #current-user-select {
@@ -668,8 +690,8 @@ dialog::backdrop {
   justify-content: center;
   cursor: pointer;
   transition:
-          background 0.15s ease,
-          color 0.15s ease;
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .notif-settings-btn:hover,
@@ -735,7 +757,6 @@ dialog::backdrop {
   font-size: 0.78rem;
 }
 
-
 /* --- Selects : utilisateur + langue ------------------------------- */
 
 #current-user-select,
@@ -765,8 +786,8 @@ dialog::backdrop {
   background-size: 10px 7px;
 
   transition:
-          background-color 0.15s ease,
-          color 0.15s ease;
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 /* Au survol */
@@ -787,4 +808,24 @@ dialog::backdrop {
 .language-select option {
   background: var(--bg-panel);
   color: var(--text-primary);
+}
+
+/* Le sélecteur de langue est un réglage secondaire, pas un second "compte" —
+   volontairement plus discret que #current-user-select (texte plus petit,
+   fond neutre) et posé sur sa propre ligne avec le statut de présence (voir
+   .user-meta) plutôt que collé juste après, pour qu'on ne les confonde plus
+   au premier coup d'œil. */
+.language-select {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background-color: transparent;
+  padding: 2px 20px 2px 6px;
+  background-position: right 6px center;
+  background-size: 8px 6px;
+}
+
+.language-select:hover,
+.language-select:focus {
+  color: var(--text-primary);
+  background-color: var(--bg-bubble);
 }
