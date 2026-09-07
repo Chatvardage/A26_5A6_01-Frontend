@@ -58,9 +58,13 @@ interface ErreurSoumission {
   /** Clé de traduction (ex. "auth.invalidFormat") ou code brut venant du
    * backend (ex. "ERR_PSEUDO_PRIS|alice") — jamais un texte déjà traduit,
    * pour que le message affiché se retraduise tout seul si la langue
-   * change après coup (voir traduireErreurSoumission ci-dessous). */
+   * change après coup (voir traduireErreurSoumission ci-dessous). Le
+   * paramètre éventuel (ex. "alice" ci-dessus) reste encodé DANS `cle`
+   * plutôt que dans un champ séparé — traduireErreurSoumission le
+   * resépare lui-même via split('|'), donc un champ `params` distinct
+   * ici ne ferait que dupliquer une information déjà présente et jamais
+   * lue. */
   cle: string;
-  params?: Record<string, string>;
 }
 
 /**
@@ -81,15 +85,20 @@ function traduireErreurSoumission(
   }
   const [code, ...params] = erreur.cle.split('|');
   const cleTraduction = `errors.${code}`;
-  // Passe le paramètre à t() plutôt que de refaire la substitution ici :
-  // un futur code d'erreur "CODE|param" dont le texte utilise un autre
-  // nom de paramètre que {pseudo} (ex. {host}) fonctionnerait quand même.
-  const traduit = t(
-    langue,
-    cleTraduction,
-    params.length ? { pseudo: params[0] } : undefined
-  );
-  return traduit === cleTraduction ? t(langue, 'errors.generic') : traduit;
+  const brutTraduit = t(langue, cleTraduction);
+  if (brutTraduit === cleTraduction) {
+    return t(langue, 'errors.generic');
+  }
+  if (!params.length) return brutTraduit;
+  // Convention "CODE|valeur" : un seul paramètre positionnel, dont le nom
+  // (ex. "pseudo", "host"...) n'est pas connu d'ici — on le lit dans le
+  // texte déjà traduit plutôt que de supposer qu'il s'appelle toujours
+  // "pseudo", ce qui laisserait un futur {host} non substitué. On repasse
+  // ensuite par t() (pas de .replace() manuel) pour la substitution.
+  const nomParametre = brutTraduit.match(/\{(\w+)\}/)?.[1];
+  return nomParametre
+    ? t(langue, cleTraduction, { [nomParametre]: params[0] })
+    : brutTraduit;
 }
 
 export function LoginPage({

@@ -2,43 +2,34 @@
 //
 // Pas de require() ici : nodeIntegration est désactivé (à raison, voir
 // main.js) donc ce fichier n'a accès ni à Node ni au module i18n.js utilisé
-// par main.js/preload.js. Le dictionnaire de traductions est demandé UNE
-// FOIS au démarrage via IPC (voir initialiser() plus bas), puis mis en
-// cache ici pour des lookups synchrones — pas d'aller-retour IPC par
-// traduction. Même logique que src/i18n/i18n.js et src/i18n/i18n-web.ts
-// (voir leurs commentaires respectifs) : la fonction est dupliquée par
-// nécessité entre les environnements du projet, mais translations.json
-// reste l'unique source des textes eux-mêmes.
-let dictionnaires = null; // rempli par initialiser() avant le premier rendu
-// 'fr' ici n'est qu'un repli de tout dernier recours pour la toute première
-// fraction de seconde avant qu'initialiser() n'ait pu joindre le processus
-// main (pas d'IPC synchrone possible à ce stade) : dès que 'i18n:langue-par-
-// defaut' répond, langueParDefaut est réaligné sur LANGUE_PAR_DEFAUT
-// (src/i18n/i18n.js), la vraie source de vérité — évite de dupliquer cette
-// constante en dur ici sans lien avec l'original.
-let langueActuelle = 'fr';
-let langueParDefaut = 'fr';
-
-function t(cle, params) {
-  const dictionnaire =
-    (dictionnaires && dictionnaires[langueActuelle]) ||
-    (dictionnaires && dictionnaires[langueParDefaut]) ||
-    {};
-  const brut = cle
-    .split('.')
-    .reduce(
-      (acc, partie) =>
-        acc && typeof acc === 'object' ? acc[partie] : undefined,
-      dictionnaire
+// par main.js/preload.js.
+//
+// I18n vient de i18n-browser.js, un script classique chargé avant celui-ci
+// (voir index.html) qui expose window.I18n comme global — même pattern que
+// NotifPrefs ci-dessous (voir son commentaire pour le garde-fou), et qui
+// tient tout l'état i18n (dictionnaire, langue courante/par défaut) et la
+// logique de lookup/substitution/traduction d'erreurs en UN SEUL endroit
+// partagé avec message-prive.js, plutôt que deux copies à synchroniser à la
+// main (voir i18n-browser.js pour le détail complet).
+const I18n =
+  window.I18n ??
+  (() => {
+    console.error(
+      '[renderer] window.I18n est introuvable : i18n-browser.js doit être chargé avant renderer.js (voir index.html). Traductions désactivées pour cette session (clés brutes affichées).'
     );
-  let texte = typeof brut === 'string' ? brut : cle;
-  if (params) {
-    for (const cleParam of Object.keys(params)) {
-      texte = texte.split(`{${cleParam}}`).join(String(params[cleParam]));
-    }
-  }
-  return texte;
-}
+    return {
+      t: (cle) => cle,
+      appliquerTraductionsStatiques: () => {},
+      messageErreur: (erreur) =>
+        erreur instanceof Error ? erreur.message : String(erreur),
+      initialiserDepuisElectronAPI: async () => 'fr',
+      obtenirLangue: () => 'fr',
+      definirLangueActuelle: () => {},
+    };
+  })();
+const t = I18n.t;
+const appliquerTraductionsStatiques = I18n.appliquerTraductionsStatiques;
+const messageErreur = I18n.messageErreur;
 
 // NotifPrefs vient de notif-prefs.js, un script classique chargé avant celui-ci
 // (voir index.html) qui expose window.NotifPrefs comme global — cette référence
@@ -195,45 +186,6 @@ function notifier(message, erreur = false) {
   window.setTimeout(() => el.toast.classList.remove('visible'), 2600);
 }
 
-/**
- * Traduit une erreur venant du processus main (via IPC) en texte lisible
- * dans la langue courante. Deux couches à défaire : (1) le préfixe
- * qu'Electron ajoute automatiquement à toute erreur IPC, et (2) le CODE
- * stable que MockGatewayRuntime lève (ex. "ERR_ACCES_REFUSE_SALON", ou
- * "ERR_PSEUDO_PRIS|alice" avec un paramètre) plutôt qu'un texte déjà en
- * français — la couche métier ne doit pas connaître la langue choisie par
- * l'utilisateur, donc la traduction se fait ici, à la frontière IPC/UI.
- */
-function messageErreur(erreur) {
-  const brutAvecPrefixe =
-    erreur instanceof Error ? erreur.message : String(erreur);
-  const brut = brutAvecPrefixe.replace(
-    /^Error invoking remote method '[^']+': (?:Error: )?/,
-    ''
-  );
-
-  const [code, ...params] = brut.split('|');
-  const cle = `errors.${code}`;
-  // Passe le paramètre à t() plutôt que de refaire la substitution ici :
-  // un futur code d'erreur "CODE|param" dont le texte utilise un autre nom
-  // de paramètre que {pseudo} (ex. {host}) fonctionnerait quand même.
-  const traduit = t(cle, params.length ? { pseudo: params[0] } : undefined);
-
-  if (traduit === cle) {
-    // Code non reconnu : on garde le texte brut plutôt qu'un message
-    // générique. Différence assumée avec LoginPage.tsx (qui, lui, retombe
-    // sur "errors.generic") : ce tableau de bord est l'outil de test/démo
-    // (utilisateurs simulés, voir #current-user-select) où voir le détail
-    // exact d'une erreur inattendue — y compris une erreur JS qui n'a
-    // jamais été un CODE reconnu — aide à diagnostiquer plus vite qu'un
-    // message vague, alors que l'écran de connexion est la première chose
-    // vue par une personne qui n'a pas encore de raison de faire confiance
-    // à un détail technique brut.
-    return brut;
-  }
-  return traduit;
-}
-
 function remplirSelectUtilisateur(utilisateurs) {
   const options = utilisateurs.map((item) =>
     creerEl('option', {
@@ -255,29 +207,6 @@ function ouvrirDialogue(titre, contenu) {
     ...(Array.isArray(contenu) ? contenu : [contenu])
   );
   el.dialogue.showModal();
-}
-
-/**
- * Retraduit tout le texte STATIQUE du HTML (aria-labels, titres, libellés
- * de boutons qui ne dépendent d'aucune donnée dynamique) via les attributs
- * data-i18n / data-i18n-title / data-i18n-aria-label. Les textes construits
- * dynamiquement (messages, dialogues, toasts...) sont eux traduits
- * directement dans les fonctions qui les génèrent.
- */
-function appliquerTraductionsStatiques() {
-  document.documentElement.lang = langueActuelle;
-  document.querySelectorAll('[data-i18n]').forEach((element) => {
-    element.textContent = t(element.dataset.i18n);
-  });
-  document.querySelectorAll('[data-i18n-title]').forEach((element) => {
-    element.setAttribute('title', t(element.dataset.i18nTitle));
-  });
-  document.querySelectorAll('[data-i18n-aria-label]').forEach((element) => {
-    element.setAttribute('aria-label', t(element.dataset.i18nAriaLabel));
-  });
-  document.querySelectorAll('[data-i18n-placeholder]').forEach((element) => {
-    element.setAttribute('placeholder', t(element.dataset.i18nPlaceholder));
-  });
 }
 
 /**
@@ -442,6 +371,14 @@ function afficherMessages() {
     el.nomSalon.textContent = t('channels.noChannelAccessible');
     el.prive.hidden = true;
     el.message.disabled = true;
+    // channels.sendMessagePlaceholder attend un paramètre {name} (voir plus
+    // bas) : il n'est donc PAS dans le balayage générique data-i18n-*
+    // (appliquerTraductionsStatiques), qui appelle t() sans paramètres.
+    // Cette branche doit donc gérer elle-même la traduction du placeholder,
+    // sous peine de laisser affiché le texte brut du HTML statique
+    // ("Envoyez un message dans #général") tant qu'aucun salon n'est
+    // accessible.
+    el.message.placeholder = t('channels.noChannelAccessible');
     definirConversationActivePourNotifs(null);
     return;
   }
@@ -496,7 +433,7 @@ function afficherMessages() {
                 creerEl('span', {
                   classe: 'timestamp',
                   texte: new Date(message.date).toLocaleString(
-                    langueActuelle === 'en' ? 'en-CA' : 'fr-CA'
+                    I18n.obtenirLangue() === 'en' ? 'en-CA' : 'fr-CA'
                   ),
                 }),
               ],
@@ -787,14 +724,14 @@ el.utilisateur.addEventListener('change', async (event) => {
 if (el.langue) {
   el.langue.addEventListener('change', async (event) => {
     try {
-      langueActuelle = await window.electronAPI.definirLangue(
-        event.target.value
+      I18n.definirLangueActuelle(
+        await window.electronAPI.definirLangue(event.target.value)
       );
     } catch {
       // Repli silencieux : la langue affichée reste celle d'avant si le
       // canal échoue.
     }
-    el.langue.value = langueActuelle;
+    el.langue.value = I18n.obtenirLangue();
     afficherTout();
   });
 }
@@ -821,37 +758,11 @@ async function initialiserUtilisateurCourant() {
 }
 
 async function initialiser() {
-  // Les trois canaux ci-dessous sont indépendants (aucun n'a besoin du
-  // résultat d'un autre) : les lancer en parallèle plutôt qu'en série évite
-  // trois allers-retours IPC successifs au démarrage. allSettled (plutôt que
-  // Promise.all) conserve le même comportement qu'avant — chaque échec est
-  // géré indépendamment, un canal qui échoue ne doit pas empêcher les autres
-  // de s'appliquer.
-  const [resultatDictionnaires, resultatLangue, resultatLangueParDefaut] =
-    await Promise.allSettled([
-      window.electronAPI.obtenirDictionnairesI18n(),
-      window.electronAPI.obtenirLangue(),
-      window.electronAPI.obtenirLangueParDefaut(),
-    ]);
-
-  if (resultatDictionnaires.status === 'fulfilled') {
-    dictionnaires = resultatDictionnaires.value;
-  }
-  // sinon, t() se rabat sur la clé brute si dictionnaires reste `null`.
-
-  if (resultatLangueParDefaut.status === 'fulfilled') {
-    langueParDefaut = resultatLangueParDefaut.value;
-  }
-  // sinon, repli sur 'fr' (valeur initiale, voir sa déclaration plus haut).
-
-  if (resultatLangue.status === 'fulfilled') {
-    langueActuelle = resultatLangue.value;
-    if (el.langue) el.langue.value = langueActuelle;
-  } else {
-    // Repli sur langueParDefaut (lui-même 'fr' si le canal ci-dessus a aussi
-    // échoué) plutôt que rester sur la valeur initiale codée en dur.
-    langueActuelle = langueParDefaut;
-  }
+  // Dictionnaire, langue courante et langue par défaut : voir
+  // I18n.initialiserDepuisElectronAPI (i18n-browser.js) pour le détail
+  // (trois canaux IPC indépendants, lancés en parallèle).
+  const langue = await I18n.initialiserDepuisElectronAPI(window.electronAPI);
+  if (el.langue) el.langue.value = langue;
 
   try {
     await initialiserUtilisateurCourant();

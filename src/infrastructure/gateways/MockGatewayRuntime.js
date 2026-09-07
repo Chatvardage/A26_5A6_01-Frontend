@@ -254,21 +254,24 @@ class MockGatewayRuntime {
   connexion({ id, pseudo }) {
     const dejaEnregistre = this.utilisateurs.some((item) => item.id === id);
     if (!dejaEnregistre) {
+      // Rejette un '|' AVANT de regarder si le pseudo est disponible : la
+      // convention "CODE|param" (voir plus bas) est le seul moyen simple de
+      // faire voyager un paramètre dans un message d'erreur à travers
+      // l'IPC, mais elle casse si `pseudo` contient lui-même un '|' (le
+      // premier '|' ferait alors office de séparateur côté présentation,
+      // tronquant le pseudo affiché) — y compris quand ce pseudo n'est PAS
+      // déjà pris, le cas qu'un bypass de `validationPseudo` (domaine)
+      // emprunterait en premier. Cette couche ne doit pas dépendre
+      // silencieusement d'une règle définie ailleurs (l'UI) : on revérifie
+      // ici, en défense en profondeur, avant toute autre logique.
+      if (String(pseudo).includes('|')) {
+        throw new Error('ERR_UTILISATEUR_INVALIDE');
+      }
       if (!this.pseudoDisponible(pseudo)) {
         // Code stable plutôt qu'un message figé en français : la traduction
         // se fait à la frontière présentation (voir main.tsx
         // nettoyerErreurIpc), pas ici dans la couche métier, qui ne doit pas
-        // connaître la langue choisie par l'utilisateur. Convention
-        // "CODE|param" : le seul moyen simple de faire voyager un paramètre
-        // dans un message d'erreur à travers l'IPC — fragile si `pseudo`
-        // contenait lui-même un '|' (le premier '|' ferait alors office de
-        // séparateur côté présentation, tronquant le pseudo affiché).
-        // `validationPseudo` (domaine) l'interdit déjà en amont, mais cette
-        // couche ne doit pas dépendre silencieusement d'une règle définie
-        // ailleurs : on revérifie ici, en défense en profondeur.
-        if (String(pseudo).includes('|')) {
-          throw new Error('ERR_UTILISATEUR_INVALIDE');
-        }
+        // connaître la langue choisie par l'utilisateur.
         throw new Error(`ERR_PSEUDO_PRIS|${pseudo}`);
       }
       this.utilisateurs.push({ id, pseudo });

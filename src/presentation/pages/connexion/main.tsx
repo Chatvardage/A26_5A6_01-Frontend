@@ -46,7 +46,14 @@ function App() {
   useEffect(() => {
     window.electronAPI
       .obtenirLangue()
-      .then(setLangue)
+      .then((langueResolue) => {
+        setLangue(langueResolue);
+        // renderer.js/message-prive.js (via i18n-browser.js) mettent à jour
+        // document.documentElement.lang à chaque changement de langue ; cet
+        // écran React doit faire de même pour rester cohérent (lecteurs
+        // d'écran, sélection de langue du correcteur orthographique, etc.).
+        document.documentElement.lang = langueResolue;
+      })
       .catch(() => {
         // Repli silencieux sur LANGUE_PAR_DEFAUT (valeur initiale) si le
         // canal échoue pour une raison quelconque.
@@ -56,7 +63,10 @@ function App() {
   const changerLangue = useCallback((nouvelleLangue: string) => {
     window.electronAPI
       .definirLangue(nouvelleLangue)
-      .then(setLangue)
+      .then((langueConfirmee) => {
+        setLangue(langueConfirmee);
+        document.documentElement.lang = langueConfirmee;
+      })
       .catch(() => {
         // Si l'IPC échoue, on ne change rien : mieux vaut rester dans la
         // langue actuelle (cohérente) qu'afficher un mélange des deux.
