@@ -29,6 +29,58 @@ const I18n =
 const t = I18n.t;
 const appliquerTraductionsStatiques = I18n.appliquerTraductionsStatiques;
 
+// Icône de main qui salue, en remplacement de l'emoji 👋 : voir le
+// commentaire équivalent (et le même SVG) dans renderer.js — l'emoji ne
+// s'affiche pas de façon fiable dans Electron selon les polices installées
+// sur le système (tofu box), un SVG inline s'affiche toujours.
+function creerIconeMain() {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'icone-main');
+  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('width', '14');
+  svg.setAttribute('height', '14');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const groupe = document.createElementNS(NS, 'g');
+  groupe.setAttribute('fill', 'currentColor');
+  const paume = document.createElementNS(NS, 'circle');
+  paume.setAttribute('cx', '8');
+  paume.setAttribute('cy', '10');
+  paume.setAttribute('r', '4');
+  groupe.appendChild(paume);
+  for (const angle of [-30, -10, 10, 30]) {
+    const doigt = document.createElementNS(NS, 'rect');
+    doigt.setAttribute('x', '-1');
+    doigt.setAttribute('y', '-6');
+    doigt.setAttribute('width', '2');
+    doigt.setAttribute('height', '5');
+    doigt.setAttribute('rx', '1');
+    doigt.setAttribute('transform', `translate(8 6) rotate(${angle})`);
+    groupe.appendChild(doigt);
+  }
+  svg.appendChild(groupe);
+  return svg;
+}
+
+// Voir EMOJI_VERS_ICONE/remplirTexteMessage dans renderer.js : même table et
+// même logique, dupliquées ici faute de système de module partagé entre les
+// deux scripts (voir le commentaire en tête de fichier sur nodeIntegration).
+const EMOJI_VERS_ICONE = { '👋': creerIconeMain };
+
+function remplirTexteMessage(element, texte) {
+  element.replaceChildren();
+  const emojiConnus = Object.keys(EMOJI_VERS_ICONE);
+  const decoupage = new RegExp(`(${emojiConnus.join('|')})`, 'gu');
+  for (const segment of texte.split(decoupage)) {
+    if (!segment) continue;
+    const creerIcone = EMOJI_VERS_ICONE[segment];
+    element.appendChild(
+      creerIcone ? creerIcone() : document.createTextNode(segment)
+    );
+  }
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   const listElement = document.getElementById('conversation-list');
   const messageList = document.getElementById('message-list');
@@ -207,6 +259,61 @@ window.addEventListener('DOMContentLoaded', async () => {
     toastElement.classList.toggle('error', erreur);
     toastElement.classList.add('visible');
     window.setTimeout(() => toastElement.classList.remove('visible'), 2600);
+  }
+
+  // --- Historique et pagination des messages (conversations privées) ------
+  // `obtenirConversationsPrivees` (voir refreshConversations()) ne renvoie
+  // déjà plus que la page de messages la plus récente de chaque conversation
+  // (voir construireConversationPriveeDTO côté MockGatewayRuntime.js) : cet
+  // état garde en mémoire, PAR-DESSUS cette page récente, les pages plus
+  // anciennes chargées à la demande (voir chargerMessagesPlusAnciensDm) pour
+  // la conversation actuellement affichée. Réinitialisé au changement de
+  // conversation active (voir renderActiveConversation()), même principe que
+  // etatHistoriqueSalon dans renderer.js (voir son commentaire équivalent).
+  let etatHistoriqueDm = {
+    conversationId: null,
+    messagesAnciens: [],
+    finHistorique: false,
+    enChargement: false,
+  };
+
+  // Fusionne messages plus anciens déjà remontés et page récente en
+  // dédoublonnant par id puis en triant par date d'envoi — voir
+  // fusionnerHistorique dans renderer.js pour l'équivalent salon et le détail
+  // du pourquoi (chevauchement possible entre les deux listes).
+  function fusionnerHistoriqueDm(messagesAnciens, messagesRecents) {
+    const parId = new Map();
+    [...messagesAnciens, ...messagesRecents].forEach((message) => {
+      parId.set(message.id, message);
+    });
+    return Array.from(parId.values()).sort((a, b) => a.envoi - b.envoi);
+  }
+
+  // Construit l'élément affiché en haut de la liste des messages pour
+  // représenter l'état de l'historique — voir creerStatutHistorique dans
+  // renderer.js pour l'équivalent salon (même comportement : chargement en
+  // cours, historique épuisé, ou bouton "charger plus ancien").
+  function creerStatutHistoriqueDm(etatHistorique, surClicChargerPlus) {
+    const div = document.createElement(
+      etatHistorique.enChargement || etatHistorique.finHistorique
+        ? 'div'
+        : 'button'
+    );
+    div.classList.add('historique-statut');
+    if (etatHistorique.enChargement) {
+      div.classList.add('historique-statut--chargement');
+      div.textContent = t('history.loading');
+      div.setAttribute('aria-live', 'polite');
+    } else if (etatHistorique.finHistorique) {
+      div.classList.add('historique-statut--fin');
+      div.textContent = t('history.endOfHistory');
+    } else {
+      div.classList.add('historique-statut--bouton');
+      div.type = 'button';
+      div.textContent = t('history.loadOlder');
+      div.addEventListener('click', surClicChargerPlus);
+    }
+    return div;
   }
 
   // messageErreur vient de I18n (i18n-browser.js, voir le garde-fou en tête
@@ -423,12 +530,23 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  async function renderActiveConversation() {
+  function reinitialiserHistoriqueDm() {
+    etatHistoriqueDm = {
+      conversationId: null,
+      messagesAnciens: [],
+      finHistorique: false,
+      enChargement: false,
+    };
+  }
+
+  async function renderActiveConversation(options = {}) {
+    const { conserverPositionScroll = false } = options;
     if (!state.activeConversationId) {
       if (messageList) {
         messageList.innerHTML = '';
       }
       definirConversationActivePourNotifs(null);
+      reinitialiserHistoriqueDm();
       return;
     }
 
@@ -447,7 +565,25 @@ window.addEventListener('DOMContentLoaded', async () => {
         messageList.innerHTML = '';
       }
       definirConversationActivePourNotifs(null);
+      reinitialiserHistoriqueDm();
       return;
+    }
+
+    // Changement de conversation active : on repart d'un historique manuel
+    // vide (voir chargerMessagesPlusAnciensDm et reinitialiserHistoriqueDm).
+    // `finHistorique` part de la page récente tout juste reçue
+    // (conversation.finHistorique, voir construireConversationPriveeDTO côté
+    // MockGatewayRuntime.js) — même logique que etatHistoriqueSalon dans
+    // renderer.js (voir son commentaire équivalent).
+    if (etatHistoriqueDm.conversationId !== conversation.id) {
+      etatHistoriqueDm = {
+        conversationId: conversation.id,
+        messagesAnciens: [],
+        finHistorique: Boolean(conversation.finHistorique),
+        enChargement: false,
+      };
+    } else if (etatHistoriqueDm.messagesAnciens.length === 0) {
+      etatHistoriqueDm.finHistorique = Boolean(conversation.finHistorique);
     }
 
     // La conversation affichée est "lue" — mais SEULEMENT si la fenêtre a
@@ -468,8 +604,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     // focus ou non : c'est elle qui est affichée à l'écran.
     definirConversationActivePourNotifs(conversation.id);
 
-    const messages = [...(conversation.messages ?? [])].sort(
-      (a, b) => (a.envoi ?? 0) - (b.envoi ?? 0)
+    // Page récente (conversation.messages) + historique manuellement remonté
+    // (voir chargerMessagesPlusAnciensDm) : voir fusionnerHistoriqueDm plus
+    // haut.
+    const messages = fusionnerHistoriqueDm(
+      etatHistoriqueDm.messagesAnciens,
+      conversation.messages ?? []
     );
     const otherUser = conversation.otherUser;
 
@@ -495,9 +635,19 @@ window.addEventListener('DOMContentLoaded', async () => {
       isTypingNom.textContent = otherUser?.pseudo ?? t('dm.defaultUser');
     }
 
+    // Mémorise la position de défilement AVANT de reconstruire la liste :
+    // voir le commentaire équivalent dans afficherMessages() (renderer.js)
+    // pour le pourquoi (sans ça, un chargement de messages plus anciens
+    // ferait sauter la vue tout en haut).
+    const hauteurAvant = messageList.scrollHeight;
+    const scrollAvant = messageList.scrollTop;
+
     messageList.innerHTML = '';
 
     if (messages.length === 0) {
+      // Conversation réellement vide : voir le commentaire équivalent dans
+      // afficherMessages() (renderer.js) pour le pourquoi on n'affiche pas la
+      // barre d'historique dans ce cas précis.
       const row = document.createElement('article');
       row.classList.add('message-row');
 
@@ -513,6 +663,12 @@ window.addEventListener('DOMContentLoaded', async () => {
       messageList.appendChild(row);
       return;
     }
+
+    messageList.appendChild(
+      creerStatutHistoriqueDm(etatHistoriqueDm, () =>
+        chargerMessagesPlusAnciensDm()
+      )
+    );
 
     messages.forEach((message) => {
       const row = document.createElement('article');
@@ -552,12 +708,88 @@ window.addEventListener('DOMContentLoaded', async () => {
 
       const text = document.createElement('p');
       text.classList.add('text');
-      text.textContent = message.contenu;
+      remplirTexteMessage(text, message.contenu);
 
       meta.append(authorEl, timeEl);
       body.append(meta, text);
       row.append(avatar, body);
       messageList.appendChild(row);
+    });
+
+    if (conserverPositionScroll) {
+      // Charger plus ancien insère du contenu EN HAUT de la liste : voir le
+      // commentaire équivalent dans afficherMessages() (renderer.js) pour le
+      // pourquoi de ce recalcul.
+      messageList.scrollTop =
+        messageList.scrollHeight - hauteurAvant + scrollAvant;
+    } else {
+      messageList.scrollTop = messageList.scrollHeight;
+    }
+  }
+
+  /**
+   * Charge la page de messages plus anciens qui précède ceux déjà affichés
+   * pour la conversation active (pagination "charger plus ancien" — voir
+   * obtenirMessagesPriveesAvant côté MockGatewayRuntime.js), et les fusionne
+   * dans etatHistoriqueDm avant de redemander un rendu qui préserve la
+   * position de défilement. Voir chargerMessagesPlusAnciensSalon dans
+   * renderer.js pour l'équivalent salon (même garde-fous : pas d'effet si un
+   * chargement est déjà en cours, si l'historique de la conversation active
+   * est déjà entièrement remonté, ou si aucune conversation n'est active).
+   */
+  async function chargerMessagesPlusAnciensDm() {
+    const conversation = state.conversations.find(
+      (entry) => entry.id === state.activeConversationId
+    );
+    if (
+      !conversation ||
+      etatHistoriqueDm.conversationId !== conversation.id ||
+      etatHistoriqueDm.enChargement ||
+      etatHistoriqueDm.finHistorique
+    ) {
+      return;
+    }
+
+    const plusAncienCharge =
+      etatHistoriqueDm.messagesAnciens[0] ?? conversation.messages?.[0];
+
+    etatHistoriqueDm.enChargement = true;
+    await renderActiveConversation({ conserverPositionScroll: true });
+
+    try {
+      const resultat = await window.electronAPI.obtenirMessagesPriveesAvant({
+        conversationId: conversation.id,
+        utilisateurId: state.currentUserId,
+        avantId: plusAncienCharge?.id,
+      });
+      if (etatHistoriqueDm.conversationId !== conversation.id) {
+        return;
+      }
+      etatHistoriqueDm.messagesAnciens = fusionnerHistoriqueDm(
+        etatHistoriqueDm.messagesAnciens,
+        resultat.messages
+      );
+      etatHistoriqueDm.finHistorique = resultat.finHistorique;
+    } catch (erreur) {
+      notifier(messageErreur(erreur), true);
+    } finally {
+      if (etatHistoriqueDm.conversationId === conversation.id) {
+        etatHistoriqueDm.enChargement = false;
+        await renderActiveConversation({ conserverPositionScroll: true });
+      }
+    }
+  }
+
+  // Déclenchement automatique du chargement de l'historique plus ancien en
+  // s'approchant du haut de la liste (défilement "progressif", en plus du
+  // bouton explicite — voir creerStatutHistoriqueDm) : voir le commentaire
+  // équivalent dans renderer.js pour le pourquoi de l'absence de garde
+  // supplémentaire ici (chargerMessagesPlusAnciensDm est déjà protégée).
+  if (messageList) {
+    messageList.addEventListener('scroll', () => {
+      if (messageList.scrollTop < 80) {
+        chargerMessagesPlusAnciensDm();
+      }
     });
   }
 

@@ -80,6 +80,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   obtenirEtatSalons: (utilisateurId) =>
     ipcRenderer.invoke('salons:etat', { utilisateurId }),
+  // Pagination "charger plus ancien" de l'historique d'un salon (voir
+  // obtenirMessagesSalonAvant dans MockGatewayRuntime.js) : salons:etat
+  // ci-dessus ne renvoie déjà plus que la page de messages la plus récente.
+  obtenirMessagesSalonAvant: (donnees) =>
+    ipcRenderer.invoke('salons:messages-avant', donnees),
   creerSalon: (donnees) => ipcRenderer.invoke('salons:creer', donnees),
   inviterAuSalon: (donnees) => ipcRenderer.invoke('salons:inviter', donnees),
   accepterInvitation: (donnees) =>
@@ -92,6 +97,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   obtenirUtilisateurs: () => ipcRenderer.invoke('utilisateurs:lister'),
   obtenirConversationsPrivees: (utilisateurId) =>
     ipcRenderer.invoke('obtenir-conversations-privees', { utilisateurId }),
+  // Pagination "charger plus ancien" de l'historique d'une conversation
+  // privée (voir obtenirMessagesPriveesAvant dans MockGatewayRuntime.js) :
+  // obtenir-conversations-privees ci-dessus ne renvoie déjà plus que la page
+  // de messages la plus récente de chaque conversation.
+  obtenirMessagesPriveesAvant: (donnees) =>
+    ipcRenderer.invoke('obtenir-messages-prive-avant', donnees),
   envoyerMessagePrive: (donnees) =>
     ipcRenderer.invoke('envoyer-message-prive', donnees),
   demarrerConversationPrivee: (donnees) =>

@@ -881,6 +881,12 @@ function arreterSimulationMessages() {
 exposerCanal('salons:etat', ({ utilisateurId }) =>
   chatGateway.obtenirEtat(utilisateurId)
 );
+// Pagination "charger plus ancien" de l'historique d'un salon : salons:etat
+// ci-dessus ne renvoie déjà plus que la page de messages la plus récente
+// (voir construireSalonDTO dans MockGatewayRuntime.js).
+exposerCanal('salons:messages-avant', (donnees) =>
+  chatGateway.obtenirMessagesSalonAvant(donnees)
+);
 exposerCanal('utilisateurs:lister', () => chatGateway.obtenirUtilisateurs());
 exposerCanal('salons:creer', (donnees) => chatGateway.creerSalon(donnees));
 exposerCanal('salons:inviter', (donnees) => chatGateway.inviter(donnees));
@@ -903,6 +909,13 @@ exposerCanal('salons:envoyer-message', (donnees) =>
 // n'importe quel utilisateur.
 exposerCanal('obtenir-conversations-privees', ({ utilisateurId }) =>
   chatGateway.obtenirConversationsPrivees(utilisateurId)
+);
+// Pagination "charger plus ancien" de l'historique d'une conversation
+// privée : obtenir-conversations-privees ci-dessus ne renvoie déjà plus que
+// la page de messages la plus récente (voir construireConversationPriveeDTO
+// dans MockGatewayRuntime.js).
+exposerCanal('obtenir-messages-prive-avant', (donnees) =>
+  chatGateway.obtenirMessagesPriveesAvant(donnees)
 );
 
 exposerCanal('envoyer-message-prive', (donnees) =>
