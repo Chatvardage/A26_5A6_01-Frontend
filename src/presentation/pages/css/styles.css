@@ -223,6 +223,28 @@ button {
   font-weight: 600;
 }
 
+/* Colonne d'infos (nom d'utilisateur simulé + ligne de statut/langue) :
+   avant, le sélecteur de langue était un simple <select> jeté à la suite
+   de #current-user-select, avec exactement le même style — au premier
+   coup d'œil on aurait dit un deuxième sélecteur d'utilisateur plutôt
+   qu'un réglage de langue. Regrouper le statut de présence et la langue
+   sur leur propre ligne, sous le nom d'utilisateur, sépare clairement
+   "qui je suis" (au-dessus) de "réglages secondaires" (en dessous). */
+.user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.user-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 #current-user-select {
   border: 0;
   background: var(--bg-panel-alt);
@@ -733,4 +755,77 @@ dialog::backdrop {
 .notif-menu-option-desc {
   color: var(--text-muted);
   font-size: 0.78rem;
+}
+
+/* --- Selects : utilisateur + langue ------------------------------- */
+
+#current-user-select,
+.language-select {
+  border: none;
+  background-color: var(--bg-panel-alt);
+  color: var(--text-primary);
+
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+
+  border-radius: 5px;
+  padding: 4px 28px 4px 8px;
+
+  cursor: pointer;
+
+  /* On retire la flèche native */
+  appearance: none;
+  -webkit-appearance: none;
+
+  /* Petit chevron vers le bas */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' fill='none' stroke='%239fb8b3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  background-size: 10px 7px;
+
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+/* Au survol */
+#current-user-select:hover,
+.language-select:hover {
+  background-color: var(--bg-bubble);
+  color: var(--text-primary);
+}
+
+/* Quand le select est sélectionné/focus */
+#current-user-select:focus,
+.language-select:focus {
+  outline: none;
+}
+
+/* Options du menu */
+#current-user-select option,
+.language-select option {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+}
+
+/* Le sélecteur de langue est un réglage secondaire, pas un second "compte" —
+   volontairement plus discret que #current-user-select (texte plus petit,
+   fond neutre) et posé sur sa propre ligne avec le statut de présence (voir
+   .user-meta) plutôt que collé juste après, pour qu'on ne les confonde plus
+   au premier coup d'œil. */
+.language-select {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background-color: transparent;
+  padding: 2px 20px 2px 6px;
+  background-position: right 6px center;
+  background-size: 8px 6px;
+}
+
+.language-select:hover,
+.language-select:focus {
+  color: var(--text-primary);
+  background-color: var(--bg-bubble);
 }

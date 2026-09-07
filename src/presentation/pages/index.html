@@ -11,7 +11,11 @@
     <link rel="stylesheet" href="css/styles.css" />
   </head>
   <body>
-    <nav id="server-rail" aria-label="Serveurs">
+    <nav
+      id="server-rail"
+      aria-label="Serveurs"
+      data-i18n-aria-label="nav.servers"
+    >
       <button id="message-prive-btn">
         <img
           class="app-logo"
@@ -26,6 +30,8 @@
         class="server-icon active"
         title="Projet"
         aria-label="Serveur : Projet"
+        data-i18n-title="nav.project"
+        data-i18n-aria-label="nav.project"
       >
         P
         <span class="notif-dot notif-dot--rail" hidden></span>
@@ -35,6 +41,8 @@
         class="server-icon"
         title="Créer un salon"
         aria-label="Créer un salon"
+        data-i18n-title="nav.createChannel"
+        data-i18n-aria-label="nav.createChannel"
       >
         +
       </button>
@@ -42,29 +50,48 @@
 
     <aside id="channel-sidebar">
       <div class="sidebar-header">
-        <span id="server-name">Nom chat</span>
+        <span id="server-name" data-i18n="nav.chatName">Nom chat</span>
         <button
           id="open-create-channel"
           class="icon-action"
           title="Créer un salon"
+          data-i18n-title="nav.createChannel"
         >
           +
         </button>
       </div>
       <ul id="channel-list">
-        <li class="category">Projet</li>
+        <li class="category" data-i18n="nav.project">Projet</li>
       </ul>
       <button id="open-invitations" class="sidebar-action">
-        Invitations <span id="invitation-count" class="badge">0</span>
+        <span data-i18n="nav.invitations">Invitations</span>
+        <span id="invitation-count" class="badge">0</span>
       </button>
       <div id="user-panel">
         <div class="avatar"></div>
-        <div>
+        <div class="user-info">
           <select
             id="current-user-select"
             aria-label="Utilisateur simulé"
+            data-i18n-aria-label="nav.simulatedUser"
           ></select>
-          <div class="presence-label" id="current-user-presence">En ligne</div>
+          <div class="user-meta">
+            <div
+              class="presence-label"
+              id="current-user-presence"
+              data-i18n="nav.onlineStatus"
+            >
+              En ligne
+            </div>
+            <select
+              id="language-select"
+              aria-label="Langue / Language"
+              class="language-select"
+            >
+              <option value="fr">FR</option>
+              <option value="en">EN</option>
+            </select>
+          </div>
         </div>
         <button
           id="open-notif-settings"
@@ -74,6 +101,8 @@
           aria-label="Paramètres de notifications"
           aria-haspopup="true"
           aria-expanded="false"
+          data-i18n-title="notifications.title"
+          data-i18n-aria-label="notifications.settingsAriaLabel"
         >
           <svg
             viewBox="0 0 16 16"
@@ -95,13 +124,22 @@
           hidden
           role="menu"
           aria-label="Préférences de notification"
+          data-i18n-aria-label="notifications.menuAriaLabel"
         >
-          <p class="notif-menu-title">Notifications</p>
+          <p class="notif-menu-title" data-i18n="notifications.title">
+            Notifications
+          </p>
           <label class="notif-menu-option">
             <input type="radio" name="notif-mode" value="systeme" />
             <span class="notif-menu-option-text">
-              <span class="notif-menu-option-title">Système + son</span>
-              <span class="notif-menu-option-desc"
+              <span
+                class="notif-menu-option-title"
+                data-i18n="notifications.systemTitle"
+                >Système + son</span
+              >
+              <span
+                class="notif-menu-option-desc"
+                data-i18n="notifications.systemDesc"
                 >Notification Windows avec son, et un rond sur la
                 conversation</span
               >
@@ -110,8 +148,14 @@
           <label class="notif-menu-option">
             <input type="radio" name="notif-mode" value="discret" />
             <span class="notif-menu-option-text">
-              <span class="notif-menu-option-title">Discret</span>
-              <span class="notif-menu-option-desc"
+              <span
+                class="notif-menu-option-title"
+                data-i18n="notifications.discreteTitle"
+                >Discret</span
+              >
+              <span
+                class="notif-menu-option-desc"
+                data-i18n="notifications.discreteDesc"
                 >Un rond sur la conversation, rien d'autre</span
               >
             </span>
@@ -119,8 +163,16 @@
           <label class="notif-menu-option">
             <input type="radio" name="notif-mode" value="aucune" />
             <span class="notif-menu-option-text">
-              <span class="notif-menu-option-title">Aucune</span>
-              <span class="notif-menu-option-desc">Pas de notification</span>
+              <span
+                class="notif-menu-option-title"
+                data-i18n="notifications.noneTitle"
+                >Aucune</span
+              >
+              <span
+                class="notif-menu-option-desc"
+                data-i18n="notifications.noneDesc"
+                >Pas de notification</span
+              >
             </span>
           </label>
         </div>
@@ -131,29 +183,57 @@
       <header id="topbar">
         <div class="channel-name">
           <span id="active-channel-name"># général</span>
-          <span id="private-indicator" class="private-indicator" hidden
+          <span
+            id="private-indicator"
+            class="private-indicator"
+            hidden
+            data-i18n="channels.private"
             >Privé</span
           >
         </div>
         <div class="topbar-actions">
-          <button id="open-members" class="secondary-button">Membres</button>
-          <button id="open-invite-user" class="primary-button">Inviter</button>
+          <button
+            id="open-members"
+            class="secondary-button"
+            data-i18n="channels.members"
+          >
+            Membres
+          </button>
+          <button
+            id="open-invite-user"
+            class="primary-button"
+            data-i18n="channels.invite"
+          >
+            Inviter
+          </button>
           <div id="connection-status" data-state="connecte">
             <span class="dot"></span>
-            <span id="connection-label">Connecté</span>
+            <span id="connection-label" data-i18n="channels.connected"
+              >Connecté</span
+            >
           </div>
         </div>
       </header>
 
       <div id="message-list" aria-live="polite"></div>
 
-      <div id="typing-indicator" class="typing-indicator" aria-live="polite" hidden>
-  <span class="typing-dots" aria-hidden="true">
-    <span class="dot"></span>
-    <span class="dot"></span>
-    <span class="dot"></span>
-  </span>
-        <span id="typing-text" class="typing-text"><strong id="is-typing-nom"></strong> est en train d'écrire...</span>
+      <div
+        id="typing-indicator"
+        class="typing-indicator"
+        aria-live="polite"
+        hidden
+      >
+        <span class="typing-dots" aria-hidden="true">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </span>
+        <span id="typing-text" class="typing-text"
+          ><strong id="is-typing-nom"></strong
+          ><span data-i18n="typing.suffix">
+            est en train d'écrire...</span
+          ></span
+        >
       </div>
 
       <div id="composer">
@@ -164,7 +244,7 @@
             placeholder="Envoyez un message dans #général"
             autocomplete="off"
           />
-          <button type="submit">Envoyer</button>
+          <button type="submit" data-i18n="channels.send">Envoyer</button>
         </form>
       </div>
     </main>
@@ -178,6 +258,7 @@
             formnovalidate
             class="close-button"
             aria-label="Fermer"
+            data-i18n-aria-label="channels.close"
           >
             ×
           </button>
@@ -189,6 +270,7 @@
     <div id="toast" role="status" aria-live="polite"></div>
 
     <script src="javascript/notif-prefs.js"></script>
+    <script src="javascript/i18n-browser.js"></script>
     <script src="../../../renderer.js"></script>
   </body>
 </html>

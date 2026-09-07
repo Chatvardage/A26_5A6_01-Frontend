@@ -1,3 +1,33 @@
+// Pas de require() ici : nodeIntegration est désactivé, comme pour
+// renderer.js (voir son commentaire équivalent en tête de fichier pour le
+// pourquoi complet).
+//
+// I18n vient de i18n-browser.js, un script classique chargé avant celui-ci
+// (voir message-prive.html) qui expose window.I18n comme global — même
+// pattern que window.NotifPrefs (voir le garde-fou plus bas dans ce
+// fichier), et qui tient tout l'état i18n (dictionnaire, langue
+// courante/par défaut) et la logique de lookup/substitution/traduction
+// d'erreurs en UN SEUL endroit partagé avec renderer.js, plutôt que deux
+// copies à synchroniser à la main (voir i18n-browser.js pour le détail
+// complet).
+const I18n =
+  window.I18n ??
+  (() => {
+    console.error(
+      '[message-prive] window.I18n est introuvable : i18n-browser.js doit être chargé avant ce script (voir message-prive.html). Traductions désactivées pour cette session (clés brutes affichées).'
+    );
+    return {
+      t: (cle) => cle,
+      appliquerTraductionsStatiques: () => {},
+      messageErreur: (erreur) =>
+        erreur instanceof Error ? erreur.message : String(erreur),
+      initialiserDepuisElectronAPI: async () => 'fr',
+      obtenirLangue: () => 'fr',
+      definirLangueActuelle: () => {},
+    };
+  })();
+const t = I18n.t;
+const appliquerTraductionsStatiques = I18n.appliquerTraductionsStatiques;
 
 window.addEventListener('DOMContentLoaded', async () => {
   const listElement = document.getElementById('conversation-list');
@@ -10,6 +40,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   const typingIndicator = document.getElementById('typing-indicator');
   const filterButtons = document.querySelectorAll('.filter-button');
   const currentUserSelect = document.getElementById('current-user-select');
+  const langueSelect = document.getElementById('language-select');
   const openNewDmBtn = document.getElementById('open-new-dm');
   const dmDialog = document.getElementById('dm-dialog');
   const dmDialogContent = document.getElementById('dialog-content');
@@ -17,6 +48,35 @@ window.addEventListener('DOMContentLoaded', async () => {
   const notifBtn = document.getElementById('open-notif-settings');
   const notifMenu = document.getElementById('notif-menu');
   const isTypingNom = document.getElementById('is-typing-nom');
+
+  // Dictionnaire, langue courante et langue par défaut : voir
+  // I18n.initialiserDepuisElectronAPI (i18n-browser.js) pour le détail
+  // (trois canaux IPC indépendants, lancés en parallèle).
+  if (langueSelect) {
+    langueSelect.value = await I18n.initialiserDepuisElectronAPI(
+      window.electronAPI
+    );
+  } else {
+    await I18n.initialiserDepuisElectronAPI(window.electronAPI);
+  }
+  appliquerTraductionsStatiques();
+
+  if (langueSelect) {
+    langueSelect.addEventListener('change', async (event) => {
+      try {
+        I18n.definirLangueActuelle(
+          await window.electronAPI.definirLangue(event.target.value)
+        );
+      } catch {
+        // Repli silencieux : la langue affichée reste celle d'avant si le
+        // canal échoue.
+      }
+      langueSelect.value = I18n.obtenirLangue();
+      appliquerTraductionsStatiques();
+      renderConversationList();
+      await renderActiveConversation();
+    });
+  }
 
   // window.NotifPrefs vient de notif-prefs.js, un script classique chargé
   // avant ce module (voir message-prive.html) — voir ce fichier pour le
@@ -149,9 +209,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     window.setTimeout(() => toastElement.classList.remove('visible'), 2600);
   }
 
-  function messageErreur(erreur) {
-    return erreur instanceof Error ? erreur.message : String(erreur);
-  }
+  // messageErreur vient de I18n (i18n-browser.js, voir le garde-fou en tête
+  // de fichier) — logique partagée avec renderer.js, voir son commentaire
+  // pour le détail (prefix IPC, code d'erreur, repli sur le texte brut).
+  const messageErreur = I18n.messageErreur;
 
   function getFilteredConversations() {
     if (state.currentFilter === 'online') {
@@ -263,10 +324,27 @@ window.addEventListener('DOMContentLoaded', async () => {
       });
     }
     const selectedUserId = sessionStorage.getItem('currentUserId');
+    let utilisateurResolu = utilisateurs.find(
+      (u) => u.id === selectedUserId
+    )?.id;
+
+    if (!utilisateurResolu) {
+      // sessionStorage ne survit pas forcément à la navigation entre deux
+      // pages file:// distinctes (index.html -> message-prive.html) — même
+      // incident que "connecté en tant qu'alice par défaut" déjà rencontré
+      // sur index.html (voir renderer.js, initialiserUtilisateurCourant, et
+      // session:utilisateur-connecte dans main.js), qui applique déjà ce
+      // même repli. Sans lui, cette page retombe systématiquement sur le
+      // premier utilisateur de la liste plutôt que la personne réellement
+      // connectée.
+      utilisateurResolu = await window.electronAPI.obtenirUtilisateurConnecte();
+    }
+
     state.currentUserId =
-      utilisateurs.find((u) => u.id === selectedUserId)?.id ??
+      utilisateurs.find((u) => u.id === utilisateurResolu)?.id ??
       utilisateurs[0]?.id ??
       'u1';
+    sessionStorage.setItem('currentUserId', state.currentUserId);
     if (currentUserSelect) {
       currentUserSelect.value = state.currentUserId;
     }
@@ -286,8 +364,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       const li = document.createElement('li');
       const otherUser = conversation.otherUser;
       const isActive = conversation.id === state.activeConversationId;
-      const lastMessage = conversation.lastMessage?.contenu ?? 'Aucun message';
-      const statusLabel = otherUser?.present ? 'En ligne' : 'Hors ligne';
+      const lastMessage =
+        conversation.lastMessage?.contenu ?? t('dm.noMessage');
+      const statusLabel = otherUser?.present ? t('dm.online') : t('dm.offline');
       const subtitle = conversation.lastMessage ? lastMessage : statusLabel;
 
       li.classList.add('conversation');
@@ -322,7 +401,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
       const username = document.createElement('div');
       username.classList.add('username');
-      username.textContent = otherUser?.pseudo ?? 'Utilisateur';
+      username.textContent = otherUser?.pseudo ?? t('dm.defaultUser');
 
       const lastMessageEl = document.createElement('div');
       lastMessageEl.classList.add('last-message');
@@ -395,10 +474,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     const otherUser = conversation.otherUser;
 
     if (topbarName) {
-      topbarName.textContent = otherUser?.pseudo ?? 'Utilisateur';
+      topbarName.textContent = otherUser?.pseudo ?? t('dm.defaultUser');
     }
     if (topbarStatus) {
-      topbarStatus.textContent = otherUser?.present ? 'En ligne' : 'Hors ligne';
+      topbarStatus.textContent = otherUser?.present
+        ? t('dm.online')
+        : t('dm.offline');
       topbarStatus.classList.toggle('online', Boolean(otherUser?.present));
       topbarStatus.classList.toggle('offline', !otherUser?.present);
     }
@@ -406,8 +487,12 @@ window.addEventListener('DOMContentLoaded', async () => {
       topbarAvatar.classList.toggle('offline', !otherUser?.present);
     }
     if (typingIndicator && isTypingNom) {
-      isTypingNom.textContent = otherUser?.pseudo ?? 'Utilisateur';
-
+      // Dans un DM, une seule autre personne peut potentiellement écrire
+      // (contrairement à un salon) — son nom est donc fixé une fois ici, à
+      // l'ouverture de la conversation, plutôt que recalculé à chaque
+      // battement de actualiserIndicateurSaisie() (qui ne gère, lui, que le
+      // show/hide selon l'état de saisie réel — voir plus bas).
+      isTypingNom.textContent = otherUser?.pseudo ?? t('dm.defaultUser');
     }
 
     messageList.innerHTML = '';
@@ -421,7 +506,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
       const text = document.createElement('p');
       text.classList.add('text');
-      text.textContent = 'Aucun message pour le moment.';
+      text.textContent = t('dm.noMessagesYet');
 
       body.appendChild(text);
       row.appendChild(body);
@@ -432,10 +517,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     messages.forEach((message) => {
       const row = document.createElement('article');
       const isOwn = message.auteurId === state.currentUserId;
-      const author =
-        message.auteurId === state.currentUserId
-          ? 'Moi'
-          : (otherUser?.pseudo ?? 'Utilisateur');
+      const author = isOwn
+        ? t('dm.me')
+        : (otherUser?.pseudo ?? t('dm.defaultUser'));
       const timeLabel = new Date(message.envoi).toLocaleTimeString([], {
         hour: '2-digit',
         minute: '2-digit',
@@ -491,7 +575,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (candidats.length === 0) {
       const empty = document.createElement('p');
       empty.classList.add('empty-state');
-      empty.textContent = 'Aucun autre utilisateur disponible.';
+      empty.textContent = t('dm.noOtherUsers');
       dmDialogContent.appendChild(empty);
       return;
     }
@@ -512,7 +596,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       nom.textContent = user.pseudo;
 
       const action = document.createElement('span');
-      action.textContent = dejaOuverte ? 'Ouvrir' : 'Nouveau';
+      action.textContent = dejaOuverte
+        ? t('dm.openExisting')
+        : t('dm.newLabel');
 
       bouton.append(nom, action);
 
@@ -766,7 +852,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       const salons = await obtenirSalonsActuels().catch(() => []);
       actualiserBadgeSalons(salons);
       mettreAJourBadgeApplication(salons);
-      notifier('Préférence de notification mise à jour.');
+      notifier(t('notifications.preferenceUpdated'));
     });
   });
 

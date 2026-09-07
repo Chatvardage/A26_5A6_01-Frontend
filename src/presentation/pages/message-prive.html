@@ -12,11 +12,17 @@
     <link rel="stylesheet" href="css/message-prive.css" />
   </head>
   <body>
-    <nav id="server-rail" aria-label="Navigation principale">
+    <nav
+      id="server-rail"
+      aria-label="Navigation principale"
+      data-i18n-aria-label="nav.mainNavigation"
+    >
       <button
         id="home-btn"
         title="Retour à l'accueil"
         aria-label="Retour à l'accueil"
+        data-i18n-title="nav.backHome"
+        data-i18n-aria-label="nav.backHome"
       >
         <img
           class="app-logo"
@@ -26,7 +32,13 @@
         <span class="notif-dot notif-dot--rail" hidden></span>
       </button>
       <div class="rail-divider"></div>
-      <button class="server-icon" title="Projet" aria-label="Serveur : Projet">
+      <button
+        class="server-icon"
+        title="Projet"
+        aria-label="Serveur : Projet"
+        data-i18n-title="nav.project"
+        data-i18n-aria-label="nav.project"
+      >
         P
         <span class="notif-dot notif-dot--rail" hidden></span>
       </button>
@@ -34,6 +46,8 @@
         class="server-icon"
         title="Ajouter un serveur"
         aria-label="Ajouter un serveur"
+        data-i18n-title="nav.addServer"
+        data-i18n-aria-label="nav.addServer"
       >
         +
       </button>
@@ -41,21 +55,33 @@
 
     <aside id="dm-sidebar">
       <div class="sidebar-header">
-        <span>Messages privés</span>
+        <span data-i18n="dm.title">Messages privés</span>
         <button
           id="open-new-dm"
           class="icon-action"
           title="Nouveau message privé"
           aria-label="Nouveau message privé"
+          data-i18n-title="dm.newDm"
+          data-i18n-aria-label="dm.newDm"
         >
           +
         </button>
       </div>
       <div class="friends-actions" aria-label="Filtres des messages privés">
-        <button type="button" class="filter-button active" data-filter="all">
+        <button
+          type="button"
+          class="filter-button active"
+          data-filter="all"
+          data-i18n="dm.filterAll"
+        >
           Tous
         </button>
-        <button type="button" class="filter-button" data-filter="online">
+        <button
+          type="button"
+          class="filter-button"
+          data-filter="online"
+          data-i18n="dm.filterOnline"
+        >
           En ligne
         </button>
       </div>
@@ -65,12 +91,29 @@
       ></ul>
       <div id="user-panel">
         <div class="avatar"></div>
-        <div>
+        <div class="user-info">
           <select
             id="current-user-select"
             aria-label="Utilisateur simulé"
+            data-i18n-aria-label="nav.simulatedUser"
           ></select>
-          <div class="presence-label" id="current-user-presence">En ligne</div>
+          <div class="user-meta">
+            <div
+              class="presence-label"
+              id="current-user-presence"
+              data-i18n="nav.onlineStatus"
+            >
+              En ligne
+            </div>
+            <select
+              id="language-select"
+              aria-label="Langue / Language"
+              class="language-select"
+            >
+              <option value="fr">FR</option>
+              <option value="en">EN</option>
+            </select>
+          </div>
         </div>
         <button
           id="open-notif-settings"
@@ -80,6 +123,8 @@
           aria-label="Paramètres de notifications"
           aria-haspopup="true"
           aria-expanded="false"
+          data-i18n-title="notifications.title"
+          data-i18n-aria-label="notifications.settingsAriaLabel"
         >
           <svg
             viewBox="0 0 16 16"
@@ -101,13 +146,22 @@
           hidden
           role="menu"
           aria-label="Préférences de notification"
+          data-i18n-aria-label="notifications.menuAriaLabel"
         >
-          <p class="notif-menu-title">Notifications</p>
+          <p class="notif-menu-title" data-i18n="notifications.title">
+            Notifications
+          </p>
           <label class="notif-menu-option">
             <input type="radio" name="notif-mode" value="systeme" />
             <span class="notif-menu-option-text">
-              <span class="notif-menu-option-title">Système + son</span>
-              <span class="notif-menu-option-desc"
+              <span
+                class="notif-menu-option-title"
+                data-i18n="notifications.systemTitle"
+                >Système + son</span
+              >
+              <span
+                class="notif-menu-option-desc"
+                data-i18n="notifications.systemDesc"
                 >Notification Windows avec son, et un rond sur la
                 conversation</span
               >
@@ -116,8 +170,14 @@
           <label class="notif-menu-option">
             <input type="radio" name="notif-mode" value="discret" />
             <span class="notif-menu-option-text">
-              <span class="notif-menu-option-title">Discret</span>
-              <span class="notif-menu-option-desc"
+              <span
+                class="notif-menu-option-title"
+                data-i18n="notifications.discreteTitle"
+                >Discret</span
+              >
+              <span
+                class="notif-menu-option-desc"
+                data-i18n="notifications.discreteDesc"
                 >Un rond sur la conversation, rien d'autre</span
               >
             </span>
@@ -125,8 +185,16 @@
           <label class="notif-menu-option">
             <input type="radio" name="notif-mode" value="aucune" />
             <span class="notif-menu-option-text">
-              <span class="notif-menu-option-title">Aucune</span>
-              <span class="notif-menu-option-desc">Pas de notification</span>
+              <span
+                class="notif-menu-option-title"
+                data-i18n="notifications.noneTitle"
+                >Aucune</span
+              >
+              <span
+                class="notif-menu-option-desc"
+                data-i18n="notifications.noneDesc"
+                >Pas de notification</span
+              >
             </span>
           </label>
         </div>
@@ -138,8 +206,12 @@
         <div class="dm-user">
           <div class="avatar topbar-avatar"></div>
           <div>
-            <div class="user-name">Sélectionnez une conversation</div>
-            <div class="user-status">Aucune conversation active</div>
+            <div class="user-name" data-i18n="dm.selectConversation">
+              Sélectionnez une conversation
+            </div>
+            <div class="user-status" data-i18n="dm.noActiveConversation">
+              Aucune conversation active
+            </div>
           </div>
         </div>
       </header>
@@ -147,18 +219,30 @@
       <div id="message-list" aria-live="polite">
         <article class="message-row">
           <div class="message-body">
-            <p class="text">Aucune conversation sélectionnée.</p>
+            <p class="text" data-i18n="dm.noConversationSelected">
+              Aucune conversation sélectionnée.
+            </p>
           </div>
         </article>
       </div>
 
-      <div id="typing-indicator" class="typing-indicator" aria-live="polite" hidden>
-  <span class="typing-dots" aria-hidden="true">
-    <span class="dot"></span>
-    <span class="dot"></span>
-    <span class="dot"></span>
-  </span>
-        <span id="typing-text" class="typing-text"><strong id="is-typing-nom"></strong> est en train d'écrire...</span>
+      <div
+        id="typing-indicator"
+        class="typing-indicator"
+        aria-live="polite"
+        hidden
+      >
+        <span class="typing-dots" aria-hidden="true">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </span>
+        <span id="typing-text" class="typing-text"
+          ><strong id="is-typing-nom"></strong
+          ><span data-i18n="typing.suffix">
+            est en train d'écrire...</span
+          ></span
+        >
       </div>
 
       <div id="composer">
@@ -168,8 +252,9 @@
             type="text"
             placeholder="Écrire un message privé"
             autocomplete="off"
+            data-i18n-placeholder="dm.writeMessagePlaceholder"
           />
-          <button type="submit">Envoyer</button>
+          <button type="submit" data-i18n="channels.send">Envoyer</button>
         </form>
       </div>
     </main>
@@ -177,12 +262,13 @@
     <dialog id="dm-dialog">
       <form method="dialog" id="dialog-form">
         <div class="dialog-header">
-          <h2 id="dialog-title">Nouveau message privé</h2>
+          <h2 id="dialog-title" data-i18n="dm.newDm">Nouveau message privé</h2>
           <button
             value="cancel"
             formnovalidate
             class="close-button"
             aria-label="Fermer"
+            data-i18n-aria-label="channels.close"
           >
             ×
           </button>
@@ -194,6 +280,7 @@
     <div id="toast" role="status" aria-live="polite"></div>
 
     <script src="javascript/notif-prefs.js"></script>
+    <script src="javascript/i18n-browser.js"></script>
     <script type="module" src="javascript/message-prive.js"></script>
   </body>
 </html>

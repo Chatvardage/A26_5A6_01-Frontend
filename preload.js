@@ -73,6 +73,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('session:utilisateur-connecte'),
   allerAuTableauDeBord: () => ipcRenderer.invoke('navigation:tableau-de-bord'),
 
+  obtenirLangue: () => ipcRenderer.invoke('langue:obtenir'),
+  definirLangue: (langue) => ipcRenderer.invoke('langue:definir', { langue }),
+  obtenirDictionnairesI18n: () => ipcRenderer.invoke('i18n:dictionnaires'),
+  obtenirLangueParDefaut: () => ipcRenderer.invoke('i18n:langue-par-defaut'),
+
   obtenirEtatSalons: (utilisateurId) =>
     ipcRenderer.invoke('salons:etat', { utilisateurId }),
   creerSalon: (donnees) => ipcRenderer.invoke('salons:creer', donnees),
@@ -95,5 +100,4 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('modifier-etat-saisie', donnees),
   obtenirEtatsSaisie: (donnees) =>
     ipcRenderer.invoke('obtenir-etats-saisie', donnees),
-
 });

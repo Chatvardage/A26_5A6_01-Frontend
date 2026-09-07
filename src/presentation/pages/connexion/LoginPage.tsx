@@ -12,6 +12,7 @@ import {
 } from '../../../domain/entities/Utilisateur';
 import mascotLogo from '../../../../maquette/logo.png';
 import type { ChatGateway } from '../../../infrastructure/gateways/ChatGateway';
+import { t, LANGUES_SUPPORTEES } from '../../../i18n/i18n-web';
 
 /**
  * Sous-ensemble de ChatGateway réellement nécessaire à cet écran (principe
@@ -28,30 +29,13 @@ export type GatewaySession = Pick<
 
 interface LoginPageProps {
   gateway: GatewaySession;
+  /** Langue actuelle ('fr' ou 'en'), pilotée par le composant parent (voir main.tsx). */
+  langue: string;
+  /** Demande un changement de langue ; le parent est responsable de le confirmer via l'IPC. */
+  changerLangue: (langue: string) => void;
   /** Appelé une fois la session établie ; par défaut, redirige vers le tableau de bord via electronAPI. */
   onSessionEtablie?: () => void;
 }
-
-type EtatChamp = 'idle' | 'checking' | 'error' | 'ok';
-
-interface Disponibilite {
-  pseudo: string;
-  disponible: boolean;
-}
-
-interface ErreurSoumission {
-  pseudo: string;
-  message: string;
-}
-
-/**
- * Message affiché pour un format de pseudo invalide. Les règles exactes
- * (longueur, caractères permis) sont dans `validationPseudo` (domaine) —
- * ce message reste volontairement générique pour ne pas dupliquer la
- * règle ici et risquer de désynchroniser les deux.
- */
-const MESSAGE_FORMAT_INVALIDE =
-  'Le pseudo doit contenir entre 3 et 20 caractères (lettres, chiffres, _ ou -).';
 
 /**
  * Délai maximal accordé à `gateway.pseudoDisponible` avant de considérer la
@@ -62,7 +46,67 @@ const MESSAGE_FORMAT_INVALIDE =
  */
 const DELAI_VERIFICATION_MS = 5000;
 
-export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
+type EtatChamp = 'idle' | 'checking' | 'error' | 'ok';
+
+interface Disponibilite {
+  pseudo: string;
+  disponible: boolean;
+}
+
+interface ErreurSoumission {
+  pseudo: string;
+  /** Clé de traduction (ex. "auth.invalidFormat") ou code brut venant du
+   * backend (ex. "ERR_PSEUDO_PRIS|alice") — jamais un texte déjà traduit,
+   * pour que le message affiché se retraduise tout seul si la langue
+   * change après coup (voir traduireErreurSoumission ci-dessous). Le
+   * paramètre éventuel (ex. "alice" ci-dessus) reste encodé DANS `cle`
+   * plutôt que dans un champ séparé — traduireErreurSoumission le
+   * resépare lui-même via split('|'), donc un champ `params` distinct
+   * ici ne ferait que dupliquer une information déjà présente et jamais
+   * lue. */
+  cle: string;
+}
+
+/**
+ * Traduit erreurSoumission.cle dans la langue COURANTE (recalculé à chaque
+ * rendu, jamais mis en cache) : (1) une clé de validation locale connue
+ * (ex. "auth.invalidFormat"), ou (2) un code d'erreur backend au format
+ * "errors.CODE" avec un paramètre optionnel (voir nettoyerPrefixeIpc dans
+ * main.tsx, qui ne traduit plus rien lui-même). Repli sur un message
+ * générique traduit si le code est inconnu, plutôt qu'afficher une clé
+ * technique brute à l'utilisateur.
+ */
+function traduireErreurSoumission(
+  langue: string,
+  erreur: ErreurSoumission
+): string {
+  if (erreur.cle.startsWith('auth.')) {
+    return t(langue, erreur.cle);
+  }
+  const [code, ...params] = erreur.cle.split('|');
+  const cleTraduction = `errors.${code}`;
+  const brutTraduit = t(langue, cleTraduction);
+  if (brutTraduit === cleTraduction) {
+    return t(langue, 'errors.generic');
+  }
+  if (!params.length) return brutTraduit;
+  // Convention "CODE|valeur" : un seul paramètre positionnel, dont le nom
+  // (ex. "pseudo", "host"...) n'est pas connu d'ici — on le lit dans le
+  // texte déjà traduit plutôt que de supposer qu'il s'appelle toujours
+  // "pseudo", ce qui laisserait un futur {host} non substitué. On repasse
+  // ensuite par t() (pas de .replace() manuel) pour la substitution.
+  const nomParametre = brutTraduit.match(/\{(\w+)\}/)?.[1];
+  return nomParametre
+    ? t(langue, cleTraduction, { [nomParametre]: params[0] })
+    : brutTraduit;
+}
+
+export function LoginPage({
+  gateway,
+  langue,
+  changerLangue,
+  onSessionEtablie,
+}: LoginPageProps) {
   const [pseudo, setPseudo] = useState('');
   const [disponibilite, setDisponibilite] = useState<Disponibilite | null>(
     null
@@ -78,7 +122,7 @@ export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
 
   // Vérification d'unicité "au fil de la frappe" (anti-rafale + jeton pour
   // ignorer une réponse obsolète). Le seul setState dans cet effet se
-  // produit dans les callbacks async (synchronisation avec le gateway),
+  // produit dans le callback async (synchronisation avec le gateway),
   // jamais de façon synchrone dans le corps de l'effet.
   useEffect(() => {
     if (!formatValide) return;
@@ -96,8 +140,7 @@ export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
         if (jeton !== jetonVerification.current) return; // réponse obsolète
         setErreurSoumission({
           pseudo: pseudoVerifie,
-          message:
-            'Impossible de vérifier la disponibilité du pseudo (délai dépassé).',
+          cle: 'auth.checkTimeout',
         });
       }, DELAI_VERIFICATION_MS);
 
@@ -116,17 +159,14 @@ export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
             actuelle && actuelle.pseudo === pseudoVerifie ? null : actuelle
           );
         })
-        .catch((err) => {
+        .catch(() => {
           // Sans ce catch, un appel IPC qui rejette laissait le champ
           // bloqué sur "Vérification de la disponibilité…" indéfiniment.
           if (jeton !== jetonVerification.current) return; // réponse obsolète
           clearTimeout(delaiDepasse);
           setErreurSoumission({
             pseudo: pseudoVerifie,
-            message:
-              err instanceof Error
-                ? err.message
-                : 'Impossible de vérifier la disponibilité du pseudo.',
+            cle: 'auth.checkFailed',
           });
         });
     }, 300);
@@ -144,20 +184,20 @@ export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
 
   if (erreurSoumission && erreurSoumission.pseudo === pseudoActuel) {
     etat = 'error';
-    message = erreurSoumission.message;
+    message = traduireErreurSoumission(langue, erreurSoumission);
   } else if (pseudoActuel.length === 0) {
     etat = 'idle';
   } else if (!formatValide) {
     etat = 'error';
-    message = MESSAGE_FORMAT_INVALIDE;
+    message = t(langue, 'auth.invalidFormat');
   } else if (disponibilite && disponibilite.pseudo === pseudoActuel) {
     etat = disponibilite.disponible ? 'ok' : 'error';
     message = disponibilite.disponible
-      ? 'Pseudo disponible.'
-      : 'Ce pseudo est déjà pris, choisissez-en un autre.';
+      ? t(langue, 'auth.available')
+      : t(langue, 'auth.taken');
   } else {
     etat = 'checking';
-    message = 'Vérification de la disponibilité…';
+    message = t(langue, 'auth.checking');
   }
 
   const handleSubmit = useCallback(
@@ -168,7 +208,7 @@ export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
       if (!validationPseudo(valeur)) {
         setErreurSoumission({
           pseudo: valeur,
-          message: MESSAGE_FORMAT_INVALIDE,
+          cle: 'auth.invalidFormat',
         });
         inputRef.current?.focus();
         return;
@@ -185,11 +225,8 @@ export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
           await window.electronAPI.allerAuTableauDeBord();
         }
       } catch (err) {
-        const texte =
-          err instanceof Error
-            ? err.message
-            : 'Impossible de créer la session.';
-        setErreurSoumission({ pseudo: valeur, message: texte });
+        const cle = err instanceof Error ? err.message : '';
+        setErreurSoumission({ pseudo: valeur, cle });
         setEnCours(false);
         inputRef.current?.focus();
       }
@@ -199,6 +236,24 @@ export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
 
   return (
     <div className="screen-login">
+      <div
+        className="language-switch"
+        role="group"
+        aria-label={t(langue, 'auth.languageLabel')}
+      >
+        {LANGUES_SUPPORTEES.map((code) => (
+          <button
+            key={code}
+            type="button"
+            className={`lang-btn ${code === langue ? 'active' : ''}`}
+            onClick={() => changerLangue(code)}
+            aria-pressed={code === langue}
+          >
+            {code.toUpperCase()}
+          </button>
+        ))}
+      </div>
+
       <div className="login-brand">ChatVardage</div>
       <form className="login-card" onSubmit={handleSubmit} noValidate>
         <img
@@ -208,10 +263,10 @@ export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
           aria-hidden="true"
         />
 
-        <label htmlFor="pseudo-input">Pseudo local</label>
+        <label htmlFor="pseudo-input">{t(langue, 'auth.fieldLabel')}</label>
         <div className="login-card-header">
-          <span>Nom d&apos;utilisateur</span>
-          <span>Local</span>
+          <span>{t(langue, 'auth.headerUsername')}</span>
+          <span>{t(langue, 'auth.headerLocal')}</span>
         </div>
 
         <input
@@ -219,7 +274,7 @@ export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
           name="pseudo"
           type="text"
           autoComplete="off"
-          placeholder="Nom d'utilisateur"
+          placeholder={t(langue, 'auth.usernamePlaceholder')}
           maxLength={20}
           value={pseudo}
           onChange={(event) => setPseudo(event.target.value)}
@@ -236,12 +291,10 @@ export function LoginPage({ gateway, onSessionEtablie }: LoginPageProps) {
         </p>
 
         <button type="submit" disabled={enCours}>
-          {enCours ? 'Connexion…' : 'Rejoindre le clavardage'}
+          {enCours ? t(langue, 'auth.connecting') : t(langue, 'auth.join')}
         </button>
 
-        <p className="login-hint">
-          Unique sur cet appareil · aucun mot de passe
-        </p>
+        <p className="login-hint">{t(langue, 'auth.hint')}</p>
       </form>
     </div>
   );
