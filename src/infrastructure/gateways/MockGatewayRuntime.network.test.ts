@@ -59,6 +59,18 @@ describe('MockGatewayRuntime - réseau et présence', () => {
     ).toThrow('ERR_RESEAU_NON_CONNECTE');
   });
 
+  it('ignore une reconnexion demandée lorsque le réseau est déjà connecté', async () => {
+    const gateway = new MockGatewayRuntime();
+    gateway.connexion({ id: 'u1', pseudo: 'sam' });
+
+    const avant = gateway.obtenirEtatConnexion();
+    const resultat = await gateway.simulerReconnexion(0);
+
+    expect(resultat.statut).toBe('connecte');
+    expect(resultat.reconnexions).toBe(avant.reconnexions);
+    expect(gateway.obtenirPresences().u1).toBe('en-ligne');
+  });
+
   it('ne compte pas une reconnexion impossible sans utilisateur connecté', async () => {
     const gateway = new MockGatewayRuntime();
     expect(gateway.obtenirEtatConnexion().reconnexions).toBe(0);

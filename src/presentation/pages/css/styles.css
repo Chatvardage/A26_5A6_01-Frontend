@@ -997,3 +997,52 @@ dialog::backdrop {
 .message-actions.confirming-delete .message-action.danger {
   color: #ff8a8a;
 }
+
+/* Modification de message : conserver le rendu visuel du message normal. */
+.message-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.message-edit-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+}
+
+.message-edit-input:focus {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.message-edit-save,
+.message-edit-cancel {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 2px 4px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.message-edit-save:hover,
+.message-edit-cancel:hover {
+  color: var(--text-primary);
+}
+
+.edited-label {
+  margin-left: 4px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}

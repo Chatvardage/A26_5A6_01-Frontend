@@ -446,6 +446,12 @@ class MockGatewayRuntime {
       throw new Error('ERR_AUCUN_UTILISATEUR_CONNECTE');
     }
 
+    // Une reconnexion n'a de sens que depuis l'état déconnecté. Le gateway
+    // protège aussi cet invariant afin de ne pas dépendre uniquement de l'UI.
+    if (this.etatConnexion.statut === 'connecte') {
+      return this.obtenirEtatConnexion();
+    }
+
     // Une reconnexion déjà en cours ne doit pas être relancée : deux appels
     // rapprochés (double-clic ou IPC concurrent) ne doivent ni doubler le
     // compteur ni faire courir deux transitions réseau en parallèle.
