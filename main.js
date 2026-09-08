@@ -670,6 +670,16 @@ chatGateway.on('presence', (presence) => {
     mainWindow.webContents.send('presence:change', presence);
   }
 });
+chatGateway.on('message-modifie', (message) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('messages:modifie-change', message);
+  }
+});
+chatGateway.on('message-supprime', (message) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('messages:supprime-change', message);
+  }
+});
 
 // --- Langue (i18n) -------------------------------------------------------
 // 'langue:obtenir' : lue par la page de connexion et le dashboard au

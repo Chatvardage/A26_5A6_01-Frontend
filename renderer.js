@@ -788,7 +788,7 @@ function afficherMessages(options = {}) {
                     ),
                   }),
                   ...(message.modification
-                    ? [creerEl('span', { classe: 'edited-label', texte: '(modifié)' })]
+                    ? [creerEl('span', { classe: 'edited-label', texte: `(${t('messages.edited')})` })]
                     : []),
                 ],
               }),
@@ -1102,7 +1102,10 @@ el.membres.addEventListener('click', () => {
         creerEl('span', {
           classe: 'member-presence',
           texte: (presences[membre.id] ?? 'hors-ligne') === 'en-ligne' ? t('network.online') : t('network.offline'),
-          attrs: { 'data-presence': presences[membre.id] ?? 'hors-ligne' },
+          attrs: {
+            'data-presence': presences[membre.id] ?? 'hors-ligne',
+            'data-user-id': membre.id,
+          },
         }),
       ];
       if (membre.id === salon.hoteId) {
@@ -1174,6 +1177,8 @@ if (el.langue) {
     }
     el.langue.value = I18n.obtenirLangue();
     afficherTout();
+    afficherEtatReseau();
+    afficherPresenceCourante();
   });
 }
 
@@ -1521,4 +1526,21 @@ window.electronAPI.onEtatReseauChange((nouvelEtat) => afficherEtatReseau(nouvelE
 window.electronAPI.onPresenceChange((presence) => {
   presences[presence.utilisateurId] = presence.statut;
   afficherPresenceCourante();
+
+  const presenceMembre = el.dialogue?.querySelector(
+    `.member-presence[data-user-id="${presence.utilisateurId}"]`
+  );
+  if (presenceMembre) {
+    presenceMembre.dataset.presence = presence.statut;
+    presenceMembre.textContent =
+      presence.statut === 'en-ligne' ? t('network.online') : t('network.offline');
+  }
+});
+
+window.electronAPI.onMessageModifieChange(async () => {
+  await actualiser();
+});
+
+window.electronAPI.onMessageSupprimeChange(async () => {
+  await actualiser();
 });

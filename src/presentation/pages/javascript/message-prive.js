@@ -174,6 +174,8 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
       langueSelect.value = I18n.obtenirLangue();
       appliquerTraductionsStatiques();
+      afficherEtatReseau();
+      afficherPresenceCourante();
       renderConversationList();
       await renderActiveConversation();
     });
@@ -764,7 +766,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (message.modification) {
         const edited = document.createElement('span');
         edited.classList.add('edited-label');
-        edited.textContent = '(modifié)';
+        edited.textContent = `(${t('messages.edited')})`;
         meta.appendChild(edited);
       }
       body.append(meta, text);
@@ -1326,6 +1328,14 @@ window.addEventListener('DOMContentLoaded', async () => {
   window.electronAPI.onPresenceChange(async (presence) => {
     presences[presence.utilisateurId] = presence.statut;
     afficherPresenceCourante();
+    await refreshConversations();
+  });
+
+  window.electronAPI.onMessageModifieChange(async () => {
+    await refreshConversations();
+  });
+
+  window.electronAPI.onMessageSupprimeChange(async () => {
     await refreshConversations();
   });
 

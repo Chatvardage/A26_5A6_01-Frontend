@@ -1,5 +1,8 @@
 name: Builds multiplateformes
 
+permissions:
+  contents: read
+
 on:
   workflow_dispatch:
   push:

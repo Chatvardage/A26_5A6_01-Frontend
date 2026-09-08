@@ -18,7 +18,7 @@
     "build:win": "npm run build:login && npx --yes electron-builder@26.0.12 --win",
     "build:mac": "npm run build:login && npx --yes electron-builder@26.0.12 --mac",
     "build:linux": "npm run build:login && npx --yes electron-builder@26.0.12 --linux",
-    "build:all": "npm run build:login && npx --yes electron-builder@26.0.12 --win --linux"
+    "build:all": "npm run build:login && npx --yes electron-builder@26.0.12 --win --mac --linux"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
