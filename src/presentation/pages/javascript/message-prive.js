@@ -339,6 +339,128 @@ window.addEventListener('DOMContentLoaded', async () => {
     enChargement: false,
   };
 
+  // --- Messages non livrés (hors ligne) ------------------------------------
+  // Messages tapés pendant que etatReseau.statut !== 'connecte' (ou dont
+  // l'envoi a échoué en cours de route) : jamais transmis au gateway, gardés
+  // uniquement ici par conversation en attendant que l'utilisateur clique
+  // "réessayer" ou "supprimer" (voir creerActionsMessageNonLivre dans
+  // chat-ui-shared.js). Voir messagesEnAttenteSalon dans renderer.js pour
+  // l'équivalent salon (même raisonnement, y compris le pourquoi de l'absence
+  // de persistance dans StockageLocal, et le fait que la Map n'est jamais
+  // purgée pour une conversation qu'on ne revisite plus — accepté tel quel).
+  const messagesEnAttenteDm = new Map();
+
+  // Ids des messages actuellement en cours de renvoi (voir
+  // reessayerMessageEnAttenteDm ci-dessous) — voir
+  // messagesEnAttenteEnCoursSalon dans renderer.js pour l'équivalent salon et
+  // le détail du pourquoi (anti-double-envoi + empêcher "Supprimer" d'agir
+  // pendant qu'un envoi est déjà parti pour ce message).
+  const messagesEnAttenteEnCoursDm = new Set();
+
+  function ajouterMessageEnAttenteDm(conversationId, message) {
+    const liste = messagesEnAttenteDm.get(conversationId) ?? [];
+    liste.push(message);
+    messagesEnAttenteDm.set(conversationId, liste);
+  }
+
+  // Ne renvoie que les messages en attente de l'utilisateur COURANT (voir
+  // obtenirMessagesEnAttenteSalon dans renderer.js pour l'équivalent salon et
+  // le pourquoi) : sans ce filtre, changer d'utilisateur simulé ferait
+  // apparaître les brouillons non livrés d'un autre utilisateur dans cette
+  // même conversation, avec un "Réessayer" qui les enverrait sous son
+  // ancien auteurId.
+  function obtenirMessagesEnAttenteDm(conversationId) {
+    const liste = messagesEnAttenteDm.get(conversationId) ?? [];
+    return liste.filter((message) => message.auteurId === state.currentUserId);
+  }
+
+  function retirerMessageEnAttenteDm(conversationId, messageId) {
+    const liste = messagesEnAttenteDm.get(conversationId);
+    if (!liste) return;
+    const restants = liste.filter((message) => message.id !== messageId);
+    if (restants.length) {
+      messagesEnAttenteDm.set(conversationId, restants);
+    } else {
+      messagesEnAttenteDm.delete(conversationId);
+    }
+  }
+
+  /**
+   * Retente l'envoi d'un message resté "non livré". Vérifie explicitement
+   * etatReseau (EtatConnexion) — jamais `presences` : simuler sa propre
+   * présence "hors-ligne" (voir brancherControlesReseauPresence) ne doit pas
+   * empêcher de réessayer, seule une vraie coupure réseau le doit.
+   */
+  async function reessayerMessageEnAttenteDm(message) {
+    // Garde anti-double-envoi (voir messagesEnAttenteEnCoursDm) : un second
+    // clic (ou un second appel) pendant qu'une tentative est déjà en cours
+    // pour CE message ne doit rien déclencher de plus.
+    if (messagesEnAttenteEnCoursDm.has(message.id)) return;
+    if (etatReseau.statut !== 'connecte') {
+      notifier(t('messages.stillOffline'), true);
+      return;
+    }
+    messagesEnAttenteEnCoursDm.add(message.id);
+    // Réaffiche tout de suite (avant l'await) pour désactiver visuellement
+    // les boutons réessayer/supprimer de ce message pendant que la requête
+    // est en vol — voir messagesEnAttenteEnCoursDm. conserverPositionScroll
+    // évite de faire sauter la vue en bas de la conversation si
+    // l'utilisateur avait remonté dans l'historique (voir renderer.js pour
+    // l'équivalent salon).
+    void renderActiveConversation({ conserverPositionScroll: true });
+
+    // L'envoi et le rafraîchissement de la liste ont chacun leur propre
+    // try/catch, volontairement séparés : les regrouper ferait qu'un
+    // refreshConversations() en échec APRÈS un envoi réussi tomberait dans
+    // le même bloc catch qu'un envoi raté, et serait alors traité comme tel
+    // (notification "échec", message remis en attente) — alors que le
+    // message est déjà bien parti côté serveur à ce moment-là.
+    try {
+      await window.electronAPI.envoyerMessagePrive({
+        conversationId: message.conversationId,
+        contenu: message.contenu,
+        utilisateurId: message.auteurId,
+      });
+    } catch (erreur) {
+      // Ici seulement, l'envoi lui-même a échoué : le message reste "non
+      // livré" (rien à retirer de messagesEnAttenteDm).
+      messagesEnAttenteEnCoursDm.delete(message.id);
+      notifier(messageErreur(erreur), true);
+      void renderActiveConversation({ conserverPositionScroll: true });
+      return;
+    }
+
+    // Envoi réussi : retiré de la liste d'attente quoi qu'il arrive au
+    // rafraîchissement ci-dessous.
+    retirerMessageEnAttenteDm(message.conversationId, message.id);
+    messagesEnAttenteEnCoursDm.delete(message.id);
+    try {
+      await refreshConversations();
+    } catch (erreur) {
+      // Le message est bien parti ; seul le rechargement de la liste des
+      // conversations a échoué ensuite — à ne pas confondre avec un échec
+      // d'envoi (pas de remise en attente pour un message déjà livré).
+      notifier(messageErreur(erreur), true);
+      void renderActiveConversation({ conserverPositionScroll: true });
+    }
+  }
+
+  function supprimerMessageEnAttenteDm(message) {
+    // Refuse de supprimer un message dont l'envoi est actuellement en cours
+    // (voir messagesEnAttenteEnCoursDm et reessayerMessageEnAttenteDm) : la
+    // requête déjà partie aboutira de toute façon, donc "supprimer" ici ne
+    // ferait qu'induire l'utilisateur en erreur sur ce qui a réellement été
+    // envoyé.
+    if (messagesEnAttenteEnCoursDm.has(message.id)) return;
+    retirerMessageEnAttenteDm(message.conversationId, message.id);
+    // conserverPositionScroll: true — voir le commentaire équivalent dans
+    // reessayerMessageEnAttenteDm ci-dessus (et supprimerMessageEnAttenteSalon
+    // dans renderer.js) : sans lui, supprimer un brouillon fait sauter la vue
+    // en bas de la conversation même si l'utilisateur lisait plus haut dans
+    // l'historique.
+    void renderActiveConversation({ conserverPositionScroll: true });
+  }
+
   // Fusionne messages plus anciens déjà remontés et page récente en
   // dédoublonnant par id puis en triant par date d'envoi — voir
   // fusionnerHistorique dans renderer.js pour l'équivalent salon et le détail
@@ -349,6 +471,33 @@ window.addEventListener('DOMContentLoaded', async () => {
       parId.set(message.id, message);
     });
     return Array.from(parId.values()).sort((a, b) => a.envoi - b.envoi);
+  }
+
+  // Fusionne `messagesTries` (déjà trié par `envoi`, typiquement le résultat
+  // de fusionnerHistoriqueDm) avec `messagesEnAttente` (0, 1 ou 2 brouillons
+  // non livrés en général) sans re-trier tout l'historique — voir
+  // fusionnerAvecMessagesEnAttente dans renderer.js pour l'équivalent salon
+  // et le détail du pourquoi (renderActiveConversation est rappelé très
+  // souvent pour des raisons sans rapport avec les brouillons, ex.
+  // indicateur de saisie).
+  function fusionnerAvecMessagesEnAttenteDm(messagesTries, messagesEnAttente) {
+    if (!messagesEnAttente.length) return messagesTries;
+    const brouillonsTries = [...messagesEnAttente].sort(
+      (a, b) => a.envoi - b.envoi
+    );
+    const resultat = [];
+    let i = 0;
+    let j = 0;
+    while (i < messagesTries.length && j < brouillonsTries.length) {
+      if (messagesTries[i].envoi <= brouillonsTries[j].envoi) {
+        resultat.push(messagesTries[i++]);
+      } else {
+        resultat.push(brouillonsTries[j++]);
+      }
+    }
+    while (i < messagesTries.length) resultat.push(messagesTries[i++]);
+    while (j < brouillonsTries.length) resultat.push(brouillonsTries[j++]);
+    return resultat;
   }
 
   // Construit l'élément affiché en haut de la liste des messages pour
@@ -458,6 +607,16 @@ window.addEventListener('DOMContentLoaded', async () => {
       );
       state.activeConversationId = firstOnline?.id ?? null;
     }
+
+    // state.activeConversationId vient tout juste d'être fixé (ou confirmé)
+    // ci-dessus : on rappelle explicitement afficherEtatReseau() ici, car
+    // composerAutorise (voir sa définition plus haut) est calculé à partir de
+    // cette valeur. Sans cet appel, le chargerEtatReseauEtPresences() du
+    // démarrage (voir l'initialisation en bas de fichier) a déjà figé
+    // messageInput/submitButton sur `disabled = true` (aucune conversation
+    // active à ce moment-là, avant le tout premier refreshConversations()),
+    // et rien ne les réactivait plus jamais ensuite.
+    afficherEtatReseau();
 
     // renderActiveConversation() doit s'exécuter avant renderConversationList() :
     // c'est elle qui marque la conversation active comme "lue"
@@ -610,6 +769,11 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
       definirConversationActivePourNotifs(null);
       reinitialiserHistoriqueDm();
+      // composerAutorise (voir afficherEtatReseau) est calculé à partir de
+      // state.activeConversationId : sans ce rappel, un composer resterait
+      // activé alors qu'il n'y a plus de conversation active pour recevoir
+      // le message tapé.
+      afficherEtatReseau();
       return;
     }
 
@@ -629,8 +793,27 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
       definirConversationActivePourNotifs(null);
       reinitialiserHistoriqueDm();
+      // Voir le commentaire équivalent plus haut : activeConversationId
+      // vient d'être remis à null, composerAutorise doit être recalculé en
+      // conséquence.
+      afficherEtatReseau();
       return;
     }
+
+    // On rappelle explicitement afficherEtatReseau() ici : composerAutorise
+    // (voir sa définition plus haut) est calculé à partir de
+    // state.activeConversationId, qui vient potentiellement d'être fixé par
+    // un appelant qui ne passe PAS par refreshConversations() (ex. un clic
+    // direct sur une conversation dans la liste, ou un changement de filtre
+    // — voir leurs listeners plus bas) — refreshConversations() rappelle
+    // bien afficherEtatReseau() de son côté, mais ces deux-là appellent
+    // renderActiveConversation() directement. Sans cet appel ici,
+    // composerAutorise resterait figé sur sa dernière valeur connue (par ex.
+    // désactivé s'il n'y avait provisoirement aucune conversation active),
+    // même après qu'une conversation valide soit redevenue active — voir
+    // afficherEtatReseau() dans renderer.js (afficherMessages()) pour
+    // l'équivalent salon et le même raisonnement.
+    afficherEtatReseau();
 
     // Changement de conversation active : on repart d'un historique manuel
     // vide (voir chargerMessagesPlusAnciensDm et reinitialiserHistoriqueDm).
@@ -669,10 +852,30 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // Page récente (conversation.messages) + historique manuellement remonté
     // (voir chargerMessagesPlusAnciensDm) : voir fusionnerHistoriqueDm plus
-    // haut.
-    const messages = fusionnerHistoriqueDm(
+    // haut. Les messages non livrés de cette conversation (voir
+    // messagesEnAttenteDm) sont fusionnés puis triés avec le reste par
+    // `envoi` plutôt que simplement ajoutés à la suite : ils ne sont PAS
+    // garantis d'être les plus récents — voir le commentaire équivalent sur
+    // tousLesMessages dans renderer.js pour le détail du pourquoi (un
+    // message réel plus récent peut arriver via refreshConversations()
+    // pendant qu'un brouillon plus ancien attend encore, ou deux brouillons
+    // peuvent être retentés dans le désordre).
+    const messagesEnAttenteDeLaConversation = obtenirMessagesEnAttenteDm(
+      conversation.id
+    );
+    const messagesHistorique = fusionnerHistoriqueDm(
       etatHistoriqueDm.messagesAnciens,
       conversation.messages ?? []
+    );
+    // fusionnerHistoriqueDm() renvoie déjà un tableau trié par `envoi` : pas
+    // besoin de re-trier l'ensemble à chaque rendu quand il n'y a aucun
+    // message en attente (le cas de loin le plus fréquent). Quand il y en a,
+    // on fusionne au lieu de tout retrier — voir
+    // fusionnerAvecMessagesEnAttenteDm ci-dessus et son équivalent salon dans
+    // renderer.js.
+    const messages = fusionnerAvecMessagesEnAttenteDm(
+      messagesHistorique,
+      messagesEnAttenteDeLaConversation
     );
     const otherUser = conversation.otherUser;
 
@@ -748,6 +951,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (isOwn) {
         row.classList.add('own-message');
       }
+      if (message.nonLivre) {
+        row.classList.add('non-livre');
+      }
 
       const avatar = document.createElement('div');
       avatar.classList.add('avatar');
@@ -781,7 +987,11 @@ window.addEventListener('DOMContentLoaded', async () => {
         meta.appendChild(edited);
       }
       body.append(meta, text);
-      if (isOwn) body.appendChild(creerActionsMessage(message, text));
+      if (message.nonLivre) {
+        body.appendChild(creerActionsMessageNonLivre(message));
+      } else if (isOwn) {
+        body.appendChild(creerActionsMessage(message, text));
+      }
       row.append(avatar, body);
       messageList.appendChild(row);
     });
@@ -818,6 +1028,16 @@ window.addEventListener('DOMContentLoaded', async () => {
       messageErreur,
       champMessage: messageInput,
       getEtatReseau: () => etatReseau,
+    });
+  }
+
+  function creerActionsMessageNonLivre(message) {
+    return ChatUiShared.creerActionsMessageNonLivre({
+      message,
+      t,
+      enCours: messagesEnAttenteEnCoursDm.has(message.id),
+      onReessayer: reessayerMessageEnAttenteDm,
+      onSupprimer: supprimerMessageEnAttenteDm,
     });
   }
 
@@ -982,16 +1202,37 @@ window.addEventListener('DOMContentLoaded', async () => {
     messageForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       const content = messageInput.value.trim();
-      if (
-        !content ||
-        !state.activeConversationId ||
-        etatReseau.statut !== 'connecte'
-      ) {
+      if (!content || !state.activeConversationId) {
         return;
       }
 
       const auteurId = state.currentUserId;
       const conversationId = state.activeConversationId;
+      messageInput.value = '';
+
+      // Hors ligne (etatReseau, JAMAIS `presences` — voir le commentaire sur
+      // messagesEnAttenteDm) : le message est affiché tout de suite, marqué
+      // "non livré", sans jamais être transmis au gateway. Se mettre
+      // soi-même "hors-ligne" via le bouton de présence
+      // (brancherControlesReseauPresence) n'a donc aucun effet ici, seule
+      // une vraie coupure réseau simulée (#simulate-network-cut, qui change
+      // etatReseau) en a.
+      if (etatReseau.statut !== 'connecte') {
+        ajouterMessageEnAttenteDm(
+          conversationId,
+          ChatUiShared.creerMessageEnAttente({
+            conversationId,
+            auteurId,
+            contenu: content,
+          })
+        );
+        // conserverPositionScroll: true — voir reessayerMessageEnAttenteDm
+        // plus haut : sans lui, afficher ce brouillon "non livré" fait
+        // sauter la vue en bas de la conversation même si l'utilisateur
+        // lisait plus haut dans l'historique.
+        await renderActiveConversation({ conserverPositionScroll: true });
+        return;
+      }
 
       // 1. Annule le timer d'inactivité de cet utilisateur s'il existe
       if (timersArretSaisieDm[auteurId]) {
@@ -1006,14 +1247,47 @@ window.addEventListener('DOMContentLoaded', async () => {
         est_saisie: false,
       });
 
-      // 3. Envoie le message
-      await window.electronAPI.envoyerMessagePrive({
-        conversationId,
-        contenu: content,
-        utilisateurId: auteurId,
-      });
-      messageInput.value = '';
-      await refreshConversations();
+      // 3. Envoie le message. L'envoi et le rafraîchissement qui suit ont
+      // chacun leur propre try/catch (voir reessayerMessageEnAttenteDm plus
+      // haut pour le détail du pourquoi) : sans cette séparation, un
+      // refreshConversations() en échec APRÈS un envoi pourtant réussi
+      // tomberait dans le même bloc catch qu'un envoi raté — le message
+      // (déjà bien parti côté serveur) serait alors à tort remis en
+      // attente en double, avec une notification d'échec trompeuse.
+      try {
+        await window.electronAPI.envoyerMessagePrive({
+          conversationId,
+          contenu: content,
+          utilisateurId: auteurId,
+        });
+      } catch (erreur) {
+        // Connecté au moment de l'envoi mais échec en cours de route : même
+        // traitement qu'un envoi tenté hors ligne, plutôt que de perdre le
+        // texte tapé (voir le commentaire plus haut).
+        ajouterMessageEnAttenteDm(
+          conversationId,
+          ChatUiShared.creerMessageEnAttente({
+            conversationId,
+            auteurId,
+            contenu: content,
+          })
+        );
+        // conserverPositionScroll: true — voir reessayerMessageEnAttenteDm
+        // plus haut pour le pourquoi.
+        await renderActiveConversation({ conserverPositionScroll: true });
+        notifier(messageErreur(erreur), true);
+        return;
+      }
+      try {
+        await refreshConversations();
+      } catch (erreur) {
+        // Le message est bien parti ; seul le rechargement de la liste des
+        // conversations a échoué ensuite — à ne pas confondre avec un échec
+        // d'envoi (pas de brouillon "non livré" ajouté pour un message déjà
+        // livré).
+        notifier(messageErreur(erreur), true);
+        await renderActiveConversation({ conserverPositionScroll: true });
+      }
     });
 
     messageInput.addEventListener('input', async (event) => {

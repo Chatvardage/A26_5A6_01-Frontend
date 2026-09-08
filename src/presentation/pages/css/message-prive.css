@@ -244,6 +244,19 @@ body {
   background: var(--offline);
 }
 
+/* Le point de présence n'a de sens que sur l'avatar des AUTRES utilisateurs
+   (liste de conversations, en-tête de la conversation, messages reçus) : sur
+   l'avatar de son propre profil (panneau utilisateur, en bas de la barre
+   latérale), il ne reflète rien de dynamique (rien ne bascule jamais
+   #user-panel .avatar sur .offline — la présence qu'on affiche pour
+   soi-même est déjà le bouton #current-user-presence juste à côté) et n'a
+   donc jamais existé sur le dashboard des salons (styles.css, chargé sur
+   cette page mais qui ne définit aucun .avatar::after). On l'y retire donc
+   aussi ici, pour rester cohérent entre les deux dashboards. */
+#user-panel .avatar::after {
+  content: none;
+}
+
 .conversation-info {
   min-width: 0;
 }

@@ -174,6 +174,152 @@ let etatHistoriqueSalon = {
   enChargement: false,
 };
 
+// --- Messages non livrés (hors ligne) --------------------------------------
+// Messages tapés pendant que etatReseau.statut !== 'connecte' (ou dont
+// l'envoi a échoué en cours de route) : jamais transmis au gateway, gardés
+// uniquement ici par salon en attendant que l'utilisateur clique "réessayer"
+// ou "supprimer" (voir creerActionsMessageNonLivre dans chat-ui-shared.js).
+// Volontairement PAS persisté (StockageLocal) : contrairement à l'historique
+// des salons, un brouillon jamais envoyé n'a pas vocation à survivre à un
+// redémarrage de l'app. Ceci dit, la Map elle-même n'est jamais purgée pour
+// un salon que l'utilisateur quitte ou ne revisite plus : c'est accepté tel
+// quel (portée d'une session en mémoire, jamais persisté), pas un oubli.
+const messagesEnAttenteSalon = new Map();
+
+// Ids des messages actuellement en cours de renvoi (voir
+// reessayerMessageEnAttenteSalon ci-dessous) : sans cette garde, deux clics
+// rapprochés sur "Réessayer" pour le même message pourraient déclencher deux
+// appels envoyerMessageSalon() pour le même contenu, créant deux messages
+// bien réels côté serveur pour une seule action utilisateur. Elle sert aussi
+// à empêcher "Supprimer" d'agir tant qu'un envoi est déjà parti pour ce
+// message (voir supprimerMessageEnAttenteSalon) : sans ça, l'utilisateur
+// pourrait croire avoir annulé un message alors que la requête réseau déjà
+// en vol va quand même aboutir.
+const messagesEnAttenteEnCoursSalon = new Set();
+
+function ajouterMessageEnAttenteSalon(salonId, message) {
+  const liste = messagesEnAttenteSalon.get(salonId) ?? [];
+  liste.push(message);
+  messagesEnAttenteSalon.set(salonId, liste);
+}
+
+// Ne renvoie que les messages en attente de l'utilisateur COURANT
+// (utilisateurActuelId) : la Map est indexée par salon, pas par utilisateur,
+// donc sans ce filtre, changer d'utilisateur simulé (voir le listener sur
+// el.utilisateur plus bas) ferait apparaître les brouillons non livrés d'un
+// autre utilisateur dans ce même salon — et "Réessayer" les enverrait alors
+// avec l'auteurId de cet ancien utilisateur.
+function obtenirMessagesEnAttenteSalon(salonId) {
+  const liste = messagesEnAttenteSalon.get(salonId) ?? [];
+  return liste.filter((message) => message.auteurId === utilisateurActuelId);
+}
+
+function retirerMessageEnAttenteSalon(salonId, messageId) {
+  const liste = messagesEnAttenteSalon.get(salonId);
+  if (!liste) return;
+  const restants = liste.filter((message) => message.id !== messageId);
+  if (restants.length) {
+    messagesEnAttenteSalon.set(salonId, restants);
+  } else {
+    messagesEnAttenteSalon.delete(salonId);
+  }
+}
+
+/**
+ * Retente l'envoi d'un message resté "non livré". Vérifie explicitement
+ * etatReseau (EtatConnexion) — jamais `presences` : simuler sa propre
+ * présence "hors-ligne" (voir brancherControlesReseauPresence) ne doit pas
+ * empêcher de réessayer, seule une vraie coupure réseau le doit.
+ */
+async function reessayerMessageEnAttenteSalon(message) {
+  // Garde anti-double-envoi (voir messagesEnAttenteEnCoursSalon) : un second
+  // clic (ou un second appel) pendant qu'une tentative est déjà en cours
+  // pour CE message ne doit rien déclencher de plus.
+  if (messagesEnAttenteEnCoursSalon.has(message.id)) return;
+  if (etatReseau.statut !== 'connecte') {
+    notifier(t('messages.stillOffline'), true);
+    return;
+  }
+  messagesEnAttenteEnCoursSalon.add(message.id);
+  // Réaffiche tout de suite (avant l'await) pour désactiver visuellement les
+  // boutons réessayer/supprimer de ce message pendant que la requête est en
+  // vol — voir messagesEnAttenteEnCoursSalon.
+  afficherMessages({ conserverPositionScroll: true });
+
+  // L'envoi et le rafraîchissement (actualiser()) ont chacun leur propre
+  // try/catch, volontairement séparés — voir reessayerMessageEnAttenteDm
+  // dans message-prive.js pour l'équivalent DM et le détail du pourquoi :
+  // les regrouper ferait qu'un actualiser() en échec APRÈS un envoi réussi
+  // tomberait dans le même bloc catch qu'un envoi raté, et serait alors
+  // traité comme tel (notification "échec"), alors que le message est déjà
+  // bien parti côté serveur à ce moment-là. (actualiser() attrape déjà ses
+  // propres erreurs en interne et ne les relance jamais, donc ce cas ne se
+  // produit pas aujourd'hui — cette séparation documente explicitement
+  // cette garantie plutôt que d'en dépendre implicitement, et garde les
+  // deux fichiers symétriques.)
+  try {
+    await window.electronAPI.envoyerMessageSalon({
+      salonId: message.conversationId,
+      utilisateurId: message.auteurId,
+      contenu: message.contenu,
+    });
+  } catch (erreur) {
+    // Ici seulement, l'envoi lui-même a échoué : le message reste "non
+    // livré" (rien à retirer de messagesEnAttenteSalon).
+    messagesEnAttenteEnCoursSalon.delete(message.id);
+    notifier(messageErreur(erreur), true);
+    afficherMessages({ conserverPositionScroll: true });
+    return;
+  }
+
+  // Envoi réussi : retiré de la liste d'attente quoi qu'il arrive au
+  // rafraîchissement ci-dessous. Pas de afficherMessages() intermédiaire ici
+  // (contrairement à une version précédente) : le message vient d'être
+  // retiré de messagesEnAttenteSalon mais n'est pas encore dans les données
+  // fraîches du serveur, donc un rendu à ce stade précis le ferait
+  // disparaître brièvement de l'écran avant que actualiser() (via
+  // afficherTout -> afficherMessages, voir plus bas) ne le réaffiche à
+  // partir des données serveur. Symétrique avec reessayerMessageEnAttenteDm
+  // dans message-prive.js, qui n'a jamais eu ce rendu intermédiaire.
+  retirerMessageEnAttenteSalon(message.conversationId, message.id);
+  messagesEnAttenteEnCoursSalon.delete(message.id);
+  try {
+    await actualiser();
+  } catch (erreur) {
+    // Garde défensive pure : actualiser() attrape déjà ses propres erreurs
+    // en interne et ne les relance jamais (voir sa définition), donc ce
+    // bloc ne devrait jamais s'exécuter aujourd'hui. Il existe pour ne pas
+    // dépendre implicitement de ce contrat non appliqué par le compilateur —
+    // si un futur refactor d'actualiser() laissait une erreur se propager,
+    // on veut une notification "échec" propre (comme côté DM, où
+    // refreshConversations() propage réellement les siennes — voir
+    // reessayerMessageEnAttenteDm dans message-prive.js) plutôt qu'un rejet
+    // de promesse non géré.
+    notifier(messageErreur(erreur), true);
+  }
+}
+
+function supprimerMessageEnAttenteSalon(message) {
+  // Refuse de supprimer un message dont l'envoi est actuellement en cours
+  // (voir messagesEnAttenteEnCoursSalon et reessayerMessageEnAttenteSalon) :
+  // la requête déjà partie aboutira de toute façon, donc "supprimer" ici ne
+  // ferait qu'induire l'utilisateur en erreur sur ce qui a réellement été
+  // envoyé.
+  if (messagesEnAttenteEnCoursSalon.has(message.id)) return;
+  retirerMessageEnAttenteSalon(message.conversationId, message.id);
+  afficherMessages({ conserverPositionScroll: true });
+}
+
+function creerActionsMessageNonLivre(message) {
+  return ChatUiShared.creerActionsMessageNonLivre({
+    message,
+    t,
+    enCours: messagesEnAttenteEnCoursSalon.has(message.id),
+    onReessayer: reessayerMessageEnAttenteSalon,
+    onSupprimer: supprimerMessageEnAttenteSalon,
+  });
+}
+
 /**
  * Fusionne les messages déjà remontés manuellement (plus anciens) avec la
  * page récente renvoyée par le serveur, en dédoublonnant par `id` puis en
@@ -196,6 +342,49 @@ function fusionnerHistorique(messagesAnciens, messagesRecents, champDate) {
     parId.set(message.id, message);
   });
   return Array.from(parId.values()).sort((a, b) => a[champDate] - b[champDate]);
+}
+
+/**
+ * Fusionne `messagesTries` (déjà trié par `champDate`, typiquement le
+ * résultat de fusionnerHistorique) avec `messagesEnAttente` (0, 1 ou 2
+ * brouillons non livrés en général) sans re-trier l'ensemble.
+ *
+ * afficherMessages() est rappelé très souvent (indicateur de saisie, arrivée
+ * d'un message d'un autre utilisateur, etc.) et pas seulement quand un
+ * brouillon change : tant qu'au moins un message est en attente, un simple
+ * `[...messagesTries, ...messagesEnAttente].sort(...)` retrierait tout
+ * l'historique du salon à CHAQUE rendu, alors que seule la position des
+ * quelques brouillons a besoin d'être recalculée. On trie seulement
+ * `messagesEnAttente` (petit) puis on fait une fusion linéaire des deux
+ * tableaux triés (comme un merge sort), en O(n) plutôt que O(n log n) sur
+ * l'ensemble.
+ *
+ * @param {Array<Record<string, number>>} messagesTries
+ * @param {Array<Record<string, number>>} messagesEnAttente
+ * @param {string} champDate
+ */
+function fusionnerAvecMessagesEnAttente(
+  messagesTries,
+  messagesEnAttente,
+  champDate
+) {
+  if (!messagesEnAttente.length) return messagesTries;
+  const brouillonsTries = [...messagesEnAttente].sort(
+    (a, b) => a[champDate] - b[champDate]
+  );
+  const resultat = [];
+  let i = 0;
+  let j = 0;
+  while (i < messagesTries.length && j < brouillonsTries.length) {
+    if (messagesTries[i][champDate] <= brouillonsTries[j][champDate]) {
+      resultat.push(messagesTries[i++]);
+    } else {
+      resultat.push(brouillonsTries[j++]);
+    }
+  }
+  while (i < messagesTries.length) resultat.push(messagesTries[i++]);
+  while (j < brouillonsTries.length) resultat.push(brouillonsTries[j++]);
+  return resultat;
 }
 
 /**
@@ -633,18 +822,48 @@ function afficherMessages(options = {}) {
   definirConversationActivePourNotifs(salon.id);
   remplirLabelSalon(el.nomSalon, salon);
   el.prive.hidden = salon.visibilite !== 'prive';
-  const reseauBloque = etatReseau.statut !== 'connecte';
-  el.message.disabled = reseauBloque;
-  if (el.envoyer) el.envoyer.disabled = reseauBloque;
+  // Le champ de saisie reste actif même hors ligne (voir ChatUiShared.
+  // afficherEtatReseau, qui ne le désactive plus que si aucun salon n'est
+  // sélectionné) : un message tapé sans connexion est affiché comme "non
+  // livré" avec réessayer/supprimer plutôt que d'empêcher la saisie.
+  // On rappelle explicitement afficherEtatReseau() ici : salonActifId vient
+  // tout juste d'être fixé par actualiser() (voir plus haut dans ce
+  // fichier), donc composerAutorise — calculé à partir de salonActifId —
+  // n'a encore jamais été recalculé avec CE salon. Sans cet appel, le
+  // premier chargerEtatReseauEtPresences() au démarrage (voir initialiser())
+  // a déjà figé messageInput/submitButton sur `disabled = true` (aucun salon
+  // actif à ce moment-là), et rien ne les réactivait plus jamais ensuite.
+  afficherEtatReseau();
   el.message.placeholder = t('channels.sendMessagePlaceholder', {
     name: salon.nom,
   });
 
   // Page récente (salon.messages) + historique manuellement remonté (voir
   // chargerMessagesPlusAnciensSalon) : voir fusionnerHistorique plus haut.
-  const tousLesMessages = fusionnerHistorique(
+  // Les messages non livrés du salon (voir messagesEnAttenteSalon) sont
+  // fusionnés puis triés avec le reste par `date` plutôt que simplement
+  // ajoutés à la suite : ils ne sont PAS garantis d'être les plus récents —
+  // actualiser() peut faire apparaître un message réel plus récent pendant
+  // qu'un brouillon plus ancien est toujours en attente (ou en cours de
+  // renvoi), et deux messages en attente peuvent être retentés dans le
+  // désordre. Un simple append donnerait alors un ordre chronologiquement
+  // faux.
+  const messagesEnAttenteDuSalon = obtenirMessagesEnAttenteSalon(salon.id);
+  const messagesHistorique = fusionnerHistorique(
     etatHistoriqueSalon.messagesAnciens,
     salon.messages,
+    'date'
+  );
+  // fusionnerHistorique() renvoie déjà un tableau trié par date : pas besoin
+  // de re-trier l'ensemble à chaque rendu quand il n'y a aucun message en
+  // attente (le cas de loin le plus fréquent). Quand il y en a, on fusionne
+  // au lieu de tout retrier (voir fusionnerAvecMessagesEnAttente) : sinon
+  // TOUT l'historique du salon serait retrié à chaque rendu tant qu'un seul
+  // brouillon reste en attente — y compris pour des rendus qui n'ont rien à
+  // voir avec lui (indicateur de saisie, etc.).
+  const tousLesMessages = fusionnerAvecMessagesEnAttente(
+    messagesHistorique,
+    messagesEnAttenteDuSalon,
     'date'
   );
 
@@ -682,8 +901,11 @@ function afficherMessages(options = {}) {
       const estMessagePersonnel = message.auteurId === utilisateurActuelId;
       const texteEl = creerEl('p', { classe: 'text' });
       remplirTexteMessage(texteEl, message.contenu);
+      const classesRow = ['message-row'];
+      if (estMessagePersonnel) classesRow.push('own');
+      if (message.nonLivre) classesRow.push('non-livre');
       const article = creerEl('article', {
-        classe: estMessagePersonnel ? 'message-row own' : 'message-row',
+        classe: classesRow.join(' '),
         enfants: [
           creerEl('div', {
             classe: 'avatar',
@@ -726,7 +948,11 @@ function afficherMessages(options = {}) {
           }),
         ],
       });
-      if (estMessagePersonnel) {
+      if (message.nonLivre) {
+        article
+          .querySelector('.message-body')
+          ?.appendChild(creerActionsMessageNonLivre(message));
+      } else if (estMessagePersonnel) {
         article
           .querySelector('.message-body')
           ?.appendChild(creerActionsMessage(message, texteEl));
@@ -1055,12 +1281,31 @@ el.membres.addEventListener('click', () => {
 
 el.formulaire.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const contenu = el.message.value;
-  if (!salonActifId || !contenu.trim() || etatReseau.statut !== 'connecte')
-    return;
+  const contenu = el.message.value.trim();
+  if (!salonActifId || !contenu) return;
 
   const auteurId = utilisateurActuelId;
   const salonId = salonActifId;
+  el.message.value = '';
+
+  // Hors ligne (etatReseau, JAMAIS `presences` — voir le commentaire sur
+  // messagesEnAttenteSalon) : le message est affiché tout de suite, marqué
+  // "non livré", sans jamais être transmis au gateway. Se mettre soi-même
+  // "hors-ligne" via le bouton de présence (brancherControlesReseauPresence)
+  // n'a donc aucun effet ici, seule une vraie coupure réseau simulée
+  // (#simulate-network-cut, qui change etatReseau) en a.
+  if (etatReseau.statut !== 'connecte') {
+    ajouterMessageEnAttenteSalon(
+      salonId,
+      ChatUiShared.creerMessageEnAttente({
+        conversationId: salonId,
+        auteurId,
+        contenu,
+      })
+    );
+    afficherMessages({ conserverPositionScroll: true });
+    return;
+  }
 
   // 1. Annule le timer actif de cet utilisateur s'il existe
   if (timersArretSaisie[auteurId]) {
@@ -1075,15 +1320,42 @@ el.formulaire.addEventListener('submit', async (event) => {
     est_saisie: false,
   });
 
+  // L'envoi et le rafraîchissement (actualiser()) qui suit ont chacun leur
+  // propre try/catch (voir reessayerMessageEnAttenteSalon plus haut, et
+  // l'équivalent DM dans message-prive.js, pour le détail du pourquoi) :
+  // sans cette séparation, un actualiser() en échec APRÈS un envoi pourtant
+  // réussi tomberait dans le même bloc catch qu'un envoi raté — le message
+  // (déjà bien parti côté serveur) serait alors à tort remis en attente en
+  // double, avec un risque de renvoi réel en double si l'utilisateur clique
+  // ensuite sur "Réessayer" pour ce brouillon fantôme.
   try {
     await window.electronAPI.envoyerMessageSalon({
       salonId,
       utilisateurId: auteurId,
       contenu,
     });
-    el.message.value = '';
+  } catch (erreur) {
+    // Connecté au moment de l'envoi mais échec en cours de route : même
+    // traitement qu'un envoi tenté hors ligne, plutôt que de perdre le texte
+    // tapé (voir le commentaire plus haut).
+    ajouterMessageEnAttenteSalon(
+      salonId,
+      ChatUiShared.creerMessageEnAttente({
+        conversationId: salonId,
+        auteurId,
+        contenu,
+      })
+    );
+    afficherMessages({ conserverPositionScroll: true });
+    notifier(messageErreur(erreur), true);
+    return;
+  }
+  try {
     await actualiser();
   } catch (erreur) {
+    // Garde défensive pure — voir le commentaire équivalent dans
+    // reessayerMessageEnAttenteSalon plus haut pour le détail du pourquoi
+    // (actualiser() n'est pas censée relancer d'erreur aujourd'hui).
     notifier(messageErreur(erreur), true);
   }
 });
