@@ -103,7 +103,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   const connectionStatus = document.getElementById('connection-status');
   const connectionLabel = document.getElementById('connection-label');
   const simulateNetworkCut = document.getElementById('simulate-network-cut');
-  const simulateNetworkReconnect = document.getElementById('simulate-network-reconnect');
+  const simulateNetworkReconnect = document.getElementById(
+    'simulate-network-reconnect'
+  );
   const currentUserPresence = document.getElementById('current-user-presence');
 
   let etatReseau = { statut: 'connecte' };
@@ -118,7 +120,8 @@ window.addEventListener('DOMContentLoaded', async () => {
         deconnecte: t('network.disconnected'),
         reconnexion: t('network.reconnecting'),
       };
-      connectionLabel.textContent = libelles[etatReseau.statut] ?? etatReseau.statut;
+      connectionLabel.textContent =
+        libelles[etatReseau.statut] ?? etatReseau.statut;
     }
     const bloque = etatReseau.statut !== 'connecte';
     if (messageInput) messageInput.disabled = bloque;
@@ -127,7 +130,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (currentUserPresence) currentUserPresence.disabled = bloque;
     if (simulateNetworkCut) simulateNetworkCut.disabled = bloque;
     if (simulateNetworkReconnect) {
-      simulateNetworkReconnect.disabled = etatReseau.statut === 'connecte';
+      simulateNetworkReconnect.disabled = etatReseau.statut !== 'deconnecte';
     }
   }
 
@@ -1314,7 +1317,10 @@ window.addEventListener('DOMContentLoaded', async () => {
       const actuelle = presences[state.currentUserId] ?? 'hors-ligne';
       const prochaine = actuelle === 'en-ligne' ? 'hors-ligne' : 'en-ligne';
       try {
-        await window.electronAPI.modifierPresence(state.currentUserId, prochaine);
+        await window.electronAPI.modifierPresence(
+          state.currentUserId,
+          prochaine
+        );
       } catch (erreur) {
         notifier(messageErreur(erreur), true);
       }

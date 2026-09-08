@@ -106,7 +106,6 @@ const el = {
   presenceCourante: document.querySelector('#current-user-presence'),
 };
 
-
 function afficherEtatReseau(nouvelEtat = etatReseau) {
   etatReseau = nouvelEtat ?? etatReseau;
   if (!el.statutConnexion || !el.libelleConnexion) return;
@@ -116,21 +115,22 @@ function afficherEtatReseau(nouvelEtat = etatReseau) {
     deconnecte: t('network.disconnected'),
     reconnexion: t('network.reconnecting'),
   };
-  el.libelleConnexion.textContent = libelles[etatReseau.statut] ?? etatReseau.statut;
+  el.libelleConnexion.textContent =
+    libelles[etatReseau.statut] ?? etatReseau.statut;
   const bloque = etatReseau.statut !== 'connecte';
   if (el.message) el.message.disabled = bloque;
   if (el.presenceCourante) el.presenceCourante.disabled = bloque;
   if (el.couperReseau) el.couperReseau.disabled = bloque;
-  if (el.reconnecterReseau) el.reconnecterReseau.disabled = etatReseau.statut === 'connecte';
+  if (el.reconnecterReseau)
+    el.reconnecterReseau.disabled = etatReseau.statut !== 'deconnecte';
 }
 
 function afficherPresenceCourante() {
   if (!el.presenceCourante || !utilisateurActuelId) return;
   const statut = presences[utilisateurActuelId] ?? 'hors-ligne';
   el.presenceCourante.dataset.presence = statut;
-  el.presenceCourante.textContent = statut === 'en-ligne'
-    ? t('network.online')
-    : t('network.offline');
+  el.presenceCourante.textContent =
+    statut === 'en-ligne' ? t('network.online') : t('network.offline');
 }
 
 async function chargerEtatReseauEtPresences() {
@@ -788,7 +788,12 @@ function afficherMessages(options = {}) {
                     ),
                   }),
                   ...(message.modification
-                    ? [creerEl('span', { classe: 'edited-label', texte: `(${t('messages.edited')})` })]
+                    ? [
+                        creerEl('span', {
+                          classe: 'edited-label',
+                          texte: `(${t('messages.edited')})`,
+                        }),
+                      ]
                     : []),
                 ],
               }),
@@ -798,7 +803,9 @@ function afficherMessages(options = {}) {
         ],
       });
       if (estMessagePersonnel) {
-        article.querySelector('.message-body')?.appendChild(creerActionsMessage(message, texteEl));
+        article
+          .querySelector('.message-body')
+          ?.appendChild(creerActionsMessage(message, texteEl));
       }
       el.messages.appendChild(article);
     });
@@ -1101,7 +1108,10 @@ el.membres.addEventListener('click', () => {
         creerEl('span', { texte: membre.pseudo }),
         creerEl('span', {
           classe: 'member-presence',
-          texte: (presences[membre.id] ?? 'hors-ligne') === 'en-ligne' ? t('network.online') : t('network.offline'),
+          texte:
+            (presences[membre.id] ?? 'hors-ligne') === 'en-ligne'
+              ? t('network.online')
+              : t('network.offline'),
           attrs: {
             'data-presence': presences[membre.id] ?? 'hors-ligne',
             'data-user-id': membre.id,
@@ -1499,17 +1509,22 @@ el.message.addEventListener('input', async (event) => {
   }
 });
 
-
 if (el.couperReseau) {
   el.couperReseau.addEventListener('click', async () => {
-    try { await window.electronAPI.simulerCoupureReseau(); }
-    catch (erreur) { notifier(messageErreur(erreur), true); }
+    try {
+      await window.electronAPI.simulerCoupureReseau();
+    } catch (erreur) {
+      notifier(messageErreur(erreur), true);
+    }
   });
 }
 if (el.reconnecterReseau) {
   el.reconnecterReseau.addEventListener('click', async () => {
-    try { await window.electronAPI.simulerReconnexionReseau(900); }
-    catch (erreur) { notifier(messageErreur(erreur), true); }
+    try {
+      await window.electronAPI.simulerReconnexionReseau(900);
+    } catch (erreur) {
+      notifier(messageErreur(erreur), true);
+    }
   });
 }
 if (el.presenceCourante) {
@@ -1517,12 +1532,17 @@ if (el.presenceCourante) {
     if (etatReseau.statut !== 'connecte') return;
     const actuelle = presences[utilisateurActuelId] ?? 'hors-ligne';
     const prochaine = actuelle === 'en-ligne' ? 'hors-ligne' : 'en-ligne';
-    try { await window.electronAPI.modifierPresence(utilisateurActuelId, prochaine); }
-    catch (erreur) { notifier(messageErreur(erreur), true); }
+    try {
+      await window.electronAPI.modifierPresence(utilisateurActuelId, prochaine);
+    } catch (erreur) {
+      notifier(messageErreur(erreur), true);
+    }
   });
 }
 
-window.electronAPI.onEtatReseauChange((nouvelEtat) => afficherEtatReseau(nouvelEtat));
+window.electronAPI.onEtatReseauChange((nouvelEtat) =>
+  afficherEtatReseau(nouvelEtat)
+);
 window.electronAPI.onPresenceChange((presence) => {
   presences[presence.utilisateurId] = presence.statut;
   afficherPresenceCourante();
@@ -1533,7 +1553,9 @@ window.electronAPI.onPresenceChange((presence) => {
   if (presenceMembre) {
     presenceMembre.dataset.presence = presence.statut;
     presenceMembre.textContent =
-      presence.statut === 'en-ligne' ? t('network.online') : t('network.offline');
+      presence.statut === 'en-ligne'
+        ? t('network.online')
+        : t('network.offline');
   }
 });
 

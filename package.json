@@ -14,7 +14,7 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,html,css,md,txt}\"",
-    "dev": "cross-env NODE_ENV=development node scripts/start.js",
+    "dev": "npm run start:dev",
     "build:win": "npm run build:login && npx --yes electron-builder@26.0.12 --win",
     "build:mac": "npm run build:login && npx --yes electron-builder@26.0.12 --mac",
     "build:linux": "npm run build:login && npx --yes electron-builder@26.0.12 --linux",

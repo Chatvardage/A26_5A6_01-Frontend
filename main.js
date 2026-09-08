@@ -933,6 +933,11 @@ exposerCanal('salons:refuser-invitation', (donnees) =>
 exposerCanal('salons:envoyer-message', (donnees) =>
   chatGateway.envoyerMessage(donnees)
 );
+// Limite assumée de cette itération mock : `utilisateurId` vient du renderer
+// et n'est pas lié cryptographiquement à une session serveur. Le gateway
+// vérifie bien que l'auteur du message correspond à cet identifiant, mais un
+// vrai backend devra dériver l'identité d'une session authentifiée plutôt que
+// faire confiance à un identifiant fourni par le client.
 exposerCanal('messages:modifier', (donnees) =>
   chatGateway.modifierMessage(donnees)
 );

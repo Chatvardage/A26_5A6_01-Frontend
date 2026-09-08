@@ -91,12 +91,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onMessageModifieChange: (rappel) => {
     const ecouteur = (_event, message) => rappel(message);
     ipcRenderer.on('messages:modifie-change', ecouteur);
-    return () => ipcRenderer.removeListener('messages:modifie-change', ecouteur);
+    return () =>
+      ipcRenderer.removeListener('messages:modifie-change', ecouteur);
   },
   onMessageSupprimeChange: (rappel) => {
     const ecouteur = (_event, message) => rappel(message);
     ipcRenderer.on('messages:supprime-change', ecouteur);
-    return () => ipcRenderer.removeListener('messages:supprime-change', ecouteur);
+    return () =>
+      ipcRenderer.removeListener('messages:supprime-change', ecouteur);
   },
   allerAuTableauDeBord: () => ipcRenderer.invoke('navigation:tableau-de-bord'),
 
@@ -120,8 +122,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('salons:refuser-invitation', donnees),
   envoyerMessageSalon: (donnees) =>
     ipcRenderer.invoke('salons:envoyer-message', donnees),
-  modifierMessage: (donnees) => ipcRenderer.invoke('messages:modifier', donnees),
-  supprimerMessage: (donnees) => ipcRenderer.invoke('messages:supprimer', donnees),
+  modifierMessage: (donnees) =>
+    ipcRenderer.invoke('messages:modifier', donnees),
+  supprimerMessage: (donnees) =>
+    ipcRenderer.invoke('messages:supprimer', donnees),
   navigate: (page) => ipcRenderer.invoke('navigate', page),
   obtenirUtilisateurs: () => ipcRenderer.invoke('utilisateurs:lister'),
   obtenirConversationsPrivees: (utilisateurId) =>
