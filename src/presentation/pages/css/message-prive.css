@@ -484,3 +484,70 @@ body {
   color: #f2f3f5;
   font-weight: 600;
 }
+
+.message-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.message-row:hover .message-actions,
+.message-actions:focus-within {
+  opacity: 1;
+}
+.message-action {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 6px;
+  padding: 3px 7px;
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.message-action:hover {
+  color: var(--text-primary);
+  background: var(--bg-bubble);
+}
+.message-action.danger:hover {
+  color: #ff8a8a;
+}
+
+/* Édition de message inspirée de v1.0.3 */
+.message-edit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px 32px;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+}
+.message-edit-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  padding: 7px 9px;
+  background: var(--bg-panel-alt);
+  color: var(--text-primary);
+  outline: none;
+}
+.message-edit-save,
+.message-edit-cancel {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-panel-alt);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.message-edit-save:hover,
+.message-edit-cancel:hover {
+  background: var(--bg-bubble);
+}
+.edited-label {
+  margin-left: 6px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}

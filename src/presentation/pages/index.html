@@ -76,13 +76,14 @@
             data-i18n-aria-label="nav.simulatedUser"
           ></select>
           <div class="user-meta">
-            <div
-              class="presence-label"
+            <button
+              class="presence-label presence-toggle"
               id="current-user-presence"
-              data-i18n="nav.onlineStatus"
+              type="button"
+              title="Changer la présence"
             >
               En ligne
-            </div>
+            </button>
             <select
               id="language-select"
               aria-label="Langue / Language"
@@ -206,11 +207,29 @@
           >
             Inviter
           </button>
-          <div id="connection-status" data-state="connecte">
-            <span class="dot"></span>
-            <span id="connection-label" data-i18n="channels.connected"
-              >Connecté</span
+          <div class="network-simulation">
+            <div
+              id="connection-status"
+              data-state="connecte"
+              aria-live="polite"
             >
+              <span class="dot"></span>
+              <span id="connection-label">Connecté</span>
+            </div>
+            <button
+              id="simulate-network-cut"
+              class="network-test-button"
+              type="button"
+            >
+              Coupure
+            </button>
+            <button
+              id="simulate-network-reconnect"
+              class="network-test-button"
+              type="button"
+            >
+              Reconnexion
+            </button>
           </div>
         </div>
       </header>

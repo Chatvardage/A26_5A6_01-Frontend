@@ -9,17 +9,35 @@ const projectRoot = path.resolve(__dirname, '..');
 const DEV_PORT = 5173;
 const isDev = process.env.NODE_ENV === 'development';
 
-function commandFor(bin) {
-  return process.platform === 'win32' ? `${bin}.cmd` : bin;
+function resolveCommand(bin, args) {
+  if (bin === 'electron') {
+    return {
+      command: require('electron'),
+      args,
+    };
+  }
+
+  if (bin === 'vite') {
+    return {
+      command: process.execPath,
+      args: [
+        path.join(projectRoot, 'node_modules', 'vite', 'bin', 'vite.js'),
+        ...args,
+      ],
+    };
+  }
+
+  return { command: bin, args };
 }
 
 function spawnProcess(bin, args) {
-  return spawn(commandFor(bin), args, {
+  const resolved = resolveCommand(bin, args);
+
+  return spawn(resolved.command, resolved.args, {
     cwd: projectRoot,
     env: { ...process.env },
     stdio: 'inherit',
     windowsHide: false,
-    shell: true,
   });
 }
 

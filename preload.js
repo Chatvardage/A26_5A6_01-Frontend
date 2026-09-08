@@ -71,6 +71,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('session:connexion', utilisateur),
   obtenirUtilisateurConnecte: () =>
     ipcRenderer.invoke('session:utilisateur-connecte'),
+  obtenirEtatReseau: () => ipcRenderer.invoke('reseau:etat'),
+  simulerCoupureReseau: () => ipcRenderer.invoke('reseau:coupure'),
+  simulerReconnexionReseau: (delaiMs = 900) =>
+    ipcRenderer.invoke('reseau:reconnexion', { delaiMs }),
+  obtenirPresences: () => ipcRenderer.invoke('presence:obtenir'),
+  modifierPresence: (utilisateurId, statut) =>
+    ipcRenderer.invoke('presence:modifier', { utilisateurId, statut }),
+  onEtatReseauChange: (rappel) => {
+    const ecouteur = (_event, etat) => rappel(etat);
+    ipcRenderer.on('reseau:etat-change', ecouteur);
+    return () => ipcRenderer.removeListener('reseau:etat-change', ecouteur);
+  },
+  onPresenceChange: (rappel) => {
+    const ecouteur = (_event, presence) => rappel(presence);
+    ipcRenderer.on('presence:change', ecouteur);
+    return () => ipcRenderer.removeListener('presence:change', ecouteur);
+  },
   allerAuTableauDeBord: () => ipcRenderer.invoke('navigation:tableau-de-bord'),
 
   obtenirLangue: () => ipcRenderer.invoke('langue:obtenir'),
@@ -93,6 +110,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('salons:refuser-invitation', donnees),
   envoyerMessageSalon: (donnees) =>
     ipcRenderer.invoke('salons:envoyer-message', donnees),
+  modifierMessage: (donnees) =>
+    ipcRenderer.invoke('messages:modifier', donnees),
+  supprimerMessage: (donnees) =>
+    ipcRenderer.invoke('messages:supprimer', donnees),
   navigate: (page) => ipcRenderer.invoke('navigate', page),
   obtenirUtilisateurs: () => ipcRenderer.invoke('utilisateurs:lister'),
   obtenirConversationsPrivees: (utilisateurId) =>

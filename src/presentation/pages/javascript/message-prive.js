@@ -100,6 +100,55 @@ window.addEventListener('DOMContentLoaded', async () => {
   const notifBtn = document.getElementById('open-notif-settings');
   const notifMenu = document.getElementById('notif-menu');
   const isTypingNom = document.getElementById('is-typing-nom');
+  const connectionStatus = document.getElementById('connection-status');
+  const connectionLabel = document.getElementById('connection-label');
+  const simulateNetworkCut = document.getElementById('simulate-network-cut');
+  const simulateNetworkReconnect = document.getElementById('simulate-network-reconnect');
+  const currentUserPresence = document.getElementById('current-user-presence');
+
+  let etatReseau = { statut: 'connecte' };
+  let presences = {};
+
+  function afficherEtatReseau(nouvelEtat = etatReseau) {
+    etatReseau = nouvelEtat ?? etatReseau;
+    if (connectionStatus) connectionStatus.dataset.state = etatReseau.statut;
+    if (connectionLabel) {
+      const libelles = {
+        connecte: t('network.connected'),
+        deconnecte: t('network.disconnected'),
+        reconnexion: t('network.reconnecting'),
+      };
+      connectionLabel.textContent = libelles[etatReseau.statut] ?? etatReseau.statut;
+    }
+    const bloque = etatReseau.statut !== 'connecte';
+    if (messageInput) messageInput.disabled = bloque;
+    const submit = messageForm?.querySelector('button[type="submit"]');
+    if (submit) submit.disabled = bloque;
+    if (currentUserPresence) currentUserPresence.disabled = bloque;
+    if (simulateNetworkCut) simulateNetworkCut.disabled = bloque;
+    if (simulateNetworkReconnect) {
+      simulateNetworkReconnect.disabled = etatReseau.statut === 'connecte';
+    }
+  }
+
+  function afficherPresenceCourante() {
+    if (!currentUserPresence || !state.currentUserId) return;
+    const statut = presences[state.currentUserId] ?? 'hors-ligne';
+    currentUserPresence.dataset.presence = statut;
+    currentUserPresence.textContent =
+      statut === 'en-ligne' ? t('network.online') : t('network.offline');
+  }
+
+  async function chargerEtatReseauEtPresences() {
+    const [reseau, presencesRecues] = await Promise.all([
+      window.electronAPI.obtenirEtatReseau(),
+      window.electronAPI.obtenirPresences(),
+    ]);
+    etatReseau = reseau;
+    presences = presencesRecues;
+    afficherEtatReseau();
+    afficherPresenceCourante();
+  }
 
   // Dictionnaire, langue courante et langue par défaut : voir
   // I18n.initialiserDepuisElectronAPI (i18n-browser.js) pour le détail
@@ -423,6 +472,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       currentUserSelect.addEventListener('change', async (event) => {
         sessionStorage.setItem('currentUserId', event.target.value);
         state.currentUserId = event.target.value;
+        afficherPresenceCourante();
         if (messageInput) messageInput.value = '';
         fermerMenuNotif();
         await refreshConversations();
@@ -711,7 +761,14 @@ window.addEventListener('DOMContentLoaded', async () => {
       remplirTexteMessage(text, message.contenu);
 
       meta.append(authorEl, timeEl);
+      if (message.modification) {
+        const edited = document.createElement('span');
+        edited.classList.add('edited-label');
+        edited.textContent = '(modifié)';
+        meta.appendChild(edited);
+      }
       body.append(meta, text);
+      if (isOwn) body.appendChild(creerActionsMessage(message, text));
       row.append(avatar, body);
       messageList.appendChild(row);
     });
@@ -737,6 +794,114 @@ window.addEventListener('DOMContentLoaded', async () => {
    * chargement est déjà en cours, si l'historique de la conversation active
    * est déjà entièrement remonté, ou si aucune conversation n'est active).
    */
+  function creerActionsMessage(message, texteEl) {
+    const actions = document.createElement('div');
+    actions.classList.add('message-actions');
+
+    const modifier = document.createElement('button');
+    modifier.type = 'button';
+    modifier.classList.add('message-action');
+    modifier.textContent = t('messages.edit');
+    modifier.title = t('messages.edit');
+
+    modifier.addEventListener('click', () => {
+      const contenuInitial = message.contenu;
+      const editeur = document.createElement('div');
+      editeur.classList.add('message-edit-row');
+
+      const champ = document.createElement('input');
+      champ.type = 'text';
+      champ.classList.add('message-edit-input');
+      champ.value = contenuInitial;
+      champ.maxLength = 2000;
+
+      const enregistrer = document.createElement('button');
+      enregistrer.type = 'button';
+      enregistrer.classList.add('message-edit-save');
+      enregistrer.textContent = '✓';
+      enregistrer.title = t('messages.updated');
+
+      const annuler = document.createElement('button');
+      annuler.type = 'button';
+      annuler.classList.add('message-edit-cancel');
+      annuler.textContent = '✕';
+      annuler.title = 'Annuler';
+
+      const restaurer = () => {
+        editeur.replaceWith(texteEl);
+        actions.hidden = false;
+      };
+
+      const sauvegarder = async () => {
+        const nouveauContenu = champ.value.trim();
+        if (!nouveauContenu || nouveauContenu === contenuInitial) {
+          restaurer();
+          return;
+        }
+        enregistrer.disabled = true;
+        annuler.disabled = true;
+        try {
+          await window.electronAPI.modifierMessage({
+            messageId: message.id,
+            utilisateurId: state.currentUserId,
+            contenu: nouveauContenu,
+          });
+          await refreshConversations();
+        } catch (erreur) {
+          notifier(messageErreur(erreur), true);
+          enregistrer.disabled = false;
+          annuler.disabled = false;
+          champ.focus();
+        }
+      };
+
+      enregistrer.addEventListener('click', sauvegarder);
+      annuler.addEventListener('click', restaurer);
+      champ.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          void sauvegarder();
+        } else if (event.key === 'Escape') {
+          event.preventDefault();
+          restaurer();
+        }
+      });
+
+      editeur.append(champ, enregistrer, annuler);
+      texteEl.replaceWith(editeur);
+      actions.hidden = true;
+      champ.focus();
+      champ.select();
+    });
+
+    const supprimer = document.createElement('button');
+    supprimer.type = 'button';
+    supprimer.classList.add('message-action');
+    supprimer.textContent = t('messages.delete');
+    supprimer.title = t('messages.delete');
+
+    supprimer.addEventListener('click', async () => {
+      if (!window.confirm(t('messages.deleteConfirm'))) return;
+      modifier.disabled = true;
+      supprimer.disabled = true;
+      try {
+        await window.electronAPI.supprimerMessage({
+          messageId: message.id,
+          utilisateurId: state.currentUserId,
+        });
+        notifier(t('messages.deleted'));
+        await refreshConversations();
+      } catch (erreur) {
+        notifier(messageErreur(erreur), true);
+        modifier.disabled = false;
+        supprimer.disabled = false;
+      }
+    });
+
+    actions.append(modifier, supprimer);
+    return actions;
+  }
+
   async function chargerMessagesPlusAnciensDm() {
     const conversation = state.conversations.find(
       (entry) => entry.id === state.activeConversationId
@@ -1121,7 +1286,51 @@ window.addEventListener('DOMContentLoaded', async () => {
     );
   }
 
+  if (simulateNetworkCut) {
+    simulateNetworkCut.addEventListener('click', async () => {
+      try {
+        await window.electronAPI.simulerCoupureReseau();
+      } catch (erreur) {
+        notifier(messageErreur(erreur), true);
+      }
+    });
+  }
+
+  if (simulateNetworkReconnect) {
+    simulateNetworkReconnect.addEventListener('click', async () => {
+      try {
+        await window.electronAPI.simulerReconnexionReseau(900);
+      } catch (erreur) {
+        notifier(messageErreur(erreur), true);
+      }
+    });
+  }
+
+  if (currentUserPresence) {
+    currentUserPresence.addEventListener('click', async () => {
+      if (etatReseau.statut !== 'connecte') return;
+      const actuelle = presences[state.currentUserId] ?? 'hors-ligne';
+      const prochaine = actuelle === 'en-ligne' ? 'hors-ligne' : 'en-ligne';
+      try {
+        await window.electronAPI.modifierPresence(state.currentUserId, prochaine);
+      } catch (erreur) {
+        notifier(messageErreur(erreur), true);
+      }
+    });
+  }
+
+  window.electronAPI.onEtatReseauChange((nouvelEtat) => {
+    afficherEtatReseau(nouvelEtat);
+  });
+
+  window.electronAPI.onPresenceChange(async (presence) => {
+    presences[presence.utilisateurId] = presence.statut;
+    afficherPresenceCourante();
+    await refreshConversations();
+  });
+
   await initialiserUtilisateurCourant();
+  await chargerEtatReseauEtPresences();
   await refreshConversations();
   await actualiserBadgeSalons();
 });

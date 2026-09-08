@@ -110,6 +110,13 @@ class MockGatewayRuntime {
 
     this.etatsSaisie = [];
 
+    // État réseau + événements temps réel. Le runtime Electron doit porter
+    // cette simulation lui-même : le MockGateway TypeScript n'est pas celui
+    // utilisé par main.js pendant l'exécution de l'application.
+    this.etatConnexion = { statut: 'deconnecte', depuis: now, reconnexions: 0 };
+    this.reconnexions = 0;
+    this.ecouteurs = new Map();
+
     this.presences = {
       u1: 'en-ligne',
       u2: 'hors-ligne',
@@ -343,6 +350,96 @@ class MockGatewayRuntime {
     return salon;
   }
 
+  /** Abonnement léger aux événements temps réel du runtime. */
+  on(type, ecouteur) {
+    const liste = this.ecouteurs.get(type) ?? [];
+    liste.push(ecouteur);
+    this.ecouteurs.set(type, liste);
+    return () => {
+      const courants = this.ecouteurs.get(type) ?? [];
+      this.ecouteurs.set(
+        type,
+        courants.filter((item) => item !== ecouteur)
+      );
+    };
+  }
+
+  emettre(type, donnees) {
+    for (const ecouteur of this.ecouteurs.get(type) ?? []) {
+      ecouteur(structuredClone(donnees));
+    }
+  }
+
+  definirEtatConnexion(statut) {
+    this.etatConnexion = {
+      statut,
+      depuis: Date.now(),
+      reconnexions: this.reconnexions,
+    };
+    this.emettre('etat-connexion', this.etatConnexion);
+    return { ...this.etatConnexion };
+  }
+
+  obtenirEtatConnexion() {
+    return { ...this.etatConnexion };
+  }
+
+  /**
+   * Empêche les opérations qui nécessitent le transport simulé lorsque le
+   * réseau n'est pas connecté. L'UI désactive déjà les contrôles, mais cette
+   * validation garde la règle dans le gateway (et non seulement dans la vue).
+   */
+  verifierReseauConnecte() {
+    if (this.etatConnexion.statut !== 'connecte') {
+      throw new Error('ERR_RESEAU_NON_CONNECTE');
+    }
+  }
+
+  obtenirPresences() {
+    return { ...this.presences };
+  }
+
+  modifierPresence({ utilisateurId, statut }) {
+    this.verifierUtilisateur(utilisateurId);
+    if (!['en-ligne', 'hors-ligne'].includes(statut)) {
+      throw new Error('ERR_PRESENCE_INVALIDE');
+    }
+    this.presences[utilisateurId] = statut;
+    const presence = { utilisateurId, statut, vuLaDerniereFois: Date.now() };
+    this.emettre('presence', presence);
+    return presence;
+  }
+
+  /** Simule une coupure réseau sans détruire l'utilisateur de la session. */
+  simulerCoupure() {
+    if (this.utilisateurConnecteId) {
+      this.modifierPresence({
+        utilisateurId: this.utilisateurConnecteId,
+        statut: 'hors-ligne',
+      });
+    }
+    return this.definirEtatConnexion('deconnecte');
+  }
+
+  /**
+   * Simule la transition déconnecté -> reconnexion -> connecté. L'état
+   * intermédiaire est poussé immédiatement à l'UI avant le délai simulé.
+   */
+  async simulerReconnexion(delaiMs = 900) {
+    this.reconnexions += 1;
+    this.definirEtatConnexion('reconnexion');
+    await new Promise((resolve) => setTimeout(resolve, Math.max(0, delaiMs)));
+    if (!this.utilisateurConnecteId) {
+      this.definirEtatConnexion('deconnecte');
+      throw new Error('ERR_AUCUN_UTILISATEUR_CONNECTE');
+    }
+    this.modifierPresence({
+      utilisateurId: this.utilisateurConnecteId,
+      statut: 'en-ligne',
+    });
+    return this.definirEtatConnexion('connecte');
+  }
+
   /**
    * Vérifie si un pseudo est disponible (aucun utilisateur enregistré ne le
    * porte déjà), comparaison insensible à la casse. Utilisé par l'écran de
@@ -394,7 +491,13 @@ class MockGatewayRuntime {
       this.utilisateurs.push({ id, pseudo });
     }
     this.utilisateurConnecteId = id;
-    return { statut: 'connecte', reconnexions: 0 };
+    this.presences[id] = 'en-ligne';
+    this.emettre('presence', {
+      utilisateurId: id,
+      statut: 'en-ligne',
+      vuLaDerniereFois: Date.now(),
+    });
+    return this.definirEtatConnexion('connecte');
   }
 
   /**
@@ -659,6 +762,7 @@ class MockGatewayRuntime {
   }
 
   envoyerMessage({ salonId, utilisateurId, contenu }) {
+    this.verifierReseauConnecte();
     this.verifierUtilisateur(utilisateurId);
     const salon = this.trouverSalon(salonId);
     // Un salon public accepte implicitement tout le monde comme membre :
@@ -691,6 +795,7 @@ class MockGatewayRuntime {
   }
 
   envoyerMessagePrive({ conversationId, contenu, utilisateurId }) {
+    this.verifierReseauConnecte();
     const utilisateurActuelId = utilisateurId ?? 'u1';
     this.verifierUtilisateur(utilisateurActuelId);
     const conversation = this.conversationsPrivees.find(
@@ -713,6 +818,81 @@ class MockGatewayRuntime {
     };
     this.messagesPrives.push(message);
     return { ...message };
+  }
+
+  modifierMessage({ messageId, utilisateurId, contenu }) {
+    this.verifierReseauConnecte();
+    this.verifierUtilisateur(utilisateurId);
+    const texte =
+      typeof contenu === 'string' ? contenu.trim().slice(0, 2000) : '';
+    if (!texte) throw new Error('ERR_MESSAGE_VIDE');
+
+    for (const salon of this.salons) {
+      const index = salon.messages.findIndex(
+        (message) => message.id === messageId
+      );
+      if (index !== -1) {
+        const message = salon.messages[index];
+        if (message.auteurId !== utilisateurId)
+          throw new Error('ERR_MESSAGE_NON_AUTORISE');
+        const modifie = {
+          ...message,
+          contenu: texte,
+          modification: Date.now(),
+        };
+        salon.messages[index] = modifie;
+        this.emettre('message-modifie', structuredClone(modifie));
+        return structuredClone(modifie);
+      }
+    }
+
+    const indexPrive = this.messagesPrives.findIndex(
+      (message) => message.id === messageId
+    );
+    if (indexPrive !== -1) {
+      const message = this.messagesPrives[indexPrive];
+      if (message.auteurId !== utilisateurId)
+        throw new Error('ERR_MESSAGE_NON_AUTORISE');
+      const modifie = { ...message, contenu: texte, modification: Date.now() };
+      this.messagesPrives[indexPrive] = modifie;
+      this.emettre('message-modifie', { ...modifie });
+      return { ...modifie };
+    }
+
+    throw new Error('ERR_MESSAGE_INTROUVABLE');
+  }
+
+  supprimerMessage({ messageId, utilisateurId }) {
+    this.verifierReseauConnecte();
+    this.verifierUtilisateur(utilisateurId);
+
+    for (const salon of this.salons) {
+      const index = salon.messages.findIndex(
+        (message) => message.id === messageId
+      );
+      if (index !== -1) {
+        if (salon.messages[index].auteurId !== utilisateurId) {
+          throw new Error('ERR_MESSAGE_NON_AUTORISE');
+        }
+        salon.messages.splice(index, 1);
+        this.emettre('message-supprime', { messageId });
+        return { messageId };
+      }
+    }
+
+    const indexPrive = this.messagesPrives.findIndex(
+      (message) => message.id === messageId
+    );
+    if (indexPrive !== -1) {
+      if (this.messagesPrives[indexPrive].auteurId !== utilisateurId) {
+        throw new Error('ERR_MESSAGE_NON_AUTORISE');
+      }
+      this.messagesPrives.splice(indexPrive, 1);
+      this.emettre('message-supprime', { messageId });
+      return { messageId };
+    }
+
+    throw new Error('ERR_MESSAGE_INTROUVABLE');
   }
 
   obtenirEtatsSaisie(param) {

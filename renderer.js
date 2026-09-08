@@ -66,6 +66,8 @@ const NotifPrefs =
 let utilisateurActuelId = sessionStorage.getItem('currentUserId') ?? null;
 let salonActifId = null;
 let etat = { utilisateurs: [], salons: [], invitations: [] };
+let presences = {};
+let etatReseau = { statut: 'connecte', reconnexions: 0 };
 // Miroir côté renderer de fenetreEstFocusee dans main.js (voir
 // 'window:focus-changed' / 'window:is-focused' dans preload.js), initialisé
 // à `true` par défaut le temps que la vraie valeur arrive (voir plus bas où
@@ -97,7 +99,50 @@ const el = {
   titreDialogue: document.querySelector('#dialog-title'),
   contenuDialogue: document.querySelector('#dialog-content'),
   toast: document.querySelector('#toast'),
+  statutConnexion: document.querySelector('#connection-status'),
+  libelleConnexion: document.querySelector('#connection-label'),
+  couperReseau: document.querySelector('#simulate-network-cut'),
+  reconnecterReseau: document.querySelector('#simulate-network-reconnect'),
+  presenceCourante: document.querySelector('#current-user-presence'),
 };
+
+
+function afficherEtatReseau(nouvelEtat = etatReseau) {
+  etatReseau = nouvelEtat ?? etatReseau;
+  if (!el.statutConnexion || !el.libelleConnexion) return;
+  el.statutConnexion.dataset.state = etatReseau.statut;
+  const libelles = {
+    connecte: t('network.connected'),
+    deconnecte: t('network.disconnected'),
+    reconnexion: t('network.reconnecting'),
+  };
+  el.libelleConnexion.textContent = libelles[etatReseau.statut] ?? etatReseau.statut;
+  const bloque = etatReseau.statut !== 'connecte';
+  if (el.message) el.message.disabled = bloque;
+  if (el.presenceCourante) el.presenceCourante.disabled = bloque;
+  if (el.couperReseau) el.couperReseau.disabled = bloque;
+  if (el.reconnecterReseau) el.reconnecterReseau.disabled = etatReseau.statut === 'connecte';
+}
+
+function afficherPresenceCourante() {
+  if (!el.presenceCourante || !utilisateurActuelId) return;
+  const statut = presences[utilisateurActuelId] ?? 'hors-ligne';
+  el.presenceCourante.dataset.presence = statut;
+  el.presenceCourante.textContent = statut === 'en-ligne'
+    ? t('network.online')
+    : t('network.offline');
+}
+
+async function chargerEtatReseauEtPresences() {
+  const [reseau, presencesRecues] = await Promise.all([
+    window.electronAPI.obtenirEtatReseau(),
+    window.electronAPI.obtenirPresences(),
+  ]);
+  etatReseau = reseau;
+  presences = presencesRecues;
+  afficherEtatReseau();
+  afficherPresenceCourante();
+}
 
 const salonActif = () => etat.salons.find((salon) => salon.id === salonActifId);
 const utilisateur = (id) => etat.utilisateurs.find((item) => item.id === id);
@@ -497,6 +542,109 @@ function afficherSalons() {
   });
 }
 
+function creerActionsMessage(message, texteEl) {
+  const actions = creerEl('div', { classe: 'message-actions' });
+  const modifier = creerEl('button', {
+    classe: 'message-action',
+    texte: t('messages.edit'),
+    attrs: { type: 'button', title: t('messages.edit') },
+  });
+
+  modifier.addEventListener('click', () => {
+    const contenuInitial = message.contenu;
+    const editeur = creerEl('div', { classe: 'message-edit-row' });
+    const champ = document.createElement('input');
+    champ.className = 'message-edit-input';
+    champ.type = 'text';
+    champ.value = contenuInitial;
+    champ.maxLength = 2000;
+
+    const enregistrer = creerEl('button', {
+      classe: 'message-edit-save',
+      texte: '✓',
+      attrs: { type: 'button', title: t('messages.updated') },
+    });
+    const annuler = creerEl('button', {
+      classe: 'message-edit-cancel',
+      texte: '✕',
+      attrs: { type: 'button', title: 'Annuler' },
+    });
+
+    const restaurer = () => {
+      editeur.replaceWith(texteEl);
+      actions.hidden = false;
+    };
+
+    const sauvegarder = async () => {
+      const nouveauContenu = champ.value.trim();
+      if (!nouveauContenu || nouveauContenu === contenuInitial) {
+        restaurer();
+        return;
+      }
+      enregistrer.disabled = true;
+      annuler.disabled = true;
+      try {
+        await window.electronAPI.modifierMessage({
+          messageId: message.id,
+          utilisateurId: utilisateurActuelId,
+          contenu: nouveauContenu,
+        });
+        await actualiser();
+      } catch (erreur) {
+        notifier(messageErreur(erreur), true);
+        enregistrer.disabled = false;
+        annuler.disabled = false;
+        champ.focus();
+      }
+    };
+
+    enregistrer.addEventListener('click', sauvegarder);
+    annuler.addEventListener('click', restaurer);
+    champ.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        void sauvegarder();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        restaurer();
+      }
+    });
+
+    editeur.append(champ, enregistrer, annuler);
+    texteEl.replaceWith(editeur);
+    actions.hidden = true;
+    champ.focus();
+    champ.select();
+  });
+
+  const supprimer = creerEl('button', {
+    classe: 'message-action',
+    texte: t('messages.delete'),
+    attrs: { type: 'button', title: t('messages.delete') },
+  });
+
+  supprimer.addEventListener('click', async () => {
+    if (!window.confirm(t('messages.deleteConfirm'))) return;
+    modifier.disabled = true;
+    supprimer.disabled = true;
+    try {
+      await window.electronAPI.supprimerMessage({
+        messageId: message.id,
+        utilisateurId: utilisateurActuelId,
+      });
+      notifier(t('messages.deleted'));
+      await actualiser();
+    } catch (erreur) {
+      notifier(messageErreur(erreur), true);
+      modifier.disabled = false;
+      supprimer.disabled = false;
+    }
+  });
+
+  actions.append(modifier, supprimer);
+  return actions;
+}
+
 function afficherMessages(options = {}) {
   const { conserverPositionScroll = false } = options;
   const salon = salonActif();
@@ -639,6 +787,9 @@ function afficherMessages(options = {}) {
                       { hour: '2-digit', minute: '2-digit' }
                     ),
                   }),
+                  ...(message.modification
+                    ? [creerEl('span', { classe: 'edited-label', texte: '(modifié)' })]
+                    : []),
                 ],
               }),
               texteEl,
@@ -646,6 +797,9 @@ function afficherMessages(options = {}) {
           }),
         ],
       });
+      if (estMessagePersonnel) {
+        article.querySelector('.message-body')?.appendChild(creerActionsMessage(message, texteEl));
+      }
       el.messages.appendChild(article);
     });
   }
@@ -945,6 +1099,11 @@ el.membres.addEventListener('click', () => {
           texte: membre.pseudo[0].toUpperCase(),
         }),
         creerEl('span', { texte: membre.pseudo }),
+        creerEl('span', {
+          classe: 'member-presence',
+          texte: (presences[membre.id] ?? 'hors-ligne') === 'en-ligne' ? t('network.online') : t('network.offline'),
+          attrs: { 'data-presence': presences[membre.id] ?? 'hors-ligne' },
+        }),
       ];
       if (membre.id === salon.hoteId) {
         enfants.push(
@@ -999,6 +1158,7 @@ el.utilisateur.addEventListener('change', async (event) => {
   // de sélectionner (voir le même réflexe dans message-prive.js).
   el.message.value = '';
   fermerMenuNotif();
+  afficherPresenceCourante();
   await actualiser();
 });
 
@@ -1047,6 +1207,7 @@ async function initialiser() {
 
   try {
     await initialiserUtilisateurCourant();
+    await chargerEtatReseauEtPresences();
     // À ce stade, le script s'est déjà mis en pause une fois (l'await
     // ci-dessus), donc le reste du script synchrone du module a fini de
     // s'exécuter — `serviceNotifications`, déclaré plus bas dans le fichier
@@ -1331,4 +1492,33 @@ el.message.addEventListener('input', async (event) => {
     });
     await actualiserIndicateurSaisie();
   }
+});
+
+
+if (el.couperReseau) {
+  el.couperReseau.addEventListener('click', async () => {
+    try { await window.electronAPI.simulerCoupureReseau(); }
+    catch (erreur) { notifier(messageErreur(erreur), true); }
+  });
+}
+if (el.reconnecterReseau) {
+  el.reconnecterReseau.addEventListener('click', async () => {
+    try { await window.electronAPI.simulerReconnexionReseau(900); }
+    catch (erreur) { notifier(messageErreur(erreur), true); }
+  });
+}
+if (el.presenceCourante) {
+  el.presenceCourante.addEventListener('click', async () => {
+    if (etatReseau.statut !== 'connecte') return;
+    const actuelle = presences[utilisateurActuelId] ?? 'hors-ligne';
+    const prochaine = actuelle === 'en-ligne' ? 'hors-ligne' : 'en-ligne';
+    try { await window.electronAPI.modifierPresence(utilisateurActuelId, prochaine); }
+    catch (erreur) { notifier(messageErreur(erreur), true); }
+  });
+}
+
+window.electronAPI.onEtatReseauChange((nouvelEtat) => afficherEtatReseau(nouvelEtat));
+window.electronAPI.onPresenceChange((presence) => {
+  presences[presence.utilisateurId] = presence.statut;
+  afficherPresenceCourante();
 });

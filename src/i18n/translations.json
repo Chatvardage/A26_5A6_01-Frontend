@@ -127,7 +127,26 @@
       "ERR_CONVERSATION_AVEC_SOI_MEME": "Impossible de démarrer une conversation avec soi-même.",
       "ERR_CONVERSATION_PRIVEE_INTROUVABLE": "Conversation privée introuvable.",
       "ERR_ACCES_REFUSE_CONVERSATION": "Accès refusé à cette conversation.",
-      "ERR_CONVERSATION_OU_SALON_INTROUVABLE": "Conversation ou salon introuvable."
+      "ERR_CONVERSATION_OU_SALON_INTROUVABLE": "Conversation ou salon introuvable.",
+      "ERR_RESEAU_NON_CONNECTE": "Le réseau n’est pas connecté. Reconnectez-vous avant de continuer.",
+      "ERR_MESSAGE_INTROUVABLE": "Message introuvable.",
+      "ERR_MESSAGE_NON_AUTORISE": "Vous pouvez seulement modifier ou supprimer vos propres messages."
+    },
+    "network": {
+      "connected": "Connecté",
+      "disconnected": "Déconnecté",
+      "reconnecting": "Reconnexion…",
+      "online": "En ligne",
+      "offline": "Hors ligne"
+    },
+    "messages": {
+      "edit": "Modifier",
+      "delete": "Supprimer",
+      "edited": "modifié",
+      "editPrompt": "Modifier le message",
+      "deleteConfirm": "Supprimer ce message ?",
+      "updated": "Message modifié.",
+      "deleted": "Message supprimé."
     }
   },
   "en": {
@@ -258,7 +277,26 @@
       "ERR_CONVERSATION_AVEC_SOI_MEME": "You cannot start a conversation with yourself.",
       "ERR_CONVERSATION_PRIVEE_INTROUVABLE": "Private conversation not found.",
       "ERR_ACCES_REFUSE_CONVERSATION": "Access denied to this conversation.",
-      "ERR_CONVERSATION_OU_SALON_INTROUVABLE": "Conversation or channel not found."
+      "ERR_CONVERSATION_OU_SALON_INTROUVABLE": "Conversation or channel not found.",
+      "ERR_RESEAU_NON_CONNECTE": "The network is not connected. Reconnect before continuing.",
+      "ERR_MESSAGE_INTROUVABLE": "Message not found.",
+      "ERR_MESSAGE_NON_AUTORISE": "You can only edit or delete your own messages."
+    },
+    "network": {
+      "connected": "Connected",
+      "disconnected": "Disconnected",
+      "reconnecting": "Reconnecting…",
+      "online": "Online",
+      "offline": "Offline"
+    },
+    "messages": {
+      "edit": "Edit",
+      "delete": "Delete",
+      "edited": "edited",
+      "editPrompt": "Edit message",
+      "deleteConfirm": "Delete this message?",
+      "updated": "Message updated.",
+      "deleted": "Message deleted."
     }
   }
 }
