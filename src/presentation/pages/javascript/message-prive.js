@@ -1228,10 +1228,57 @@ window.addEventListener('DOMContentLoaded', async () => {
     afficherEtatReseau(nouvelEtat);
   });
 
-  window.electronAPI.onPresenceChange(async (presence) => {
+  window.electronAPI.onPresenceChange((presence) => {
     presences[presence.utilisateurId] = presence.statut;
     afficherPresenceCourante();
-    await refreshConversations({ conserverPositionScroll: true });
+
+    const conversation = state.conversations.find(
+      (item) => item.otherUser?.id === presence.utilisateurId
+    );
+    if (!conversation) return;
+
+    conversation.otherUser.present = presence.statut === 'en-ligne';
+
+    // Les filtres « en ligne » / « hors ligne » dépendent directement de la
+    // présence : dans ce cas on reconstruit seulement la liste locale, sans
+    // refaire d'appel IPC pour recharger toutes les conversations.
+    if (state.currentFilter !== 'all') {
+      renderConversationList();
+    } else if (listElement) {
+      const ligne = Array.from(
+        listElement.querySelectorAll('.conversation[data-conversation-id]')
+      ).find((element) => element.dataset.conversationId === conversation.id);
+      const avatar = ligne?.querySelector('.avatar');
+      avatar?.classList.toggle('offline', !conversation.otherUser.present);
+
+      // Le sous-titre affiche la présence uniquement lorsqu'il n'y a encore
+      // aucun message dans cette conversation.
+      if (!conversation.lastMessage) {
+        const sousTitre = ligne?.querySelector('.last-message');
+        if (sousTitre) {
+          sousTitre.textContent = conversation.otherUser.present
+            ? t('dm.online')
+            : t('dm.offline');
+        }
+      }
+    }
+
+    if (conversation.id === state.activeConversationId) {
+      if (topbarStatus) {
+        topbarStatus.textContent = conversation.otherUser.present
+          ? t('dm.online')
+          : t('dm.offline');
+        topbarStatus.classList.toggle('online', conversation.otherUser.present);
+        topbarStatus.classList.toggle(
+          'offline',
+          !conversation.otherUser.present
+        );
+      }
+      topbarAvatar?.classList.toggle(
+        'offline',
+        !conversation.otherUser.present
+      );
+    }
   });
 
   window.electronAPI.onMessageModifieChange(async () => {

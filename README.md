@@ -165,7 +165,7 @@ Autres mesures :
 
 ## 9. Limites connues et pistes d'amélioration
 
-- Le mock local fait confiance à `utilisateurId` fourni par le renderer dans les appels IPC. Il n'existe pas encore de session serveur cryptographiquement liée à l'utilisateur; cela concerne aussi les actions de modification/suppression de messages.
+- Le mock local fait confiance à `utilisateurId` fourni par le renderer dans les appels IPC. Il n'existe pas encore de session serveur cryptographiquement liée à l'utilisateur; cette limite concerne notamment la modification/suppression de messages ainsi que la simulation de présence et de coupure/reconnexion réseau. Ce comportement est volontaire pour ce jalon local, car le sélecteur d'utilisateur sert à tester plusieurs identités simulées sans véritable backend d'authentification.
 
 - Le backend est simulé localement; il n'y a pas encore de vraie authentification distante.
 - Les identités et autorisations sont adaptées à une maquette locale et devront être validées côté serveur dans la prochaine itération.
