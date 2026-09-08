@@ -1231,7 +1231,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     await refreshConversations({ conserverPositionScroll: true });
   });
 
-  window.electronAPI.onMessageSupprimeChange(async () => {
+  window.electronAPI.onMessageSupprimeChange(async (message) => {
+    ChatUiShared.oublierEtatActionMessage(message?.messageId);
     await refreshConversations({ conserverPositionScroll: true });
   });
 

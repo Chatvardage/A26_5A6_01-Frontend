@@ -223,6 +223,36 @@ describe('MockGatewayRuntime - réseau et présence', () => {
     ).toThrow('ERR_RESEAU_NON_CONNECTE');
   });
 
+  it('refuse un message de salon de plus de 2000 caractères', () => {
+    const gateway = new MockGatewayRuntime();
+    gateway.connexion({ id: 'u1', pseudo: 'sam' });
+
+    expect(() =>
+      gateway.envoyerMessage({
+        salonId: 's1',
+        utilisateurId: 'u1',
+        contenu: 'x'.repeat(2001),
+      })
+    ).toThrow('ERR_MESSAGE_TROP_LONG');
+  });
+
+  it('refuse un message privé de plus de 2000 caractères', () => {
+    const gateway = new MockGatewayRuntime();
+    gateway.connexion({ id: 'u1', pseudo: 'sam' });
+    const conversation = gateway.demarrerConversationPrivee({
+      utilisateurId: 'u1',
+      autreUtilisateurId: 'u2',
+    });
+
+    expect(() =>
+      gateway.envoyerMessagePrive({
+        conversationId: conversation.id,
+        utilisateurId: 'u1',
+        contenu: 'x'.repeat(2001),
+      })
+    ).toThrow('ERR_MESSAGE_TROP_LONG');
+  });
+
   it('refuse une modification de message de plus de 2000 caractères', () => {
     const gateway = new MockGatewayRuntime();
     gateway.connexion({ id: 'u1', pseudo: 'sam' });

@@ -3,6 +3,9 @@ name: Builds multiplateformes
 permissions:
   contents: read
 
+env:
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
 on:
   workflow_dispatch:
   push:

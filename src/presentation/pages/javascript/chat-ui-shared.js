@@ -103,6 +103,10 @@
     etatsActionsMessage.set(messageId, etat);
   }
 
+  function oublierEtatActionMessage(messageId) {
+    if (messageId) etatsActionsMessage.delete(messageId);
+  }
+
   function creerActionsMessage({
     message,
     texteEl,
@@ -303,5 +307,6 @@
     chargerEtatReseauEtPresences,
     brancherControlesReseauPresence,
     creerActionsMessage,
+    oublierEtatActionMessage,
   });
 })();

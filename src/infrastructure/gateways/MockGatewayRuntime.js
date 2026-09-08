@@ -819,9 +819,9 @@ class MockGatewayRuntime {
     if (!salon.membreIds.includes(utilisateurId)) {
       throw new Error('ERR_ACCES_REFUSE_SALON');
     }
-    const texte =
-      typeof contenu === 'string' ? contenu.trim().slice(0, 2000) : '';
+    const texte = typeof contenu === 'string' ? contenu.trim() : '';
     if (!texte) throw new Error('ERR_MESSAGE_VIDE');
+    if (texte.length > 2000) throw new Error('ERR_MESSAGE_TROP_LONG');
     const message = {
       id: `msg-s-${this.prochainMessageSalonIndex++}`,
       auteurId: utilisateurId,
@@ -843,9 +843,9 @@ class MockGatewayRuntime {
     if (!conversation.participantIds.includes(utilisateurActuelId)) {
       throw new Error('ERR_ACCES_REFUSE_CONVERSATION');
     }
-    const texte =
-      typeof contenu === 'string' ? contenu.trim().slice(0, 2000) : '';
+    const texte = typeof contenu === 'string' ? contenu.trim() : '';
     if (!texte) throw new Error('ERR_MESSAGE_VIDE');
+    if (texte.length > 2000) throw new Error('ERR_MESSAGE_TROP_LONG');
     this.prochainMessagePriveIndex += 1;
     const message = {
       id: `mp-${this.prochainMessagePriveIndex}`,

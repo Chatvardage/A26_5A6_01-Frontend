@@ -1390,6 +1390,7 @@ setInterval(async () => {
 const timersArretSaisie = {};
 
 el.message.addEventListener('input', async (event) => {
+  if (etatReseau.statut !== 'connecte') return;
   const aDuTexte = event.target.value.trim().length > 0;
   const auteurId = utilisateurActuelId;
   const salonId = salonActifId;
@@ -1467,6 +1468,7 @@ window.electronAPI.onMessageModifieChange(async () => {
   await actualiser({ conserverPositionScroll: true });
 });
 
-window.electronAPI.onMessageSupprimeChange(async () => {
+window.electronAPI.onMessageSupprimeChange(async (message) => {
+  ChatUiShared.oublierEtatActionMessage(message?.messageId);
   await actualiser({ conserverPositionScroll: true });
 });
