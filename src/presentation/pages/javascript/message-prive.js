@@ -885,22 +885,57 @@ window.addEventListener('DOMContentLoaded', async () => {
     supprimer.textContent = t('messages.delete');
     supprimer.title = t('messages.delete');
 
-    supprimer.addEventListener('click', async () => {
-      if (!window.confirm(t('messages.deleteConfirm'))) return;
-      modifier.disabled = true;
-      supprimer.disabled = true;
-      try {
-        await window.electronAPI.supprimerMessage({
-          messageId: message.id,
-          utilisateurId: state.currentUserId,
-        });
-        notifier(t('messages.deleted'));
-        await refreshConversations();
-      } catch (erreur) {
-        notifier(messageErreur(erreur), true);
-        modifier.disabled = false;
-        supprimer.disabled = false;
-      }
+    supprimer.addEventListener('click', () => {
+      const question = document.createElement('span');
+      question.classList.add('message-delete-question');
+      question.textContent = t('messages.deleteConfirm');
+
+      const annulerSuppression = document.createElement('button');
+      annulerSuppression.type = 'button';
+      annulerSuppression.classList.add('message-action');
+      annulerSuppression.textContent = t('messages.cancel');
+
+      const confirmerSuppression = document.createElement('button');
+      confirmerSuppression.type = 'button';
+      confirmerSuppression.classList.add('message-action', 'danger');
+      confirmerSuppression.textContent = t('messages.delete');
+
+      const restaurerActions = () => {
+        actions.classList.remove('confirming-delete');
+        actions.replaceChildren(modifier, supprimer);
+        supprimer.focus();
+      };
+
+      annulerSuppression.addEventListener('click', restaurerActions);
+      confirmerSuppression.addEventListener('click', async () => {
+        annulerSuppression.disabled = true;
+        confirmerSuppression.disabled = true;
+        try {
+          await window.electronAPI.supprimerMessage({
+            messageId: message.id,
+            utilisateurId: state.currentUserId,
+          });
+          notifier(t('messages.deleted'));
+          await refreshConversations();
+          requestAnimationFrame(() => {
+            if (!messageInput.disabled) {
+              messageInput.focus({ preventScroll: true });
+            }
+          });
+        } catch (erreur) {
+          notifier(messageErreur(erreur), true);
+          annulerSuppression.disabled = false;
+          confirmerSuppression.disabled = false;
+        }
+      });
+
+      actions.classList.add('confirming-delete');
+      actions.replaceChildren(
+        question,
+        annulerSuppression,
+        confirmerSuppression
+      );
+      confirmerSuppression.focus();
     });
 
     actions.append(modifier, supprimer);

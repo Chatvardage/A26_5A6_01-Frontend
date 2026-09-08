@@ -115,6 +115,9 @@ class MockGatewayRuntime {
     // utilisé par main.js pendant l'exécution de l'application.
     this.etatConnexion = { statut: 'deconnecte', depuis: now, reconnexions: 0 };
     this.reconnexions = 0;
+    // Jeton monotone servant à invalider une reconnexion asynchrone si une
+    // nouvelle coupure/reconnexion survient avant la fin de son délai.
+    this.reconnexionJeton = 0;
     this.ecouteurs = new Map();
 
     this.presences = {
@@ -417,6 +420,9 @@ class MockGatewayRuntime {
 
   /** Simule une coupure réseau sans détruire l'utilisateur de la session. */
   simulerCoupure(utilisateurId = this.utilisateurConnecteId) {
+    // Invalide toute reconnexion encore en attente : son timer pourra finir,
+    // mais il ne devra plus remettre le réseau en ligne.
+    this.reconnexionJeton += 1;
     if (utilisateurId) {
       this.definirPresenceInterne({
         utilisateurId,
@@ -446,8 +452,20 @@ class MockGatewayRuntime {
     }
 
     this.reconnexions += 1;
+    const jeton = ++this.reconnexionJeton;
     this.definirEtatConnexion('reconnexion');
     await new Promise((resolve) => setTimeout(resolve, Math.max(0, delaiMs)));
+
+    // Une coupure (ou une autre reconnexion) a pu arriver pendant le délai.
+    // Dans ce cas cette tentative est obsolète et ne doit pas écraser l'état
+    // réseau plus récent.
+    if (
+      jeton !== this.reconnexionJeton ||
+      this.etatConnexion.statut !== 'reconnexion'
+    ) {
+      return this.obtenirEtatConnexion();
+    }
+
     if (utilisateurId) {
       this.definirPresenceInterne({
         utilisateurId,
@@ -508,12 +526,7 @@ class MockGatewayRuntime {
       this.utilisateurs.push({ id, pseudo });
     }
     this.utilisateurConnecteId = id;
-    this.presences[id] = 'en-ligne';
-    this.emettre('presence', {
-      utilisateurId: id,
-      statut: 'en-ligne',
-      vuLaDerniereFois: Date.now(),
-    });
+    this.definirPresenceInterne({ utilisateurId: id, statut: 'en-ligne' });
     return this.definirEtatConnexion('connecte');
   }
 

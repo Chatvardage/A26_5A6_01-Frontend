@@ -39,3 +39,4 @@ jobs:
         with:
           name: ChatVardage-${{ matrix.artifact }}
           path: release/**
+          retention-days: 14

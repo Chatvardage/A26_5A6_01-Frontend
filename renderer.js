@@ -623,22 +623,54 @@ function creerActionsMessage(message, texteEl) {
     attrs: { type: 'button', title: t('messages.delete') },
   });
 
-  supprimer.addEventListener('click', async () => {
-    if (!window.confirm(t('messages.deleteConfirm'))) return;
-    modifier.disabled = true;
-    supprimer.disabled = true;
-    try {
-      await window.electronAPI.supprimerMessage({
-        messageId: message.id,
-        utilisateurId: utilisateurActuelId,
-      });
-      notifier(t('messages.deleted'));
-      await actualiser();
-    } catch (erreur) {
-      notifier(messageErreur(erreur), true);
-      modifier.disabled = false;
-      supprimer.disabled = false;
-    }
+  supprimer.addEventListener('click', () => {
+    const question = creerEl('span', {
+      classe: 'message-delete-question',
+      texte: t('messages.deleteConfirm'),
+    });
+    const annulerSuppression = creerEl('button', {
+      classe: 'message-action',
+      texte: t('messages.cancel'),
+      attrs: { type: 'button' },
+    });
+    const confirmerSuppression = creerEl('button', {
+      classe: 'message-action danger',
+      texte: t('messages.delete'),
+      attrs: { type: 'button' },
+    });
+
+    const restaurerActions = () => {
+      actions.classList.remove('confirming-delete');
+      actions.replaceChildren(modifier, supprimer);
+      supprimer.focus();
+    };
+
+    annulerSuppression.addEventListener('click', restaurerActions);
+    confirmerSuppression.addEventListener('click', async () => {
+      annulerSuppression.disabled = true;
+      confirmerSuppression.disabled = true;
+      try {
+        await window.electronAPI.supprimerMessage({
+          messageId: message.id,
+          utilisateurId: utilisateurActuelId,
+        });
+        notifier(t('messages.deleted'));
+        await actualiser();
+        requestAnimationFrame(() => {
+          if (!el.message.disabled) {
+            el.message.focus({ preventScroll: true });
+          }
+        });
+      } catch (erreur) {
+        notifier(messageErreur(erreur), true);
+        annulerSuppression.disabled = false;
+        confirmerSuppression.disabled = false;
+      }
+    });
+
+    actions.classList.add('confirming-delete');
+    actions.replaceChildren(question, annulerSuppression, confirmerSuppression);
+    confirmerSuppression.focus();
   });
 
   actions.append(modifier, supprimer);
@@ -1550,9 +1582,9 @@ window.electronAPI.onPresenceChange((presence) => {
   presences[presence.utilisateurId] = presence.statut;
   afficherPresenceCourante();
 
-  const presenceMembre = el.dialogue?.querySelector(
-    `.member-presence[data-user-id="${presence.utilisateurId}"]`
-  );
+  const presenceMembre = Array.from(
+    el.dialogue?.querySelectorAll('.member-presence[data-user-id]') ?? []
+  ).find((element) => element.dataset.userId === presence.utilisateurId);
   if (presenceMembre) {
     presenceMembre.dataset.presence = presence.statut;
     presenceMembre.textContent =

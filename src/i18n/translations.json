@@ -143,8 +143,8 @@
       "edit": "Modifier",
       "delete": "Supprimer",
       "edited": "modifié",
-      "editPrompt": "Modifier le message",
       "deleteConfirm": "Supprimer ce message ?",
+      "cancel": "Annuler",
       "updated": "Message modifié.",
       "deleted": "Message supprimé."
     }
@@ -293,8 +293,8 @@
       "edit": "Edit",
       "delete": "Delete",
       "edited": "edited",
-      "editPrompt": "Edit message",
       "deleteConfirm": "Delete this message?",
+      "cancel": "Cancel",
       "updated": "Message updated.",
       "deleted": "Message deleted."
     }
