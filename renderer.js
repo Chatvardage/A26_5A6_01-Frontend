@@ -30,6 +30,10 @@ const I18n =
 const t = I18n.t;
 const appliquerTraductionsStatiques = I18n.appliquerTraductionsStatiques;
 const messageErreur = I18n.messageErreur;
+const ChatUiShared = window.ChatUiShared;
+if (!ChatUiShared) {
+  throw new Error('chat-ui-shared.js doit être chargé avant renderer.js');
+}
 
 // NotifPrefs vient de notif-prefs.js, un script classique chargé avant celui-ci
 // (voir index.html) qui expose window.NotifPrefs comme global — cette référence
@@ -67,7 +71,7 @@ let utilisateurActuelId = sessionStorage.getItem('currentUserId') ?? null;
 let salonActifId = null;
 let etat = { utilisateurs: [], salons: [], invitations: [] };
 let presences = {};
-let etatReseau = { statut: 'connecte', reconnexions: 0 };
+let etatReseau = { statut: 'deconnecte', reconnexions: 0 };
 // Miroir côté renderer de fenetreEstFocusee dans main.js (voir
 // 'window:focus-changed' / 'window:is-focused' dans preload.js), initialisé
 // à `true` par défaut le temps que la vraie valeur arrive (voir plus bas où
@@ -104,42 +108,45 @@ const el = {
   couperReseau: document.querySelector('#simulate-network-cut'),
   reconnecterReseau: document.querySelector('#simulate-network-reconnect'),
   presenceCourante: document.querySelector('#current-user-presence'),
+  envoyer: document.querySelector('#message-form button[type="submit"]'),
 };
 
 function afficherEtatReseau(nouvelEtat = etatReseau) {
   etatReseau = nouvelEtat ?? etatReseau;
-  if (!el.statutConnexion || !el.libelleConnexion) return;
-  el.statutConnexion.dataset.state = etatReseau.statut;
-  const libelles = {
-    connecte: t('network.connected'),
-    deconnecte: t('network.disconnected'),
-    reconnexion: t('network.reconnecting'),
-  };
-  el.libelleConnexion.textContent =
-    libelles[etatReseau.statut] ?? etatReseau.statut;
-  const bloque = etatReseau.statut !== 'connecte';
-  if (el.message) el.message.disabled = bloque;
-  if (el.presenceCourante) el.presenceCourante.disabled = bloque;
-  if (el.couperReseau) el.couperReseau.disabled = bloque;
-  if (el.reconnecterReseau)
-    el.reconnecterReseau.disabled = etatReseau.statut !== 'deconnecte';
+  ChatUiShared.afficherEtatReseau({
+    etat: etatReseau,
+    elements: {
+      statutConnexion: el.statutConnexion,
+      libelleConnexion: el.libelleConnexion,
+      messageInput: el.message,
+      submitButton: el.envoyer,
+      presenceCourante: el.presenceCourante,
+      couperReseau: el.couperReseau,
+      reconnecterReseau: el.reconnecterReseau,
+    },
+    t,
+  });
 }
 
 function afficherPresenceCourante() {
-  if (!el.presenceCourante || !utilisateurActuelId) return;
-  const statut = presences[utilisateurActuelId] ?? 'hors-ligne';
-  el.presenceCourante.dataset.presence = statut;
-  el.presenceCourante.textContent =
-    statut === 'en-ligne' ? t('network.online') : t('network.offline');
+  ChatUiShared.afficherPresenceCourante({
+    element: el.presenceCourante,
+    utilisateurId: utilisateurActuelId,
+    presences,
+    t,
+  });
 }
 
 async function chargerEtatReseauEtPresences() {
-  const [reseau, presencesRecues] = await Promise.all([
-    window.electronAPI.obtenirEtatReseau(),
-    window.electronAPI.obtenirPresences(),
-  ]);
-  etatReseau = reseau;
-  presences = presencesRecues;
+  await ChatUiShared.chargerEtatReseauEtPresences({
+    api: window.electronAPI,
+    onEtat: (reseau) => {
+      etatReseau = reseau;
+    },
+    onPresences: (recues) => {
+      presences = recues;
+    },
+  });
   afficherEtatReseau();
   afficherPresenceCourante();
 }
@@ -410,13 +417,13 @@ function synchroniserSelecteurUtilisateur() {
   el.utilisateur.value = utilisateurActuelId;
 }
 
-async function actualiser() {
+async function actualiser(options = {}) {
   try {
     etat = await window.electronAPI.obtenirEtatSalons(utilisateurActuelId);
     if (!etat.salons.some((salon) => salon.id === salonActifId)) {
       salonActifId = etat.salons[0]?.id ?? null;
     }
-    afficherTout();
+    afficherTout(options);
   } catch (erreur) {
     console.error('[actualiser] ERREUR:', erreur);
     notifier(messageErreur(erreur), true);
@@ -543,136 +550,16 @@ function afficherSalons() {
 }
 
 function creerActionsMessage(message, texteEl) {
-  const actions = creerEl('div', { classe: 'message-actions' });
-  const modifier = creerEl('button', {
-    classe: 'message-action',
-    texte: t('messages.edit'),
-    attrs: { type: 'button', title: t('messages.edit') },
+  return ChatUiShared.creerActionsMessage({
+    message,
+    texteEl,
+    api: window.electronAPI,
+    utilisateurId: () => utilisateurActuelId,
+    t,
+    notifier,
+    messageErreur,
+    champMessage: el.message,
   });
-
-  modifier.addEventListener('click', () => {
-    const contenuInitial = message.contenu;
-    const editeur = creerEl('div', { classe: 'message-edit-row' });
-    const champ = document.createElement('input');
-    champ.className = 'message-edit-input';
-    champ.type = 'text';
-    champ.value = contenuInitial;
-    champ.maxLength = 2000;
-
-    const enregistrer = creerEl('button', {
-      classe: 'message-edit-save',
-      texte: '✓',
-      attrs: { type: 'button', title: t('messages.updated') },
-    });
-    const annuler = creerEl('button', {
-      classe: 'message-edit-cancel',
-      texte: '✕',
-      attrs: { type: 'button', title: t('messages.cancel') },
-    });
-
-    const restaurer = () => {
-      editeur.replaceWith(texteEl);
-      actions.hidden = false;
-    };
-
-    const sauvegarder = async () => {
-      const nouveauContenu = champ.value.trim();
-      if (!nouveauContenu || nouveauContenu === contenuInitial) {
-        restaurer();
-        return;
-      }
-      enregistrer.disabled = true;
-      annuler.disabled = true;
-      try {
-        await window.electronAPI.modifierMessage({
-          messageId: message.id,
-          utilisateurId: utilisateurActuelId,
-          contenu: nouveauContenu,
-        });
-      } catch (erreur) {
-        notifier(messageErreur(erreur), true);
-        enregistrer.disabled = false;
-        annuler.disabled = false;
-        champ.focus();
-      }
-    };
-
-    enregistrer.addEventListener('click', sauvegarder);
-    annuler.addEventListener('click', restaurer);
-    champ.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        void sauvegarder();
-      } else if (event.key === 'Escape') {
-        event.preventDefault();
-        restaurer();
-      }
-    });
-
-    editeur.append(champ, enregistrer, annuler);
-    texteEl.replaceWith(editeur);
-    actions.hidden = true;
-    champ.focus();
-    champ.select();
-  });
-
-  const supprimer = creerEl('button', {
-    classe: 'message-action',
-    texte: t('messages.delete'),
-    attrs: { type: 'button', title: t('messages.delete') },
-  });
-
-  supprimer.addEventListener('click', () => {
-    const question = creerEl('span', {
-      classe: 'message-delete-question',
-      texte: t('messages.deleteConfirm'),
-    });
-    const annulerSuppression = creerEl('button', {
-      classe: 'message-action',
-      texte: t('messages.cancel'),
-      attrs: { type: 'button' },
-    });
-    const confirmerSuppression = creerEl('button', {
-      classe: 'message-action danger',
-      texte: t('messages.delete'),
-      attrs: { type: 'button' },
-    });
-
-    const restaurerActions = () => {
-      actions.classList.remove('confirming-delete');
-      actions.replaceChildren(modifier, supprimer);
-      supprimer.focus();
-    };
-
-    annulerSuppression.addEventListener('click', restaurerActions);
-    confirmerSuppression.addEventListener('click', async () => {
-      annulerSuppression.disabled = true;
-      confirmerSuppression.disabled = true;
-      try {
-        await window.electronAPI.supprimerMessage({
-          messageId: message.id,
-          utilisateurId: utilisateurActuelId,
-        });
-        notifier(t('messages.deleted'));
-        requestAnimationFrame(() => {
-          if (!el.message.disabled) {
-            el.message.focus({ preventScroll: true });
-          }
-        });
-      } catch (erreur) {
-        notifier(messageErreur(erreur), true);
-        annulerSuppression.disabled = false;
-        confirmerSuppression.disabled = false;
-      }
-    });
-
-    actions.classList.add('confirming-delete');
-    actions.replaceChildren(question, annulerSuppression, confirmerSuppression);
-    confirmerSuppression.focus();
-  });
-
-  actions.append(modifier, supprimer);
-  return actions;
 }
 
 function afficherMessages(options = {}) {
@@ -931,10 +818,10 @@ function afficherActions() {
   el.compteur.hidden = etat.invitations.length === 0;
 }
 
-function afficherTout() {
+function afficherTout(options = {}) {
   appliquerTraductionsStatiques();
   synchroniserSelecteurUtilisateur();
-  afficherMessages();
+  afficherMessages(options);
   afficherSalons();
   afficherActions();
   mettreAJourBadgeApplication();
@@ -1162,7 +1049,8 @@ el.membres.addEventListener('click', () => {
 el.formulaire.addEventListener('submit', async (event) => {
   event.preventDefault();
   const contenu = el.message.value;
-  if (!salonActifId || !contenu.trim()) return;
+  if (!salonActifId || !contenu.trim() || etatReseau.statut !== 'connecte')
+    return;
 
   const auteurId = utilisateurActuelId;
   const salonId = salonActifId;
@@ -1521,6 +1409,7 @@ el.message.addEventListener('input', async (event) => {
     // Programme l'arrêt pour cet utilisateur
     timersArretSaisie[auteurId] = setTimeout(async () => {
       delete timersArretSaisie[auteurId];
+      if (etatReseau.statut !== 'connecte') return;
       await window.electronAPI.modifierEtatSaisie({
         conversationId: salonId,
         utilisateurId: auteurId,
@@ -1539,39 +1428,18 @@ el.message.addEventListener('input', async (event) => {
   }
 });
 
-if (el.couperReseau) {
-  el.couperReseau.addEventListener('click', async () => {
-    try {
-      await window.electronAPI.simulerCoupureReseau(utilisateurActuelId);
-    } catch (erreur) {
-      notifier(messageErreur(erreur), true);
-    }
-  });
-}
-if (el.reconnecterReseau) {
-  el.reconnecterReseau.addEventListener('click', async () => {
-    try {
-      await window.electronAPI.simulerReconnexionReseau(
-        900,
-        utilisateurActuelId
-      );
-    } catch (erreur) {
-      notifier(messageErreur(erreur), true);
-    }
-  });
-}
-if (el.presenceCourante) {
-  el.presenceCourante.addEventListener('click', async () => {
-    if (etatReseau.statut !== 'connecte') return;
-    const actuelle = presences[utilisateurActuelId] ?? 'hors-ligne';
-    const prochaine = actuelle === 'en-ligne' ? 'hors-ligne' : 'en-ligne';
-    try {
-      await window.electronAPI.modifierPresence(utilisateurActuelId, prochaine);
-    } catch (erreur) {
-      notifier(messageErreur(erreur), true);
-    }
-  });
-}
+ChatUiShared.brancherControlesReseauPresence({
+  api: window.electronAPI,
+  elements: {
+    couperReseau: el.couperReseau,
+    reconnecterReseau: el.reconnecterReseau,
+    presenceCourante: el.presenceCourante,
+  },
+  getEtatReseau: () => etatReseau,
+  getUtilisateurId: () => utilisateurActuelId,
+  getPresences: () => presences,
+  notifierErreur: (erreur) => notifier(messageErreur(erreur), true),
+});
 
 window.electronAPI.onEtatReseauChange((nouvelEtat) =>
   afficherEtatReseau(nouvelEtat)
@@ -1593,9 +1461,9 @@ window.electronAPI.onPresenceChange((presence) => {
 });
 
 window.electronAPI.onMessageModifieChange(async () => {
-  await actualiser();
+  await actualiser({ conserverPositionScroll: true });
 });
 
 window.electronAPI.onMessageSupprimeChange(async () => {
-  await actualiser();
+  await actualiser({ conserverPositionScroll: true });
 });

@@ -130,7 +130,8 @@
       "ERR_MESSAGE_INTROUVABLE": "Message introuvable.",
       "ERR_MESSAGE_NON_AUTORISE": "Vous pouvez seulement modifier ou supprimer vos propres messages.",
       "ERR_PRESENCE_INVALIDE": "Statut de présence invalide.",
-      "ERR_AUCUN_UTILISATEUR_CONNECTE": "Aucun utilisateur connecté."
+      "ERR_AUCUN_UTILISATEUR_CONNECTE": "Aucun utilisateur connecté.",
+      "ERR_MESSAGE_TROP_LONG": "Le message dépasse la limite de 2000 caractères."
     },
     "network": {
       "connected": "Connecté",
@@ -283,7 +284,8 @@
       "ERR_MESSAGE_INTROUVABLE": "Message not found.",
       "ERR_MESSAGE_NON_AUTORISE": "You can only edit or delete your own messages.",
       "ERR_PRESENCE_INVALIDE": "Invalid presence status.",
-      "ERR_AUCUN_UTILISATEUR_CONNECTE": "No user is currently signed in."
+      "ERR_AUCUN_UTILISATEUR_CONNECTE": "No user is currently signed in.",
+      "ERR_MESSAGE_TROP_LONG": "The message exceeds the 2000-character limit."
     },
     "network": {
       "connected": "Connected",

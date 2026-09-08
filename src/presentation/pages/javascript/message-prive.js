@@ -28,6 +28,10 @@ const I18n =
   })();
 const t = I18n.t;
 const appliquerTraductionsStatiques = I18n.appliquerTraductionsStatiques;
+const ChatUiShared = window.ChatUiShared;
+if (!ChatUiShared) {
+  throw new Error('chat-ui-shared.js doit être chargé avant message-prive.js');
+}
 
 // Icône de main qui salue, en remplacement de l'emoji 👋 : voir le
 // commentaire équivalent (et le même SVG) dans renderer.js — l'emoji ne
@@ -108,47 +112,45 @@ window.addEventListener('DOMContentLoaded', async () => {
   );
   const currentUserPresence = document.getElementById('current-user-presence');
 
-  let etatReseau = { statut: 'connecte' };
+  let etatReseau = { statut: 'deconnecte' };
   let presences = {};
 
   function afficherEtatReseau(nouvelEtat = etatReseau) {
     etatReseau = nouvelEtat ?? etatReseau;
-    if (connectionStatus) connectionStatus.dataset.state = etatReseau.statut;
-    if (connectionLabel) {
-      const libelles = {
-        connecte: t('network.connected'),
-        deconnecte: t('network.disconnected'),
-        reconnexion: t('network.reconnecting'),
-      };
-      connectionLabel.textContent =
-        libelles[etatReseau.statut] ?? etatReseau.statut;
-    }
-    const bloque = etatReseau.statut !== 'connecte';
-    if (messageInput) messageInput.disabled = bloque;
-    const submit = messageForm?.querySelector('button[type="submit"]');
-    if (submit) submit.disabled = bloque;
-    if (currentUserPresence) currentUserPresence.disabled = bloque;
-    if (simulateNetworkCut) simulateNetworkCut.disabled = bloque;
-    if (simulateNetworkReconnect) {
-      simulateNetworkReconnect.disabled = etatReseau.statut !== 'deconnecte';
-    }
+    ChatUiShared.afficherEtatReseau({
+      etat: etatReseau,
+      elements: {
+        statutConnexion: connectionStatus,
+        libelleConnexion: connectionLabel,
+        messageInput,
+        submitButton: messageForm?.querySelector('button[type="submit"]'),
+        presenceCourante: currentUserPresence,
+        couperReseau: simulateNetworkCut,
+        reconnecterReseau: simulateNetworkReconnect,
+      },
+      t,
+    });
   }
 
   function afficherPresenceCourante() {
-    if (!currentUserPresence || !state.currentUserId) return;
-    const statut = presences[state.currentUserId] ?? 'hors-ligne';
-    currentUserPresence.dataset.presence = statut;
-    currentUserPresence.textContent =
-      statut === 'en-ligne' ? t('network.online') : t('network.offline');
+    ChatUiShared.afficherPresenceCourante({
+      element: currentUserPresence,
+      utilisateurId: state.currentUserId,
+      presences,
+      t,
+    });
   }
 
   async function chargerEtatReseauEtPresences() {
-    const [reseau, presencesRecues] = await Promise.all([
-      window.electronAPI.obtenirEtatReseau(),
-      window.electronAPI.obtenirPresences(),
-    ]);
-    etatReseau = reseau;
-    presences = presencesRecues;
+    await ChatUiShared.chargerEtatReseauEtPresences({
+      api: window.electronAPI,
+      onEtat: (reseau) => {
+        etatReseau = reseau;
+      },
+      onPresences: (recues) => {
+        presences = recues;
+      },
+    });
     afficherEtatReseau();
     afficherPresenceCourante();
   }
@@ -419,7 +421,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  async function refreshConversations() {
+  async function refreshConversations(options = {}) {
     const conversations = await window.electronAPI.obtenirConversationsPrivees(
       state.currentUserId
     );
@@ -457,7 +459,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // premier, le rond de notification de cette conversation serait calculé
     // avec l'ancien état (non lu) et ne disparaîtrait qu'au prochain
     // rafraîchissement.
-    await renderActiveConversation();
+    await renderActiveConversation(options);
     renderConversationList();
     mettreAJourBadgeApplication();
     actualiserIndicateurSaisie();
@@ -800,144 +802,16 @@ window.addEventListener('DOMContentLoaded', async () => {
    * est déjà entièrement remonté, ou si aucune conversation n'est active).
    */
   function creerActionsMessage(message, texteEl) {
-    const actions = document.createElement('div');
-    actions.classList.add('message-actions');
-
-    const modifier = document.createElement('button');
-    modifier.type = 'button';
-    modifier.classList.add('message-action');
-    modifier.textContent = t('messages.edit');
-    modifier.title = t('messages.edit');
-
-    modifier.addEventListener('click', () => {
-      const contenuInitial = message.contenu;
-      const editeur = document.createElement('div');
-      editeur.classList.add('message-edit-row');
-
-      const champ = document.createElement('input');
-      champ.type = 'text';
-      champ.classList.add('message-edit-input');
-      champ.value = contenuInitial;
-      champ.maxLength = 2000;
-
-      const enregistrer = document.createElement('button');
-      enregistrer.type = 'button';
-      enregistrer.classList.add('message-edit-save');
-      enregistrer.textContent = '✓';
-      enregistrer.title = t('messages.updated');
-
-      const annuler = document.createElement('button');
-      annuler.type = 'button';
-      annuler.classList.add('message-edit-cancel');
-      annuler.textContent = '✕';
-      annuler.title = t('messages.cancel');
-
-      const restaurer = () => {
-        editeur.replaceWith(texteEl);
-        actions.hidden = false;
-      };
-
-      const sauvegarder = async () => {
-        const nouveauContenu = champ.value.trim();
-        if (!nouveauContenu || nouveauContenu === contenuInitial) {
-          restaurer();
-          return;
-        }
-        enregistrer.disabled = true;
-        annuler.disabled = true;
-        try {
-          await window.electronAPI.modifierMessage({
-            messageId: message.id,
-            utilisateurId: state.currentUserId,
-            contenu: nouveauContenu,
-          });
-        } catch (erreur) {
-          notifier(messageErreur(erreur), true);
-          enregistrer.disabled = false;
-          annuler.disabled = false;
-          champ.focus();
-        }
-      };
-
-      enregistrer.addEventListener('click', sauvegarder);
-      annuler.addEventListener('click', restaurer);
-      champ.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          void sauvegarder();
-        } else if (event.key === 'Escape') {
-          event.preventDefault();
-          restaurer();
-        }
-      });
-
-      editeur.append(champ, enregistrer, annuler);
-      texteEl.replaceWith(editeur);
-      actions.hidden = true;
-      champ.focus();
-      champ.select();
+    return ChatUiShared.creerActionsMessage({
+      message,
+      texteEl,
+      api: window.electronAPI,
+      utilisateurId: () => state.currentUserId,
+      t,
+      notifier,
+      messageErreur,
+      champMessage: messageInput,
     });
-
-    const supprimer = document.createElement('button');
-    supprimer.type = 'button';
-    supprimer.classList.add('message-action');
-    supprimer.textContent = t('messages.delete');
-    supprimer.title = t('messages.delete');
-
-    supprimer.addEventListener('click', () => {
-      const question = document.createElement('span');
-      question.classList.add('message-delete-question');
-      question.textContent = t('messages.deleteConfirm');
-
-      const annulerSuppression = document.createElement('button');
-      annulerSuppression.type = 'button';
-      annulerSuppression.classList.add('message-action');
-      annulerSuppression.textContent = t('messages.cancel');
-
-      const confirmerSuppression = document.createElement('button');
-      confirmerSuppression.type = 'button';
-      confirmerSuppression.classList.add('message-action', 'danger');
-      confirmerSuppression.textContent = t('messages.delete');
-
-      const restaurerActions = () => {
-        actions.classList.remove('confirming-delete');
-        actions.replaceChildren(modifier, supprimer);
-        supprimer.focus();
-      };
-
-      annulerSuppression.addEventListener('click', restaurerActions);
-      confirmerSuppression.addEventListener('click', async () => {
-        annulerSuppression.disabled = true;
-        confirmerSuppression.disabled = true;
-        try {
-          await window.electronAPI.supprimerMessage({
-            messageId: message.id,
-            utilisateurId: state.currentUserId,
-          });
-          notifier(t('messages.deleted'));
-          requestAnimationFrame(() => {
-            if (!messageInput.disabled) {
-              messageInput.focus({ preventScroll: true });
-            }
-          });
-        } catch (erreur) {
-          notifier(messageErreur(erreur), true);
-          annulerSuppression.disabled = false;
-          confirmerSuppression.disabled = false;
-        }
-      });
-
-      actions.classList.add('confirming-delete');
-      actions.replaceChildren(
-        question,
-        annulerSuppression,
-        confirmerSuppression
-      );
-      confirmerSuppression.focus();
-    });
-
-    actions.append(modifier, supprimer);
-    return actions;
   }
 
   async function chargerMessagesPlusAnciensDm() {
@@ -1101,7 +975,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     messageForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       const content = messageInput.value.trim();
-      if (!content || !state.activeConversationId) {
+      if (
+        !content ||
+        !state.activeConversationId ||
+        etatReseau.statut !== 'connecte'
+      ) {
         return;
       }
 
@@ -1132,6 +1010,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
 
     messageInput.addEventListener('input', async (event) => {
+      if (etatReseau.statut !== 'connecte') return;
       const aDuTexte = event.target.value.trim().length > 0;
       const auteurId = state.currentUserId;
       const conversationId = state.activeConversationId;
@@ -1154,6 +1033,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         // Coupe l'état de saisie après 10 secondes sans frappe
         timersArretSaisieDm[auteurId] = setTimeout(async () => {
           delete timersArretSaisieDm[auteurId];
+          if (etatReseau.statut !== 'connecte') return;
           await window.electronAPI.modifierEtatSaisie({
             conversationId,
             utilisateurId: auteurId,
@@ -1324,46 +1204,18 @@ window.addEventListener('DOMContentLoaded', async () => {
     );
   }
 
-  if (simulateNetworkCut) {
-    simulateNetworkCut.addEventListener('click', async () => {
-      try {
-        await window.electronAPI.simulerCoupureReseau(
-          currentUserSelect?.value ?? null
-        );
-      } catch (erreur) {
-        notifier(messageErreur(erreur), true);
-      }
-    });
-  }
-
-  if (simulateNetworkReconnect) {
-    simulateNetworkReconnect.addEventListener('click', async () => {
-      try {
-        await window.electronAPI.simulerReconnexionReseau(
-          900,
-          currentUserSelect?.value ?? null
-        );
-      } catch (erreur) {
-        notifier(messageErreur(erreur), true);
-      }
-    });
-  }
-
-  if (currentUserPresence) {
-    currentUserPresence.addEventListener('click', async () => {
-      if (etatReseau.statut !== 'connecte') return;
-      const actuelle = presences[state.currentUserId] ?? 'hors-ligne';
-      const prochaine = actuelle === 'en-ligne' ? 'hors-ligne' : 'en-ligne';
-      try {
-        await window.electronAPI.modifierPresence(
-          state.currentUserId,
-          prochaine
-        );
-      } catch (erreur) {
-        notifier(messageErreur(erreur), true);
-      }
-    });
-  }
+  ChatUiShared.brancherControlesReseauPresence({
+    api: window.electronAPI,
+    elements: {
+      couperReseau: simulateNetworkCut,
+      reconnecterReseau: simulateNetworkReconnect,
+      presenceCourante: currentUserPresence,
+    },
+    getEtatReseau: () => etatReseau,
+    getUtilisateurId: () => state.currentUserId,
+    getPresences: () => presences,
+    notifierErreur: (erreur) => notifier(messageErreur(erreur), true),
+  });
 
   window.electronAPI.onEtatReseauChange((nouvelEtat) => {
     afficherEtatReseau(nouvelEtat);
@@ -1376,11 +1228,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   });
 
   window.electronAPI.onMessageModifieChange(async () => {
-    await refreshConversations();
+    await refreshConversations({ conserverPositionScroll: true });
   });
 
   window.electronAPI.onMessageSupprimeChange(async () => {
-    await refreshConversations();
+    await refreshConversations({ conserverPositionScroll: true });
   });
 
   await initialiserUtilisateurCourant();

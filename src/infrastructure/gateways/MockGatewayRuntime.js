@@ -861,9 +861,9 @@ class MockGatewayRuntime {
   modifierMessage({ messageId, utilisateurId, contenu }) {
     this.verifierReseauConnecte();
     this.verifierUtilisateur(utilisateurId);
-    const texte =
-      typeof contenu === 'string' ? contenu.trim().slice(0, 2000) : '';
+    const texte = typeof contenu === 'string' ? contenu.trim() : '';
     if (!texte) throw new Error('ERR_MESSAGE_VIDE');
+    if (texte.length > 2000) throw new Error('ERR_MESSAGE_TROP_LONG');
 
     for (const salon of this.salons) {
       const index = salon.messages.findIndex(
@@ -969,6 +969,7 @@ class MockGatewayRuntime {
   }
 
   modifierEtatSaisie({ conversationId, utilisateurId, est_saisie }) {
+    this.verifierReseauConnecte();
     this.verifierUtilisateur(utilisateurId);
 
     // 1. Chercher si la cible est un DM ou un Salon

@@ -208,4 +208,36 @@ describe('MockGatewayRuntime - réseau et présence', () => {
       gateway.supprimerMessage({ messageId: message.id, utilisateurId: 'u1' })
     ).not.toThrow();
   });
+
+  it('bloque l’état de saisie hors connexion', () => {
+    const gateway = new MockGatewayRuntime();
+    gateway.connexion({ id: 'u1', pseudo: 'sam' });
+    gateway.simulerCoupure('u1');
+
+    expect(() =>
+      gateway.modifierEtatSaisie({
+        conversationId: 's1',
+        utilisateurId: 'u1',
+        est_saisie: true,
+      })
+    ).toThrow('ERR_RESEAU_NON_CONNECTE');
+  });
+
+  it('refuse une modification de message de plus de 2000 caractères', () => {
+    const gateway = new MockGatewayRuntime();
+    gateway.connexion({ id: 'u1', pseudo: 'sam' });
+    const message = gateway.envoyerMessage({
+      salonId: 's1',
+      utilisateurId: 'u1',
+      contenu: 'Avant',
+    });
+
+    expect(() =>
+      gateway.modifierMessage({
+        messageId: message.id,
+        utilisateurId: 'u1',
+        contenu: 'x'.repeat(2001),
+      })
+    ).toThrow('ERR_MESSAGE_TROP_LONG');
+  });
 });
