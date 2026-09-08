@@ -559,6 +559,7 @@ function creerActionsMessage(message, texteEl) {
     notifier,
     messageErreur,
     champMessage: el.message,
+    getEtatReseau: () => etatReseau,
   });
 }
 

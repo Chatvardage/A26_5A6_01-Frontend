@@ -30,6 +30,11 @@
     if (couperReseau) couperReseau.disabled = bloque;
     if (reconnecterReseau)
       reconnecterReseau.disabled = etat.statut !== 'deconnecte';
+    document
+      .querySelectorAll('[data-requires-network="true"]')
+      .forEach((element) => {
+        element.disabled = bloque;
+      });
   }
 
   function afficherPresenceCourante({ element, utilisateurId, presences, t }) {
@@ -116,21 +121,30 @@
     notifier,
     messageErreur,
     champMessage,
+    getEtatReseau,
   }) {
     const actions = document.createElement('div');
     actions.classList.add('message-actions');
+
+    const reseauConnecte = () => getEtatReseau?.()?.statut === 'connecte';
 
     const modifier = document.createElement('button');
     modifier.type = 'button';
     modifier.classList.add('message-action');
     modifier.textContent = t('messages.edit');
     modifier.title = t('messages.edit');
+    modifier.dataset.requiresNetwork = 'true';
 
     const supprimer = document.createElement('button');
     supprimer.type = 'button';
     supprimer.classList.add('message-action');
     supprimer.textContent = t('messages.delete');
     supprimer.title = t('messages.delete');
+    supprimer.dataset.requiresNetwork = 'true';
+
+    const actionsBloquees = !reseauConnecte();
+    modifier.disabled = actionsBloquees;
+    supprimer.disabled = actionsBloquees;
 
     const afficherEdition = (brouillon) => {
       const contenuInitial = message.contenu;
@@ -147,7 +161,8 @@
       enregistrer.type = 'button';
       enregistrer.classList.add('message-edit-save');
       enregistrer.textContent = '✓';
-      enregistrer.title = t('messages.updated');
+      enregistrer.title = t('messages.edit');
+      enregistrer.dataset.requiresNetwork = 'true';
 
       const annuler = document.createElement('button');
       annuler.type = 'button';
@@ -169,6 +184,7 @@
       });
 
       const sauvegarder = async () => {
+        if (!reseauConnecte()) return;
         const nouveauContenu = champ.value.trim();
         if (!nouveauContenu || nouveauContenu === contenuInitial) {
           restaurerEdition();
@@ -185,6 +201,7 @@
             utilisateurId: utilisateurId(),
             contenu: nouveauContenu,
           });
+          notifier(t('messages.updated'));
         } catch (erreur) {
           definirEtatAction(message.id, etatAvantEnvoi);
           notifier(messageErreur(erreur), true);
@@ -232,6 +249,7 @@
       confirmerSuppression.type = 'button';
       confirmerSuppression.classList.add('message-action', 'danger');
       confirmerSuppression.textContent = t('messages.delete');
+      confirmerSuppression.dataset.requiresNetwork = 'true';
 
       annulerSuppression.addEventListener('click', () => {
         restaurerActions();
@@ -239,6 +257,7 @@
       });
 
       confirmerSuppression.addEventListener('click', async () => {
+        if (!reseauConnecte()) return;
         annulerSuppression.disabled = true;
         confirmerSuppression.disabled = true;
         definirEtatAction(message.id, { mode: 'normal' });
@@ -271,6 +290,7 @@
     };
 
     modifier.addEventListener('click', () => {
+      if (!reseauConnecte()) return;
       definirEtatAction(message.id, {
         mode: 'edition',
         brouillon: message.contenu,
@@ -281,6 +301,7 @@
     });
 
     supprimer.addEventListener('click', () => {
+      if (!reseauConnecte()) return;
       definirEtatAction(message.id, { mode: 'suppression' });
       afficherConfirmationSuppression().focus();
     });
@@ -288,11 +309,11 @@
     actions.append(modifier, supprimer);
 
     const etat = lireEtatAction(message.id);
-    if (etat.mode === 'edition') {
+    if (etat.mode === 'edition' && reseauConnecte()) {
       requestAnimationFrame(() => {
         afficherEdition(etat.brouillon);
       });
-    } else if (etat.mode === 'suppression') {
+    } else if (etat.mode === 'suppression' && reseauConnecte()) {
       requestAnimationFrame(() => {
         afficherConfirmationSuppression();
       });

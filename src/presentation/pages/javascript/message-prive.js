@@ -811,6 +811,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       notifier,
       messageErreur,
       champMessage: messageInput,
+      getEtatReseau: () => etatReseau,
     });
   }
 
