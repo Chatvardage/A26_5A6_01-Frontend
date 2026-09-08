@@ -181,8 +181,21 @@ let etatHistoriqueSalon = {
 // ou "supprimer" (voir creerActionsMessageNonLivre dans chat-ui-shared.js).
 // Volontairement PAS persisté (StockageLocal) : contrairement à l'historique
 // des salons, un brouillon jamais envoyé n'a pas vocation à survivre à un
-// redémarrage de l'app.
+// redémarrage de l'app. Ceci dit, la Map elle-même n'est jamais purgée pour
+// un salon que l'utilisateur quitte ou ne revisite plus : c'est accepté tel
+// quel (portée d'une session en mémoire, jamais persisté), pas un oubli.
 const messagesEnAttenteSalon = new Map();
+
+// Ids des messages actuellement en cours de renvoi (voir
+// reessayerMessageEnAttenteSalon ci-dessous) : sans cette garde, deux clics
+// rapprochés sur "Réessayer" pour le même message pourraient déclencher deux
+// appels envoyerMessageSalon() pour le même contenu, créant deux messages
+// bien réels côté serveur pour une seule action utilisateur. Elle sert aussi
+// à empêcher "Supprimer" d'agir tant qu'un envoi est déjà parti pour ce
+// message (voir supprimerMessageEnAttenteSalon) : sans ça, l'utilisateur
+// pourrait croire avoir annulé un message alors que la requête réseau déjà
+// en vol va quand même aboutir.
+const messagesEnAttenteEnCoursSalon = new Set();
 
 function ajouterMessageEnAttenteSalon(salonId, message) {
   const liste = messagesEnAttenteSalon.get(salonId) ?? [];
@@ -190,8 +203,15 @@ function ajouterMessageEnAttenteSalon(salonId, message) {
   messagesEnAttenteSalon.set(salonId, liste);
 }
 
+// Ne renvoie que les messages en attente de l'utilisateur COURANT
+// (utilisateurActuelId) : la Map est indexée par salon, pas par utilisateur,
+// donc sans ce filtre, changer d'utilisateur simulé (voir le listener sur
+// el.utilisateur plus bas) ferait apparaître les brouillons non livrés d'un
+// autre utilisateur dans ce même salon — et "Réessayer" les enverrait alors
+// avec l'auteurId de cet ancien utilisateur.
 function obtenirMessagesEnAttenteSalon(salonId) {
-  return messagesEnAttenteSalon.get(salonId) ?? [];
+  const liste = messagesEnAttenteSalon.get(salonId) ?? [];
+  return liste.filter((message) => message.auteurId === utilisateurActuelId);
 }
 
 function retirerMessageEnAttenteSalon(salonId, messageId) {
@@ -212,10 +232,19 @@ function retirerMessageEnAttenteSalon(salonId, messageId) {
  * empêcher de réessayer, seule une vraie coupure réseau le doit.
  */
 async function reessayerMessageEnAttenteSalon(message) {
+  // Garde anti-double-envoi (voir messagesEnAttenteEnCoursSalon) : un second
+  // clic (ou un second appel) pendant qu'une tentative est déjà en cours
+  // pour CE message ne doit rien déclencher de plus.
+  if (messagesEnAttenteEnCoursSalon.has(message.id)) return;
   if (etatReseau.statut !== 'connecte') {
     notifier(t('messages.stillOffline'), true);
     return;
   }
+  messagesEnAttenteEnCoursSalon.add(message.id);
+  // Réaffiche tout de suite (avant l'await) pour désactiver visuellement les
+  // boutons réessayer/supprimer de ce message pendant que la requête est en
+  // vol — voir messagesEnAttenteEnCoursSalon.
+  afficherMessages({ conserverPositionScroll: true });
   try {
     await window.electronAPI.envoyerMessageSalon({
       salonId: message.conversationId,
@@ -223,13 +252,22 @@ async function reessayerMessageEnAttenteSalon(message) {
       contenu: message.contenu,
     });
     retirerMessageEnAttenteSalon(message.conversationId, message.id);
+    messagesEnAttenteEnCoursSalon.delete(message.id);
     await actualiser();
   } catch (erreur) {
+    messagesEnAttenteEnCoursSalon.delete(message.id);
     notifier(messageErreur(erreur), true);
+    afficherMessages({ conserverPositionScroll: true });
   }
 }
 
 function supprimerMessageEnAttenteSalon(message) {
+  // Refuse de supprimer un message dont l'envoi est actuellement en cours
+  // (voir messagesEnAttenteEnCoursSalon et reessayerMessageEnAttenteSalon) :
+  // la requête déjà partie aboutira de toute façon, donc "supprimer" ici ne
+  // ferait qu'induire l'utilisateur en erreur sur ce qui a réellement été
+  // envoyé.
+  if (messagesEnAttenteEnCoursSalon.has(message.id)) return;
   retirerMessageEnAttenteSalon(message.conversationId, message.id);
   afficherMessages({ conserverPositionScroll: true });
 }
@@ -238,6 +276,7 @@ function creerActionsMessageNonLivre(message) {
   return ChatUiShared.creerActionsMessageNonLivre({
     message,
     t,
+    enCours: messagesEnAttenteEnCoursSalon.has(message.id),
     onReessayer: reessayerMessageEnAttenteSalon,
     onSupprimer: supprimerMessageEnAttenteSalon,
   });
@@ -721,8 +760,13 @@ function afficherMessages(options = {}) {
   // Page récente (salon.messages) + historique manuellement remonté (voir
   // chargerMessagesPlusAnciensSalon) : voir fusionnerHistorique plus haut.
   // Les messages non livrés du salon (voir messagesEnAttenteSalon) sont
-  // ajoutés à la suite : ils sont toujours plus récents que le reste, donc
-  // pas besoin de les faire entrer dans le tri par date ci-dessus.
+  // fusionnés puis triés avec le reste par `date` plutôt que simplement
+  // ajoutés à la suite : ils ne sont PAS garantis d'être les plus récents —
+  // actualiser() peut faire apparaître un message réel plus récent pendant
+  // qu'un brouillon plus ancien est toujours en attente (ou en cours de
+  // renvoi), et deux messages en attente peuvent être retentés dans le
+  // désordre. Un simple append donnerait alors un ordre chronologiquement
+  // faux.
   const tousLesMessages = [
     ...fusionnerHistorique(
       etatHistoriqueSalon.messagesAnciens,
@@ -730,7 +774,7 @@ function afficherMessages(options = {}) {
       'date'
     ),
     ...obtenirMessagesEnAttenteSalon(salon.id),
-  ];
+  ].sort((a, b) => a.date - b.date);
 
   // Mémorise la position de défilement AVANT de reconstruire la liste : sans
   // ça, remplacer le contenu de #message-list (replaceChildren) réinitialise

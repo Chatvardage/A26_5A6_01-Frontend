@@ -1069,7 +1069,15 @@ dialog::backdrop {
   color: var(--offline, #ef4444);
 }
 
-.message-non-livre-actions {
+/* Scopée à .message-row.non-livre .message-actions (spécificité (0,3,0))
+   plutôt qu'à .message-non-livre-actions seul (0,1,0) : cette dernière ne
+   l'emportait sur la règle opacity:0 de .message-actions ci-dessus que
+   parce qu'elle est déclarée plus bas dans ce fichier — un futur
+   réarrangement (ou l'ajout d'une règle .message-actions plus spécifique)
+   aurait pu masquer à nouveau réessayer/supprimer par erreur. Cette forme
+   gagne quel que soit l'ordre des règles, et documente explicitement
+   qu'elle vise les actions d'un message non livré. */
+.message-row.non-livre .message-actions {
   opacity: 1;
 }
 

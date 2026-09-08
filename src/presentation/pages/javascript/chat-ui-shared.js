@@ -385,6 +385,12 @@
    *
    * @param message Le message en attente (voir creerMessageEnAttente).
    * @param t Fonction de traduction (voir I18n.t).
+   * @param enCours Vrai si une tentative d'envoi est déjà en cours pour CE
+   *   message (voir reessayerMessageEnAttenteSalon/Dm côté appelant) :
+   *   désactive les deux boutons pour la durée de la requête, pour qu'un
+   *   double clic sur "Réessayer" ne puisse pas déclencher un second envoi,
+   *   et qu'un clic sur "Supprimer" ne puisse pas faire croire à une
+   *   annulation d'un envoi déjà parti vers le serveur.
    * @param onReessayer Appelée avec le message quand l'utilisateur clique sur "Réessayer".
    * @param onSupprimer Appelée avec le message quand l'utilisateur clique sur "Supprimer".
    *
@@ -393,6 +399,7 @@
   function creerActionsMessageNonLivre({
     message,
     t,
+    enCours = false,
     onReessayer,
     onSupprimer,
   }) {
@@ -411,6 +418,7 @@
     reessayer.classList.add('message-action');
     reessayer.textContent = t('messages.retry');
     reessayer.title = t('messages.retry');
+    reessayer.disabled = enCours;
     reessayer.addEventListener('click', () => onReessayer?.(message));
 
     const supprimer = document.createElement('button');
@@ -418,6 +426,7 @@
     supprimer.classList.add('message-action', 'danger');
     supprimer.textContent = t('messages.delete');
     supprimer.title = t('messages.delete');
+    supprimer.disabled = enCours;
     supprimer.addEventListener('click', () => onSupprimer?.(message));
 
     actions.append(reessayer, supprimer);
