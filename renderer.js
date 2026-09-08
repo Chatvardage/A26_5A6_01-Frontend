@@ -108,6 +108,7 @@ const el = {
   couperReseau: document.querySelector('#simulate-network-cut'),
   reconnecterReseau: document.querySelector('#simulate-network-reconnect'),
   presenceCourante: document.querySelector('#current-user-presence'),
+  avatarCourant: document.querySelector('#user-panel .avatar'),
   envoyer: document.querySelector('#message-form button[type="submit"]'),
 };
 
@@ -134,6 +135,7 @@ function afficherEtatReseau(nouvelEtat = etatReseau) {
 function afficherPresenceCourante() {
   ChatUiShared.afficherPresenceCourante({
     element: el.presenceCourante,
+    avatar: el.avatarCourant,
     utilisateurId: utilisateurActuelId,
     presences,
     t,

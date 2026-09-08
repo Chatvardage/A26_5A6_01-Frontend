@@ -266,6 +266,24 @@ button {
   border-radius: 50%;
   background: var(--bg-bubble);
   flex: 0 0 auto;
+  position: relative;
+}
+
+/* Présence de l'utilisateur courant : vert = en ligne, rouge = hors ligne. */
+#user-panel .avatar::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--online);
+  border: 2px solid var(--bg-panel);
+}
+
+#user-panel .avatar.offline::after {
+  background: var(--offline);
 }
 
 #user-panel .pseudo {

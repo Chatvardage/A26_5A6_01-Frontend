@@ -24,9 +24,15 @@
     }
 
     const bloque = etat.statut !== 'connecte';
-    const composerBloque = bloque || !composerAutorise;
-    if (messageInput) messageInput.disabled = composerBloque;
-    if (submitButton) submitButton.disabled = composerBloque;
+    const conversationIndisponible = !composerAutorise;
+
+    // Hors ligne, on laisse le champ de message actif pour permettre à
+    // l'utilisateur de préparer un brouillon. Seul l'envoi est bloqué tant
+    // que le réseau n'est pas reconnecté. Le champ reste toutefois désactivé
+    // lorsqu'aucune conversation valide n'est sélectionnée.
+    if (messageInput) messageInput.disabled = conversationIndisponible;
+    if (submitButton)
+      submitButton.disabled = bloque || conversationIndisponible;
     if (presenceCourante) presenceCourante.disabled = bloque;
     if (couperReseau) couperReseau.disabled = bloque;
     if (reconnecterReseau)
@@ -38,12 +44,28 @@
       });
   }
 
-  function afficherPresenceCourante({ element, utilisateurId, presences, t }) {
-    if (!element || !utilisateurId) return;
+  function afficherPresenceCourante({
+    element,
+    avatar,
+    utilisateurId,
+    presences,
+    t,
+  }) {
+    if (!utilisateurId) return;
     const statut = presences[utilisateurId] ?? 'hors-ligne';
-    element.dataset.presence = statut;
-    element.textContent =
-      statut === 'en-ligne' ? t('network.online') : t('network.offline');
+    const estEnLigne = statut === 'en-ligne';
+
+    if (element) {
+      element.dataset.presence = statut;
+      element.textContent = estEnLigne
+        ? t('network.online')
+        : t('network.offline');
+    }
+
+    // Le rond de présence sur l'avatar de l'utilisateur courant doit toujours
+    // refléter le même statut que le libellé « En ligne / Hors ligne ».
+    avatar?.classList.toggle('offline', !estEnLigne);
+    if (avatar) avatar.dataset.presence = statut;
   }
 
   async function chargerEtatReseauEtPresences({ api, onEtat, onPresences }) {

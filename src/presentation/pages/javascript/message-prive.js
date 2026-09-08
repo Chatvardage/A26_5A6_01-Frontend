@@ -111,6 +111,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     'simulate-network-reconnect'
   );
   const currentUserPresence = document.getElementById('current-user-presence');
+  const currentUserAvatar = document.querySelector('#user-panel .avatar');
 
   let etatReseau = { statut: 'deconnecte' };
   let presences = {};
@@ -141,6 +142,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   function afficherPresenceCourante() {
     ChatUiShared.afficherPresenceCourante({
       element: currentUserPresence,
+      avatar: currentUserAvatar,
       utilisateurId: state.currentUserId,
       presences,
       t,
@@ -610,6 +612,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
       definirConversationActivePourNotifs(null);
       reinitialiserHistoriqueDm();
+      afficherEtatReseau();
       return;
     }
 
@@ -629,8 +632,14 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
       definirConversationActivePourNotifs(null);
       reinitialiserHistoriqueDm();
+      afficherEtatReseau();
       return;
     }
+
+    // La conversation est maintenant valide et active : on recalcule tout de
+    // suite l'état du composer. Sans ceci, le champ pouvait rester désactivé
+    // après avoir été rendu alors qu'aucun DM n'était sélectionné.
+    afficherEtatReseau();
 
     // Changement de conversation active : on repart d'un historique manuel
     // vide (voir chargerMessagesPlusAnciensDm et reinitialiserHistoriqueDm).
