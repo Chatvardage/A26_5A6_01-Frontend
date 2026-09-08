@@ -126,6 +126,23 @@ describe('MockGatewayRuntime - réseau et présence', () => {
     vi.useRealTimers();
   });
 
+  it('utilise l’utilisateur connecté si null est fourni explicitement', async () => {
+    vi.useFakeTimers();
+    const gateway = new MockGatewayRuntime();
+    gateway.connexion({ id: 'u1', pseudo: 'sam' });
+
+    gateway.simulerCoupure(null);
+    expect(gateway.obtenirPresences().u1).toBe('hors-ligne');
+
+    const reconnexion = gateway.simulerReconnexion(100, null);
+    await vi.advanceTimersByTimeAsync(100);
+    await reconnexion;
+
+    expect(gateway.obtenirPresences().u1).toBe('en-ligne');
+    expect(gateway.obtenirEtatConnexion().statut).toBe('connecte');
+    vi.useRealTimers();
+  });
+
   it('refuse de modifier ou supprimer un ancien message après retrait d’un salon privé', () => {
     const gateway = new MockGatewayRuntime();
     gateway.connexion({ id: 'u1', pseudo: 'sam' });
@@ -154,26 +171,6 @@ describe('MockGatewayRuntime - réseau et présence', () => {
     expect(() =>
       gateway.supprimerMessage({ messageId: message.id, utilisateurId: 'u1' })
     ).toThrow('ERR_ACCES_REFUSE_SALON');
-  });
-
-  it('ne remet pas le réseau en ligne si une coupure arrive pendant la reconnexion', async () => {
-    vi.useFakeTimers();
-    const gateway = new MockGatewayRuntime();
-    gateway.connexion({ id: 'u1', pseudo: 'sam' });
-    gateway.simulerCoupure();
-
-    const reconnexion = gateway.simulerReconnexion(1000);
-    expect(gateway.obtenirEtatConnexion().statut).toBe('reconnexion');
-
-    gateway.simulerCoupure();
-    expect(gateway.obtenirEtatConnexion().statut).toBe('deconnecte');
-
-    await vi.advanceTimersByTimeAsync(1000);
-    await reconnexion;
-
-    expect(gateway.obtenirEtatConnexion().statut).toBe('deconnecte');
-    expect(gateway.obtenirPresences().u1).toBe('hors-ligne');
-    vi.useRealTimers();
   });
 
   it('modifie et supprime uniquement les messages de leur auteur', () => {

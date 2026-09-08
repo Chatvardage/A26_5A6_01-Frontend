@@ -851,7 +851,6 @@ window.addEventListener('DOMContentLoaded', async () => {
             utilisateurId: state.currentUserId,
             contenu: nouveauContenu,
           });
-          await refreshConversations();
         } catch (erreur) {
           notifier(messageErreur(erreur), true);
           enregistrer.disabled = false;
@@ -916,7 +915,6 @@ window.addEventListener('DOMContentLoaded', async () => {
             utilisateurId: state.currentUserId,
           });
           notifier(t('messages.deleted'));
-          await refreshConversations();
           requestAnimationFrame(() => {
             if (!messageInput.disabled) {
               messageInput.focus({ preventScroll: true });

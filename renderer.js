@@ -589,7 +589,6 @@ function creerActionsMessage(message, texteEl) {
           utilisateurId: utilisateurActuelId,
           contenu: nouveauContenu,
         });
-        await actualiser();
       } catch (erreur) {
         notifier(messageErreur(erreur), true);
         enregistrer.disabled = false;
@@ -655,7 +654,6 @@ function creerActionsMessage(message, texteEl) {
           utilisateurId: utilisateurActuelId,
         });
         notifier(t('messages.deleted'));
-        await actualiser();
         requestAnimationFrame(() => {
           if (!el.message.disabled) {
             el.message.focus({ preventScroll: true });

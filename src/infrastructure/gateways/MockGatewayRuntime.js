@@ -420,6 +420,7 @@ class MockGatewayRuntime {
 
   /** Simule une coupure réseau sans détruire l'utilisateur de la session. */
   simulerCoupure(utilisateurId = this.utilisateurConnecteId) {
+    utilisateurId = utilisateurId ?? this.utilisateurConnecteId;
     // Invalide toute reconnexion encore en attente : son timer pourra finir,
     // mais il ne devra plus remettre le réseau en ligne.
     this.reconnexionJeton += 1;
@@ -440,6 +441,7 @@ class MockGatewayRuntime {
     delaiMs = 900,
     utilisateurId = this.utilisateurConnecteId
   ) {
+    utilisateurId = utilisateurId ?? this.utilisateurConnecteId;
     if (!this.utilisateurConnecteId) {
       throw new Error('ERR_AUCUN_UTILISATEUR_CONNECTE');
     }
@@ -897,7 +899,7 @@ class MockGatewayRuntime {
         throw new Error('ERR_MESSAGE_NON_AUTORISE');
       const modifie = { ...message, contenu: texte, modification: Date.now() };
       this.messagesPrives[indexPrive] = modifie;
-      this.emettre('message-modifie', { ...modifie });
+      this.emettre('message-modifie', structuredClone(modifie));
       return { ...modifie };
     }
 
