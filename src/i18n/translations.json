@@ -128,7 +128,9 @@
       "ERR_CONVERSATION_OU_SALON_INTROUVABLE": "Conversation ou salon introuvable.",
       "ERR_RESEAU_NON_CONNECTE": "Le réseau n’est pas connecté. Reconnectez-vous avant de continuer.",
       "ERR_MESSAGE_INTROUVABLE": "Message introuvable.",
-      "ERR_MESSAGE_NON_AUTORISE": "Vous pouvez seulement modifier ou supprimer vos propres messages."
+      "ERR_MESSAGE_NON_AUTORISE": "Vous pouvez seulement modifier ou supprimer vos propres messages.",
+      "ERR_PRESENCE_INVALIDE": "Statut de présence invalide.",
+      "ERR_AUCUN_UTILISATEUR_CONNECTE": "Aucun utilisateur connecté."
     },
     "network": {
       "connected": "Connecté",
@@ -137,7 +139,8 @@
       "online": "En ligne",
       "offline": "Hors ligne",
       "cut": "Coupure",
-      "reconnect": "Reconnexion"
+      "reconnect": "Reconnexion",
+      "changePresence": "Changer la présence"
     },
     "messages": {
       "edit": "Modifier",
@@ -278,7 +281,9 @@
       "ERR_CONVERSATION_OU_SALON_INTROUVABLE": "Conversation or channel not found.",
       "ERR_RESEAU_NON_CONNECTE": "The network is not connected. Reconnect before continuing.",
       "ERR_MESSAGE_INTROUVABLE": "Message not found.",
-      "ERR_MESSAGE_NON_AUTORISE": "You can only edit or delete your own messages."
+      "ERR_MESSAGE_NON_AUTORISE": "You can only edit or delete your own messages.",
+      "ERR_PRESENCE_INVALIDE": "Invalid presence status.",
+      "ERR_AUCUN_UTILISATEUR_CONNECTE": "No user is currently signed in."
     },
     "network": {
       "connected": "Connected",
@@ -287,7 +292,8 @@
       "online": "Online",
       "offline": "Offline",
       "cut": "Disconnect",
-      "reconnect": "Reconnect"
+      "reconnect": "Reconnect",
+      "changePresence": "Change presence"
     },
     "messages": {
       "edit": "Edit",

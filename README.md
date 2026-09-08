@@ -165,6 +165,8 @@ Autres mesures :
 
 ## 9. Limites connues et pistes d'amélioration
 
+- Le mock local fait confiance à `utilisateurId` fourni par le renderer dans les appels IPC. Il n'existe pas encore de session serveur cryptographiquement liée à l'utilisateur; cela concerne aussi les actions de modification/suppression de messages.
+
 - Le backend est simulé localement; il n'y a pas encore de vraie authentification distante.
 - Les identités et autorisations sont adaptées à une maquette locale et devront être validées côté serveur dans la prochaine itération.
 - Les événements temps réel utilisent le mock local; ils devront être remplacés par WebSocket/HTTP.

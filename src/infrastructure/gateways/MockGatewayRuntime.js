@@ -885,7 +885,7 @@ class MockGatewayRuntime {
           modification: Date.now(),
         };
         salon.messages[index] = modifie;
-        this.emettre('message-modifie', structuredClone(modifie));
+        this.emettre('message-modifie', modifie);
         return structuredClone(modifie);
       }
     }
@@ -905,7 +905,7 @@ class MockGatewayRuntime {
         throw new Error('ERR_MESSAGE_NON_AUTORISE');
       const modifie = { ...message, contenu: texte, modification: Date.now() };
       this.messagesPrives[indexPrive] = modifie;
-      this.emettre('message-modifie', structuredClone(modifie));
+      this.emettre('message-modifie', modifie);
       return { ...modifie };
     }
 

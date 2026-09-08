@@ -830,7 +830,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       annuler.type = 'button';
       annuler.classList.add('message-edit-cancel');
       annuler.textContent = '✕';
-      annuler.title = 'Annuler';
+      annuler.title = t('messages.cancel');
 
       const restaurer = () => {
         editeur.replaceWith(texteEl);

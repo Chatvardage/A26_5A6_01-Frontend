@@ -567,7 +567,7 @@ function creerActionsMessage(message, texteEl) {
     const annuler = creerEl('button', {
       classe: 'message-edit-cancel',
       texte: '✕',
-      attrs: { type: 'button', title: 'Annuler' },
+      attrs: { type: 'button', title: t('messages.cancel') },
     });
 
     const restaurer = () => {
