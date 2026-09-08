@@ -196,11 +196,11 @@ describe('MockGatewayRuntime - réseau et présence', () => {
         utilisateurId: 'u1',
         contenu: 'Tentative après retrait',
       })
-    ).toThrow('ERR_ACCES_REFUSE_SALON');
+    ).toThrow('ERR_MESSAGE_INTROUVABLE');
 
     expect(() =>
       gateway.supprimerMessage({ messageId: message.id, utilisateurId: 'u1' })
-    ).toThrow('ERR_ACCES_REFUSE_SALON');
+    ).toThrow('ERR_MESSAGE_INTROUVABLE');
   });
 
   it('modifie et supprime uniquement les messages de leur auteur', () => {

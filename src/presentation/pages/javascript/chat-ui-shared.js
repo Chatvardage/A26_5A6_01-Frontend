@@ -311,13 +311,9 @@
 
     const etat = lireEtatAction(message.id);
     if (etat.mode === 'edition' && reseauConnecte()) {
-      requestAnimationFrame(() => {
-        afficherEdition(etat.brouillon);
-      });
+      afficherEdition(etat.brouillon);
     } else if (etat.mode === 'suppression' && reseauConnecte()) {
-      requestAnimationFrame(() => {
-        afficherConfirmationSuppression();
-      });
+      afficherConfirmationSuppression();
     }
 
     return actions;

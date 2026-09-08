@@ -868,16 +868,15 @@ class MockGatewayRuntime {
     if (texte.length > 2000) throw new Error('ERR_MESSAGE_TROP_LONG');
 
     for (const salon of this.salons) {
+      const salonAccessible =
+        salon.visibilite === 'public' ||
+        salon.membreIds.includes(utilisateurId);
+      if (!salonAccessible) continue;
+
       const index = salon.messages.findIndex(
         (message) => message.id === messageId
       );
       if (index !== -1) {
-        if (
-          salon.visibilite !== 'public' &&
-          !salon.membreIds.includes(utilisateurId)
-        ) {
-          throw new Error('ERR_ACCES_REFUSE_SALON');
-        }
         const message = salon.messages[index];
         if (message.auteurId !== utilisateurId)
           throw new Error('ERR_MESSAGE_NON_AUTORISE');
@@ -892,17 +891,15 @@ class MockGatewayRuntime {
       }
     }
 
-    const indexPrive = this.messagesPrives.findIndex(
-      (message) => message.id === messageId
-    );
-    if (indexPrive !== -1) {
-      const message = this.messagesPrives[indexPrive];
+    const indexPrive = this.messagesPrives.findIndex((message) => {
+      if (message.id !== messageId) return false;
       const conversation = this.conversationsPrivees.find(
         (item) => item.id === message.conversationId
       );
-      if (!conversation?.participantIds.includes(utilisateurId)) {
-        throw new Error('ERR_ACCES_REFUSE_CONVERSATION');
-      }
+      return conversation?.participantIds.includes(utilisateurId);
+    });
+    if (indexPrive !== -1) {
+      const message = this.messagesPrives[indexPrive];
       if (message.auteurId !== utilisateurId)
         throw new Error('ERR_MESSAGE_NON_AUTORISE');
       const modifie = { ...message, contenu: texte, modification: Date.now() };
@@ -919,16 +916,15 @@ class MockGatewayRuntime {
     this.verifierUtilisateur(utilisateurId);
 
     for (const salon of this.salons) {
+      const salonAccessible =
+        salon.visibilite === 'public' ||
+        salon.membreIds.includes(utilisateurId);
+      if (!salonAccessible) continue;
+
       const index = salon.messages.findIndex(
         (message) => message.id === messageId
       );
       if (index !== -1) {
-        if (
-          salon.visibilite !== 'public' &&
-          !salon.membreIds.includes(utilisateurId)
-        ) {
-          throw new Error('ERR_ACCES_REFUSE_SALON');
-        }
         if (salon.messages[index].auteurId !== utilisateurId) {
           throw new Error('ERR_MESSAGE_NON_AUTORISE');
         }
@@ -938,17 +934,15 @@ class MockGatewayRuntime {
       }
     }
 
-    const indexPrive = this.messagesPrives.findIndex(
-      (message) => message.id === messageId
-    );
-    if (indexPrive !== -1) {
-      const message = this.messagesPrives[indexPrive];
+    const indexPrive = this.messagesPrives.findIndex((message) => {
+      if (message.id !== messageId) return false;
       const conversation = this.conversationsPrivees.find(
         (item) => item.id === message.conversationId
       );
-      if (!conversation?.participantIds.includes(utilisateurId)) {
-        throw new Error('ERR_ACCES_REFUSE_CONVERSATION');
-      }
+      return conversation?.participantIds.includes(utilisateurId);
+    });
+    if (indexPrive !== -1) {
+      const message = this.messagesPrives[indexPrive];
       if (message.auteurId !== utilisateurId) {
         throw new Error('ERR_MESSAGE_NON_AUTORISE');
       }
