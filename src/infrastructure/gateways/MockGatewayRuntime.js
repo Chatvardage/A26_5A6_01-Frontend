@@ -416,10 +416,10 @@ class MockGatewayRuntime {
   }
 
   /** Simule une coupure réseau sans détruire l'utilisateur de la session. */
-  simulerCoupure() {
-    if (this.utilisateurConnecteId) {
+  simulerCoupure(utilisateurId = this.utilisateurConnecteId) {
+    if (utilisateurId) {
       this.definirPresenceInterne({
-        utilisateurId: this.utilisateurConnecteId,
+        utilisateurId,
         statut: 'hors-ligne',
       });
     }
@@ -430,7 +430,10 @@ class MockGatewayRuntime {
    * Simule la transition déconnecté -> reconnexion -> connecté. L'état
    * intermédiaire est poussé immédiatement à l'UI avant le délai simulé.
    */
-  async simulerReconnexion(delaiMs = 900) {
+  async simulerReconnexion(
+    delaiMs = 900,
+    utilisateurId = this.utilisateurConnecteId
+  ) {
     if (!this.utilisateurConnecteId) {
       throw new Error('ERR_AUCUN_UTILISATEUR_CONNECTE');
     }
@@ -445,10 +448,12 @@ class MockGatewayRuntime {
     this.reconnexions += 1;
     this.definirEtatConnexion('reconnexion');
     await new Promise((resolve) => setTimeout(resolve, Math.max(0, delaiMs)));
-    this.definirPresenceInterne({
-      utilisateurId: this.utilisateurConnecteId,
-      statut: 'en-ligne',
-    });
+    if (utilisateurId) {
+      this.definirPresenceInterne({
+        utilisateurId,
+        statut: 'en-ligne',
+      });
+    }
     return this.definirEtatConnexion('connecte');
   }
 
@@ -844,6 +849,12 @@ class MockGatewayRuntime {
         (message) => message.id === messageId
       );
       if (index !== -1) {
+        if (
+          salon.visibilite !== 'public' &&
+          !salon.membreIds.includes(utilisateurId)
+        ) {
+          throw new Error('ERR_ACCES_REFUSE_SALON');
+        }
         const message = salon.messages[index];
         if (message.auteurId !== utilisateurId)
           throw new Error('ERR_MESSAGE_NON_AUTORISE');
@@ -863,6 +874,12 @@ class MockGatewayRuntime {
     );
     if (indexPrive !== -1) {
       const message = this.messagesPrives[indexPrive];
+      const conversation = this.conversationsPrivees.find(
+        (item) => item.id === message.conversationId
+      );
+      if (!conversation?.participantIds.includes(utilisateurId)) {
+        throw new Error('ERR_ACCES_REFUSE_CONVERSATION');
+      }
       if (message.auteurId !== utilisateurId)
         throw new Error('ERR_MESSAGE_NON_AUTORISE');
       const modifie = { ...message, contenu: texte, modification: Date.now() };
@@ -883,6 +900,12 @@ class MockGatewayRuntime {
         (message) => message.id === messageId
       );
       if (index !== -1) {
+        if (
+          salon.visibilite !== 'public' &&
+          !salon.membreIds.includes(utilisateurId)
+        ) {
+          throw new Error('ERR_ACCES_REFUSE_SALON');
+        }
         if (salon.messages[index].auteurId !== utilisateurId) {
           throw new Error('ERR_MESSAGE_NON_AUTORISE');
         }
@@ -896,7 +919,14 @@ class MockGatewayRuntime {
       (message) => message.id === messageId
     );
     if (indexPrive !== -1) {
-      if (this.messagesPrives[indexPrive].auteurId !== utilisateurId) {
+      const message = this.messagesPrives[indexPrive];
+      const conversation = this.conversationsPrivees.find(
+        (item) => item.id === message.conversationId
+      );
+      if (!conversation?.participantIds.includes(utilisateurId)) {
+        throw new Error('ERR_ACCES_REFUSE_CONVERSATION');
+      }
+      if (message.auteurId !== utilisateurId) {
         throw new Error('ERR_MESSAGE_NON_AUTORISE');
       }
       this.messagesPrives.splice(indexPrive, 1);

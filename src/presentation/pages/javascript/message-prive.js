@@ -1294,7 +1294,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (simulateNetworkCut) {
     simulateNetworkCut.addEventListener('click', async () => {
       try {
-        await window.electronAPI.simulerCoupureReseau();
+        await window.electronAPI.simulerCoupureReseau(
+          currentUserSelect?.value ?? null
+        );
       } catch (erreur) {
         notifier(messageErreur(erreur), true);
       }
@@ -1304,7 +1306,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (simulateNetworkReconnect) {
     simulateNetworkReconnect.addEventListener('click', async () => {
       try {
-        await window.electronAPI.simulerReconnexionReseau(900);
+        await window.electronAPI.simulerReconnexionReseau(
+          900,
+          currentUserSelect?.value ?? null
+        );
       } catch (erreur) {
         notifier(messageErreur(erreur), true);
       }

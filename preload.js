@@ -72,9 +72,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   obtenirUtilisateurConnecte: () =>
     ipcRenderer.invoke('session:utilisateur-connecte'),
   obtenirEtatReseau: () => ipcRenderer.invoke('reseau:etat'),
-  simulerCoupureReseau: () => ipcRenderer.invoke('reseau:coupure'),
-  simulerReconnexionReseau: (delaiMs = 900) =>
-    ipcRenderer.invoke('reseau:reconnexion', { delaiMs }),
+  simulerCoupureReseau: (utilisateurId) =>
+    ipcRenderer.invoke('reseau:coupure', { utilisateurId }),
+  simulerReconnexionReseau: (delaiMs = 900, utilisateurId) =>
+    ipcRenderer.invoke('reseau:reconnexion', { delaiMs, utilisateurId }),
   obtenirPresences: () => ipcRenderer.invoke('presence:obtenir'),
   modifierPresence: (utilisateurId, statut) =>
     ipcRenderer.invoke('presence:modifier', { utilisateurId, statut }),

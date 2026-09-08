@@ -108,6 +108,54 @@ describe('MockGatewayRuntime - réseau et présence', () => {
     vi.useRealTimers();
   });
 
+  it('applique la coupure et la reconnexion à l’utilisateur simulé sélectionné', async () => {
+    vi.useFakeTimers();
+    const gateway = new MockGatewayRuntime();
+    gateway.connexion({ id: 'u1', pseudo: 'sam' });
+
+    gateway.simulerCoupure('u2');
+    expect(gateway.obtenirPresences().u2).toBe('hors-ligne');
+    expect(gateway.obtenirPresences().u1).toBe('en-ligne');
+
+    const reconnexion = gateway.simulerReconnexion(100, 'u2');
+    await vi.advanceTimersByTimeAsync(100);
+    await reconnexion;
+
+    expect(gateway.obtenirPresences().u2).toBe('en-ligne');
+    expect(gateway.obtenirEtatConnexion().statut).toBe('connecte');
+    vi.useRealTimers();
+  });
+
+  it('refuse de modifier ou supprimer un ancien message après retrait d’un salon privé', () => {
+    const gateway = new MockGatewayRuntime();
+    gateway.connexion({ id: 'u1', pseudo: 'sam' });
+    const message = gateway.envoyerMessage({
+      salonId: 's2',
+      utilisateurId: 'u1',
+      contenu: 'Message privé',
+    });
+
+    type SalonRuntime = { id: string; membreIds: string[] };
+    type GatewayRuntimeInterne = { salons: SalonRuntime[] };
+    const gatewayInterne = gateway as unknown as GatewayRuntimeInterne;
+    const salon = gatewayInterne.salons.find((item) => item.id === 's2');
+    expect(salon).toBeDefined();
+    if (!salon) throw new Error('Salon de test introuvable');
+    salon.membreIds = salon.membreIds.filter((id) => id !== 'u1');
+
+    expect(() =>
+      gateway.modifierMessage({
+        messageId: message.id,
+        utilisateurId: 'u1',
+        contenu: 'Tentative après retrait',
+      })
+    ).toThrow('ERR_ACCES_REFUSE_SALON');
+
+    expect(() =>
+      gateway.supprimerMessage({ messageId: message.id, utilisateurId: 'u1' })
+    ).toThrow('ERR_ACCES_REFUSE_SALON');
+  });
+
   it('modifie et supprime uniquement les messages de leur auteur', () => {
     const gateway = new MockGatewayRuntime();
     gateway.connexion({ id: 'u1', pseudo: 'sam' });

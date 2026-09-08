@@ -649,9 +649,11 @@ exposerCanal('session:utilisateur-connecte', () =>
 
 // --- Simulation réseau / présence -----------------------------------------
 exposerCanal('reseau:etat', () => chatGateway.obtenirEtatConnexion());
-exposerCanal('reseau:coupure', () => chatGateway.simulerCoupure());
-exposerCanal('reseau:reconnexion', ({ delaiMs }) =>
-  chatGateway.simulerReconnexion(delaiMs)
+exposerCanal('reseau:coupure', ({ utilisateurId }) =>
+  chatGateway.simulerCoupure(utilisateurId)
+);
+exposerCanal('reseau:reconnexion', ({ delaiMs, utilisateurId }) =>
+  chatGateway.simulerReconnexion(delaiMs, utilisateurId)
 );
 exposerCanal('presence:obtenir', () => chatGateway.obtenirPresences());
 exposerCanal('presence:modifier', (donnees) =>

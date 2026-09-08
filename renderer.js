@@ -1512,7 +1512,7 @@ el.message.addEventListener('input', async (event) => {
 if (el.couperReseau) {
   el.couperReseau.addEventListener('click', async () => {
     try {
-      await window.electronAPI.simulerCoupureReseau();
+      await window.electronAPI.simulerCoupureReseau(utilisateurActuelId);
     } catch (erreur) {
       notifier(messageErreur(erreur), true);
     }
@@ -1521,7 +1521,10 @@ if (el.couperReseau) {
 if (el.reconnecterReseau) {
   el.reconnecterReseau.addEventListener('click', async () => {
     try {
-      await window.electronAPI.simulerReconnexionReseau(900);
+      await window.electronAPI.simulerReconnexionReseau(
+        900,
+        utilisateurActuelId
+      );
     } catch (erreur) {
       notifier(messageErreur(erreur), true);
     }
