@@ -98,13 +98,14 @@
             data-i18n-aria-label="nav.simulatedUser"
           ></select>
           <div class="user-meta">
-            <div
-              class="presence-label"
+            <button
+              class="presence-label presence-toggle"
               id="current-user-presence"
-              data-i18n="nav.onlineStatus"
+              type="button"
+              data-i18n-title="network.changePresence"
             >
               En ligne
-            </div>
+            </button>
             <select
               id="language-select"
               aria-label="Langue / Language"
@@ -214,6 +215,32 @@
             </div>
           </div>
         </div>
+        <div class="network-simulation">
+          <div
+            id="connection-status"
+            data-state="deconnecte"
+            aria-live="polite"
+          >
+            <span class="dot"></span>
+            <span id="connection-label">Déconnecté</span>
+          </div>
+          <button
+            id="simulate-network-cut"
+            class="network-test-button"
+            type="button"
+            data-i18n="network.cut"
+          >
+            Coupure
+          </button>
+          <button
+            id="simulate-network-reconnect"
+            class="network-test-button"
+            type="button"
+            data-i18n="network.reconnect"
+          >
+            Reconnexion
+          </button>
+        </div>
       </header>
 
       <div id="message-list" aria-live="polite">
@@ -252,6 +279,7 @@
             type="text"
             placeholder="Écrire un message privé"
             autocomplete="off"
+            maxlength="2000"
             data-i18n-placeholder="dm.writeMessagePlaceholder"
           />
           <button type="submit" data-i18n="channels.send">Envoyer</button>
@@ -281,6 +309,7 @@
 
     <script src="javascript/notif-prefs.js"></script>
     <script src="javascript/i18n-browser.js"></script>
+    <script src="javascript/chat-ui-shared.js"></script>
     <script type="module" src="javascript/message-prive.js"></script>
   </body>
 </html>

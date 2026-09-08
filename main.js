@@ -647,6 +647,42 @@ exposerCanal('session:utilisateur-connecte', () =>
   chatGateway.obtenirUtilisateurConnecte()
 );
 
+// --- Simulation réseau / présence -----------------------------------------
+exposerCanal('reseau:etat', () => chatGateway.obtenirEtatConnexion());
+exposerCanal('reseau:coupure', ({ utilisateurId }) =>
+  chatGateway.simulerCoupure(utilisateurId)
+);
+exposerCanal('reseau:reconnexion', ({ delaiMs, utilisateurId }) =>
+  chatGateway.simulerReconnexion(delaiMs, utilisateurId)
+);
+exposerCanal('presence:obtenir', () => chatGateway.obtenirPresences());
+exposerCanal('presence:modifier', (donnees) =>
+  chatGateway.modifierPresence(donnees)
+);
+
+// Le runtime émet les transitions avant même que l'appel IPC de reconnexion
+// soit terminé, ce qui permet à l'UI d'afficher réellement « Reconnexion ».
+chatGateway.on('etat-connexion', (etatConnexion) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('reseau:etat-change', etatConnexion);
+  }
+});
+chatGateway.on('presence', (presence) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('presence:change', presence);
+  }
+});
+chatGateway.on('message-modifie', (message) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('messages:modifie-change', message);
+  }
+});
+chatGateway.on('message-supprime', (message) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('messages:supprime-change', message);
+  }
+});
+
 // --- Langue (i18n) -------------------------------------------------------
 // 'langue:obtenir' : lue par la page de connexion et le dashboard au
 // démarrage pour afficher la bonne langue dès le premier rendu.
@@ -898,6 +934,12 @@ exposerCanal('salons:refuser-invitation', (donnees) =>
 );
 exposerCanal('salons:envoyer-message', (donnees) =>
   chatGateway.envoyerMessage(donnees)
+);
+exposerCanal('messages:modifier', (donnees) =>
+  chatGateway.modifierMessage(donnees)
+);
+exposerCanal('messages:supprimer', (donnees) =>
+  chatGateway.supprimerMessage(donnees)
 );
 // Comme tous les canaux ci-dessus, ceux-ci font confiance à l'`utilisateurId`
 // fourni par le renderer plutôt que de le lier à une session authentifiée :

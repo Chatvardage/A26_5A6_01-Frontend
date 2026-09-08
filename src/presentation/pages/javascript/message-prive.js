@@ -28,6 +28,10 @@ const I18n =
   })();
 const t = I18n.t;
 const appliquerTraductionsStatiques = I18n.appliquerTraductionsStatiques;
+const ChatUiShared = window.ChatUiShared;
+if (!ChatUiShared) {
+  throw new Error('chat-ui-shared.js doit être chargé avant message-prive.js');
+}
 
 // Icône de main qui salue, en remplacement de l'emoji 👋 : voir le
 // commentaire équivalent (et le même SVG) dans renderer.js — l'emoji ne
@@ -100,6 +104,62 @@ window.addEventListener('DOMContentLoaded', async () => {
   const notifBtn = document.getElementById('open-notif-settings');
   const notifMenu = document.getElementById('notif-menu');
   const isTypingNom = document.getElementById('is-typing-nom');
+  const connectionStatus = document.getElementById('connection-status');
+  const connectionLabel = document.getElementById('connection-label');
+  const simulateNetworkCut = document.getElementById('simulate-network-cut');
+  const simulateNetworkReconnect = document.getElementById(
+    'simulate-network-reconnect'
+  );
+  const currentUserPresence = document.getElementById('current-user-presence');
+
+  let etatReseau = { statut: 'deconnecte' };
+  let presences = {};
+
+  function afficherEtatReseau(nouvelEtat = etatReseau) {
+    etatReseau = nouvelEtat ?? etatReseau;
+    ChatUiShared.afficherEtatReseau({
+      etat: etatReseau,
+      elements: {
+        statutConnexion: connectionStatus,
+        libelleConnexion: connectionLabel,
+        messageInput,
+        submitButton: messageForm?.querySelector('button[type="submit"]'),
+        presenceCourante: currentUserPresence,
+        couperReseau: simulateNetworkCut,
+        reconnecterReseau: simulateNetworkReconnect,
+      },
+      t,
+      composerAutorise: Boolean(
+        state.activeConversationId &&
+        state.conversations.some(
+          (conversation) => conversation.id === state.activeConversationId
+        )
+      ),
+    });
+  }
+
+  function afficherPresenceCourante() {
+    ChatUiShared.afficherPresenceCourante({
+      element: currentUserPresence,
+      utilisateurId: state.currentUserId,
+      presences,
+      t,
+    });
+  }
+
+  async function chargerEtatReseauEtPresences() {
+    await ChatUiShared.chargerEtatReseauEtPresences({
+      api: window.electronAPI,
+      onEtat: (reseau) => {
+        etatReseau = reseau;
+      },
+      onPresences: (recues) => {
+        presences = recues;
+      },
+    });
+    afficherEtatReseau();
+    afficherPresenceCourante();
+  }
 
   // Dictionnaire, langue courante et langue par défaut : voir
   // I18n.initialiserDepuisElectronAPI (i18n-browser.js) pour le détail
@@ -125,6 +185,8 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
       langueSelect.value = I18n.obtenirLangue();
       appliquerTraductionsStatiques();
+      afficherEtatReseau();
+      afficherPresenceCourante();
       renderConversationList();
       await renderActiveConversation();
     });
@@ -365,7 +427,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  async function refreshConversations() {
+  async function refreshConversations(options = {}) {
     const conversations = await window.electronAPI.obtenirConversationsPrivees(
       state.currentUserId
     );
@@ -403,7 +465,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // premier, le rond de notification de cette conversation serait calculé
     // avec l'ancien état (non lu) et ne disparaîtrait qu'au prochain
     // rafraîchissement.
-    await renderActiveConversation();
+    await renderActiveConversation(options);
     renderConversationList();
     mettreAJourBadgeApplication();
     actualiserIndicateurSaisie();
@@ -423,6 +485,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       currentUserSelect.addEventListener('change', async (event) => {
         sessionStorage.setItem('currentUserId', event.target.value);
         state.currentUserId = event.target.value;
+        afficherPresenceCourante();
         if (messageInput) messageInput.value = '';
         fermerMenuNotif();
         await refreshConversations();
@@ -711,7 +774,14 @@ window.addEventListener('DOMContentLoaded', async () => {
       remplirTexteMessage(text, message.contenu);
 
       meta.append(authorEl, timeEl);
+      if (message.modification) {
+        const edited = document.createElement('span');
+        edited.classList.add('edited-label');
+        edited.textContent = `(${t('messages.edited')})`;
+        meta.appendChild(edited);
+      }
       body.append(meta, text);
+      if (isOwn) body.appendChild(creerActionsMessage(message, text));
       row.append(avatar, body);
       messageList.appendChild(row);
     });
@@ -737,6 +807,20 @@ window.addEventListener('DOMContentLoaded', async () => {
    * chargement est déjà en cours, si l'historique de la conversation active
    * est déjà entièrement remonté, ou si aucune conversation n'est active).
    */
+  function creerActionsMessage(message, texteEl) {
+    return ChatUiShared.creerActionsMessage({
+      message,
+      texteEl,
+      api: window.electronAPI,
+      utilisateurId: () => state.currentUserId,
+      t,
+      notifier,
+      messageErreur,
+      champMessage: messageInput,
+      getEtatReseau: () => etatReseau,
+    });
+  }
+
   async function chargerMessagesPlusAnciensDm() {
     const conversation = state.conversations.find(
       (entry) => entry.id === state.activeConversationId
@@ -898,7 +982,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     messageForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       const content = messageInput.value.trim();
-      if (!content || !state.activeConversationId) {
+      if (
+        !content ||
+        !state.activeConversationId ||
+        etatReseau.statut !== 'connecte'
+      ) {
         return;
       }
 
@@ -929,6 +1017,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
 
     messageInput.addEventListener('input', async (event) => {
+      if (etatReseau.statut !== 'connecte') return;
       const aDuTexte = event.target.value.trim().length > 0;
       const auteurId = state.currentUserId;
       const conversationId = state.activeConversationId;
@@ -951,6 +1040,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         // Coupe l'état de saisie après 10 secondes sans frappe
         timersArretSaisieDm[auteurId] = setTimeout(async () => {
           delete timersArretSaisieDm[auteurId];
+          if (etatReseau.statut !== 'connecte') return;
           await window.electronAPI.modifierEtatSaisie({
             conversationId,
             utilisateurId: auteurId,
@@ -1121,7 +1211,87 @@ window.addEventListener('DOMContentLoaded', async () => {
     );
   }
 
+  ChatUiShared.brancherControlesReseauPresence({
+    api: window.electronAPI,
+    elements: {
+      couperReseau: simulateNetworkCut,
+      reconnecterReseau: simulateNetworkReconnect,
+      presenceCourante: currentUserPresence,
+    },
+    getEtatReseau: () => etatReseau,
+    getUtilisateurId: () => state.currentUserId,
+    getPresences: () => presences,
+    notifierErreur: (erreur) => notifier(messageErreur(erreur), true),
+  });
+
+  window.electronAPI.onEtatReseauChange((nouvelEtat) => {
+    afficherEtatReseau(nouvelEtat);
+  });
+
+  window.electronAPI.onPresenceChange((presence) => {
+    presences[presence.utilisateurId] = presence.statut;
+    afficherPresenceCourante();
+
+    const conversation = state.conversations.find(
+      (item) => item.otherUser?.id === presence.utilisateurId
+    );
+    if (!conversation) return;
+
+    conversation.otherUser.present = presence.statut === 'en-ligne';
+
+    // Les filtres « en ligne » / « hors ligne » dépendent directement de la
+    // présence : dans ce cas on reconstruit seulement la liste locale, sans
+    // refaire d'appel IPC pour recharger toutes les conversations.
+    if (state.currentFilter !== 'all') {
+      renderConversationList();
+    } else if (listElement) {
+      const ligne = Array.from(
+        listElement.querySelectorAll('.conversation[data-conversation-id]')
+      ).find((element) => element.dataset.conversationId === conversation.id);
+      const avatar = ligne?.querySelector('.avatar');
+      avatar?.classList.toggle('offline', !conversation.otherUser.present);
+
+      // Le sous-titre affiche la présence uniquement lorsqu'il n'y a encore
+      // aucun message dans cette conversation.
+      if (!conversation.lastMessage) {
+        const sousTitre = ligne?.querySelector('.last-message');
+        if (sousTitre) {
+          sousTitre.textContent = conversation.otherUser.present
+            ? t('dm.online')
+            : t('dm.offline');
+        }
+      }
+    }
+
+    if (conversation.id === state.activeConversationId) {
+      if (topbarStatus) {
+        topbarStatus.textContent = conversation.otherUser.present
+          ? t('dm.online')
+          : t('dm.offline');
+        topbarStatus.classList.toggle('online', conversation.otherUser.present);
+        topbarStatus.classList.toggle(
+          'offline',
+          !conversation.otherUser.present
+        );
+      }
+      topbarAvatar?.classList.toggle(
+        'offline',
+        !conversation.otherUser.present
+      );
+    }
+  });
+
+  window.electronAPI.onMessageModifieChange(async () => {
+    await refreshConversations({ conserverPositionScroll: true });
+  });
+
+  window.electronAPI.onMessageSupprimeChange(async (message) => {
+    ChatUiShared.oublierEtatActionMessage(message?.messageId);
+    await refreshConversations({ conserverPositionScroll: true });
+  });
+
   await initialiserUtilisateurCourant();
+  await chargerEtatReseauEtPresences();
   await refreshConversations();
   await actualiserBadgeSalons();
 });

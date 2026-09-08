@@ -13,7 +13,12 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
-    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,html,css,md,txt}\""
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,html,css,md,txt}\"",
+    "dev": "npm run start:dev",
+    "build:win": "npm run build:login && npx --yes electron-builder@26.0.12 --win",
+    "build:mac": "npm run build:login && npx --yes electron-builder@26.0.12 --mac",
+    "build:linux": "npm run build:login && npx --yes electron-builder@26.0.12 --linux",
+    "build:all": "npm run build:login && npx --yes electron-builder@26.0.12 --win --mac --linux"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
@@ -24,6 +29,7 @@
     "@vitest/coverage-v8": "^4.1.11",
     "cross-env": "^7.0.3",
     "electron": "^44.0.0",
+    "electron-builder": "^26.0.12",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.0.0",
     "jsdom": "^29.1.1",
@@ -43,5 +49,44 @@
   "dependencies": {
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
+  },
+  "build": {
+    "appId": "ca.cegep.chatvardage",
+    "productName": "ChatVardage",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "src/**/*",
+      "!src/**/*.test.js",
+      "!src/**/*.test.ts",
+      "assets/**/*",
+      "dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "assets/icon.png",
+      "category": "public.app-category.social-networking"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Network"
+    }
   }
 }

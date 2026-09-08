@@ -30,6 +30,10 @@ const I18n =
 const t = I18n.t;
 const appliquerTraductionsStatiques = I18n.appliquerTraductionsStatiques;
 const messageErreur = I18n.messageErreur;
+const ChatUiShared = window.ChatUiShared;
+if (!ChatUiShared) {
+  throw new Error('chat-ui-shared.js doit être chargé avant renderer.js');
+}
 
 // NotifPrefs vient de notif-prefs.js, un script classique chargé avant celui-ci
 // (voir index.html) qui expose window.NotifPrefs comme global — cette référence
@@ -66,6 +70,8 @@ const NotifPrefs =
 let utilisateurActuelId = sessionStorage.getItem('currentUserId') ?? null;
 let salonActifId = null;
 let etat = { utilisateurs: [], salons: [], invitations: [] };
+let presences = {};
+let etatReseau = { statut: 'deconnecte', reconnexions: 0 };
 // Miroir côté renderer de fenetreEstFocusee dans main.js (voir
 // 'window:focus-changed' / 'window:is-focused' dans preload.js), initialisé
 // à `true` par défaut le temps que la vraie valeur arrive (voir plus bas où
@@ -97,7 +103,56 @@ const el = {
   titreDialogue: document.querySelector('#dialog-title'),
   contenuDialogue: document.querySelector('#dialog-content'),
   toast: document.querySelector('#toast'),
+  statutConnexion: document.querySelector('#connection-status'),
+  libelleConnexion: document.querySelector('#connection-label'),
+  couperReseau: document.querySelector('#simulate-network-cut'),
+  reconnecterReseau: document.querySelector('#simulate-network-reconnect'),
+  presenceCourante: document.querySelector('#current-user-presence'),
+  envoyer: document.querySelector('#message-form button[type="submit"]'),
 };
+
+function afficherEtatReseau(nouvelEtat = etatReseau) {
+  etatReseau = nouvelEtat ?? etatReseau;
+  ChatUiShared.afficherEtatReseau({
+    etat: etatReseau,
+    elements: {
+      statutConnexion: el.statutConnexion,
+      libelleConnexion: el.libelleConnexion,
+      messageInput: el.message,
+      submitButton: el.envoyer,
+      presenceCourante: el.presenceCourante,
+      couperReseau: el.couperReseau,
+      reconnecterReseau: el.reconnecterReseau,
+    },
+    t,
+    composerAutorise: Boolean(
+      salonActifId && etat.salons.some((salon) => salon.id === salonActifId)
+    ),
+  });
+}
+
+function afficherPresenceCourante() {
+  ChatUiShared.afficherPresenceCourante({
+    element: el.presenceCourante,
+    utilisateurId: utilisateurActuelId,
+    presences,
+    t,
+  });
+}
+
+async function chargerEtatReseauEtPresences() {
+  await ChatUiShared.chargerEtatReseauEtPresences({
+    api: window.electronAPI,
+    onEtat: (reseau) => {
+      etatReseau = reseau;
+    },
+    onPresences: (recues) => {
+      presences = recues;
+    },
+  });
+  afficherEtatReseau();
+  afficherPresenceCourante();
+}
 
 const salonActif = () => etat.salons.find((salon) => salon.id === salonActifId);
 const utilisateur = (id) => etat.utilisateurs.find((item) => item.id === id);
@@ -365,13 +420,13 @@ function synchroniserSelecteurUtilisateur() {
   el.utilisateur.value = utilisateurActuelId;
 }
 
-async function actualiser() {
+async function actualiser(options = {}) {
   try {
     etat = await window.electronAPI.obtenirEtatSalons(utilisateurActuelId);
     if (!etat.salons.some((salon) => salon.id === salonActifId)) {
       salonActifId = etat.salons[0]?.id ?? null;
     }
-    afficherTout();
+    afficherTout(options);
   } catch (erreur) {
     console.error('[actualiser] ERREUR:', erreur);
     notifier(messageErreur(erreur), true);
@@ -497,6 +552,20 @@ function afficherSalons() {
   });
 }
 
+function creerActionsMessage(message, texteEl) {
+  return ChatUiShared.creerActionsMessage({
+    message,
+    texteEl,
+    api: window.electronAPI,
+    utilisateurId: () => utilisateurActuelId,
+    t,
+    notifier,
+    messageErreur,
+    champMessage: el.message,
+    getEtatReseau: () => etatReseau,
+  });
+}
+
 function afficherMessages(options = {}) {
   const { conserverPositionScroll = false } = options;
   const salon = salonActif();
@@ -505,6 +574,7 @@ function afficherMessages(options = {}) {
     el.nomSalon.textContent = t('channels.noChannelAccessible');
     el.prive.hidden = true;
     el.message.disabled = true;
+    if (el.envoyer) el.envoyer.disabled = true;
     // channels.sendMessagePlaceholder attend un paramètre {name} (voir plus
     // bas) : il n'est donc PAS dans le balayage générique data-i18n-*
     // (appliquerTraductionsStatiques), qui appelle t() sans paramètres.
@@ -563,7 +633,9 @@ function afficherMessages(options = {}) {
   definirConversationActivePourNotifs(salon.id);
   remplirLabelSalon(el.nomSalon, salon);
   el.prive.hidden = salon.visibilite !== 'prive';
-  el.message.disabled = false;
+  const reseauBloque = etatReseau.statut !== 'connecte';
+  el.message.disabled = reseauBloque;
+  if (el.envoyer) el.envoyer.disabled = reseauBloque;
   el.message.placeholder = t('channels.sendMessagePlaceholder', {
     name: salon.nom,
   });
@@ -639,6 +711,14 @@ function afficherMessages(options = {}) {
                       { hour: '2-digit', minute: '2-digit' }
                     ),
                   }),
+                  ...(message.modification
+                    ? [
+                        creerEl('span', {
+                          classe: 'edited-label',
+                          texte: `(${t('messages.edited')})`,
+                        }),
+                      ]
+                    : []),
                 ],
               }),
               texteEl,
@@ -646,6 +726,11 @@ function afficherMessages(options = {}) {
           }),
         ],
       });
+      if (estMessagePersonnel) {
+        article
+          .querySelector('.message-body')
+          ?.appendChild(creerActionsMessage(message, texteEl));
+      }
       el.messages.appendChild(article);
     });
   }
@@ -740,10 +825,10 @@ function afficherActions() {
   el.compteur.hidden = etat.invitations.length === 0;
 }
 
-function afficherTout() {
+function afficherTout(options = {}) {
   appliquerTraductionsStatiques();
   synchroniserSelecteurUtilisateur();
-  afficherMessages();
+  afficherMessages(options);
   afficherSalons();
   afficherActions();
   mettreAJourBadgeApplication();
@@ -945,6 +1030,17 @@ el.membres.addEventListener('click', () => {
           texte: membre.pseudo[0].toUpperCase(),
         }),
         creerEl('span', { texte: membre.pseudo }),
+        creerEl('span', {
+          classe: 'member-presence',
+          texte:
+            (presences[membre.id] ?? 'hors-ligne') === 'en-ligne'
+              ? t('network.online')
+              : t('network.offline'),
+          attrs: {
+            'data-presence': presences[membre.id] ?? 'hors-ligne',
+            'data-user-id': membre.id,
+          },
+        }),
       ];
       if (membre.id === salon.hoteId) {
         enfants.push(
@@ -960,7 +1056,8 @@ el.membres.addEventListener('click', () => {
 el.formulaire.addEventListener('submit', async (event) => {
   event.preventDefault();
   const contenu = el.message.value;
-  if (!salonActifId || !contenu.trim()) return;
+  if (!salonActifId || !contenu.trim() || etatReseau.statut !== 'connecte')
+    return;
 
   const auteurId = utilisateurActuelId;
   const salonId = salonActifId;
@@ -999,6 +1096,7 @@ el.utilisateur.addEventListener('change', async (event) => {
   // de sélectionner (voir le même réflexe dans message-prive.js).
   el.message.value = '';
   fermerMenuNotif();
+  afficherPresenceCourante();
   await actualiser();
 });
 
@@ -1013,7 +1111,11 @@ if (el.langue) {
       // canal échoue.
     }
     el.langue.value = I18n.obtenirLangue();
+    // Appliquer d'abord l'état réseau, puis laisser le rendu du salon
+    // imposer ses contraintes propres (ex. aucun salon sélectionné).
+    afficherEtatReseau();
     afficherTout();
+    afficherPresenceCourante();
   });
 }
 
@@ -1047,6 +1149,7 @@ async function initialiser() {
 
   try {
     await initialiserUtilisateurCourant();
+    await chargerEtatReseauEtPresences();
     // À ce stade, le script s'est déjà mis en pause une fois (l'await
     // ci-dessus), donc le reste du script synchrone du module a fini de
     // s'exécuter — `serviceNotifications`, déclaré plus bas dans le fichier
@@ -1293,6 +1396,7 @@ setInterval(async () => {
 const timersArretSaisie = {};
 
 el.message.addEventListener('input', async (event) => {
+  if (etatReseau.statut !== 'connecte') return;
   const aDuTexte = event.target.value.trim().length > 0;
   const auteurId = utilisateurActuelId;
   const salonId = salonActifId;
@@ -1315,6 +1419,7 @@ el.message.addEventListener('input', async (event) => {
     // Programme l'arrêt pour cet utilisateur
     timersArretSaisie[auteurId] = setTimeout(async () => {
       delete timersArretSaisie[auteurId];
+      if (etatReseau.statut !== 'connecte') return;
       await window.electronAPI.modifierEtatSaisie({
         conversationId: salonId,
         utilisateurId: auteurId,
@@ -1331,4 +1436,45 @@ el.message.addEventListener('input', async (event) => {
     });
     await actualiserIndicateurSaisie();
   }
+});
+
+ChatUiShared.brancherControlesReseauPresence({
+  api: window.electronAPI,
+  elements: {
+    couperReseau: el.couperReseau,
+    reconnecterReseau: el.reconnecterReseau,
+    presenceCourante: el.presenceCourante,
+  },
+  getEtatReseau: () => etatReseau,
+  getUtilisateurId: () => utilisateurActuelId,
+  getPresences: () => presences,
+  notifierErreur: (erreur) => notifier(messageErreur(erreur), true),
+});
+
+window.electronAPI.onEtatReseauChange((nouvelEtat) =>
+  afficherEtatReseau(nouvelEtat)
+);
+window.electronAPI.onPresenceChange((presence) => {
+  presences[presence.utilisateurId] = presence.statut;
+  afficherPresenceCourante();
+
+  const presenceMembre = Array.from(
+    el.dialogue?.querySelectorAll('.member-presence[data-user-id]') ?? []
+  ).find((element) => element.dataset.userId === presence.utilisateurId);
+  if (presenceMembre) {
+    presenceMembre.dataset.presence = presence.statut;
+    presenceMembre.textContent =
+      presence.statut === 'en-ligne'
+        ? t('network.online')
+        : t('network.offline');
+  }
+});
+
+window.electronAPI.onMessageModifieChange(async () => {
+  await actualiser({ conserverPositionScroll: true });
+});
+
+window.electronAPI.onMessageSupprimeChange(async (message) => {
+  ChatUiShared.oublierEtatActionMessage(message?.messageId);
+  await actualiser({ conserverPositionScroll: true });
 });

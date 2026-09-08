@@ -16,3 +16,4 @@ coverage/
 # NTFS) ; métadonnée locale sans rapport avec le projet, jamais à committer.
 *:Zone.Identifier
 dist/
+release/

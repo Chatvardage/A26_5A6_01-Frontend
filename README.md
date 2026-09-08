@@ -1,299 +1,202 @@
-# multiplatforme-gr.1
+# ChatVardage — Contrôle 1 (420-5A6-ST, A26)
 
-- Calendrier de travail (section projet du repo github)
+Application de clavardage desktop locale réalisée avec Electron. Cette itération n'utilise pas encore de serveur réel : `MockGatewayRuntime` simule les salons, les DM, la présence, le typing, les événements temps réel, la latence et les états réseau. L'architecture UI / IPC / gateway permet de remplacer le mock par un backend HTTP/WebSocket lors d'une itération future.
 
-# Plan de communication:
+## 1. Objectifs
 
-- Communication par discord
-- Rencontre à chaque début de cours avant de commencer à travailler
-- Documenter problème dans les messages de push git.
+- Authentification locale par pseudo unique.
+- Salons publics et privés avec invitations simulées.
+- Messages et conversations privées (DM).
+- Présence en ligne/hors ligne et indicateur « en train d'écrire ».
+- Historique paginé (« charger les messages plus anciens »).
+- États réseau simulés : connecté, déconnecté et reconnexion.
+- Notifications système lorsqu'un message arrive hors focus.
+- Modification et suppression de ses propres messages.
+- Application Electron sécurisée et multiplateforme.
 
-# Definition of done:
+## 2. Choix techniques et architecture
 
-- 90 % de couverture de tests (logique seulement, non sur l’interface)
-- Deux personnes doivent approuver les pull requests
-- Code qui compile
-- Interface fonctionnelle
+- **Langages :** JavaScript + TypeScript.
+- **Desktop :** Electron.
+- **Connexion :** React + Vite.
+- **Chat :** HTML/CSS/JavaScript vanilla.
+- **Tests :** Vitest.
+- **Qualité :** ESLint + Prettier.
+- **Persistance :** données simulées en mémoire et stockage local pour les préférences/états d'interface.
 
-# Technologies
+Flux principal :
 
-- Frontend: React
-- Backend: Nodejs
-- BD: SQLite
+```text
+UI (renderer)
+   ↓ API limitée exposée par preload.js
+IPC Electron
+   ↓
+main.js
+   ↓
+MockGatewayRuntime
+   ↓
+Domaine / données simulées
+```
 
-# Comment démarrer
+Le renderer n'a jamais accès directement à Node.js ou à `ipcRenderer`.
+
+## 3. Prérequis
+
+- Node.js 22 recommandé.
+- npm.
+- Windows, macOS ou Linux.
+
+Installation :
 
 ```bash
 npm install
+```
+
+## 4. Lancement
+
+Mode développement (Vite + Electron) :
+
+```bash
+npm run dev
+```
+
+Lancement normal :
+
+```bash
 npm start
 ```
 
-## Architecture
+Le script `prestart` construit automatiquement la page de connexion avant le lancement normal.
 
-ChatVardage <br />
-&emsp;| <br />
-&emsp;├── frontend/ <br />
-&emsp;│&emsp;│<br />
-&emsp;│&emsp;└── src/<br />
-&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;├── presentation/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Affichage et interaction avec l'utilisateur.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Cette couche ne contient pas la logique métier.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;├── pages/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Pages complètes de l'application.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Exemple : LoginPage, ChatPage, ServerPage.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;├── components/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Composants React réutilisables.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Exemple : MessageList, MessageInput, ChannelList.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;└── layouts/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# Structures générales des pages.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# Exemple : AppLayout, ChatLayout, AuthLayout.<br />
-&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;├── application/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Logique applicative du frontend.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Orchestre les actions de l'interface.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;├── hooks/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Hooks React contenant la logique de présentation.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Exemple : useMessages(), useChannels(), useAuth().<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;├── stores/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # État global ou partagé de l'application.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Exemple : utilisateur connecté, serveur sélectionné,<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # channel actuel, messages en mémoire.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;└── view-models/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# Transforme les données du domaine/API en données<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# adaptées aux composants React.<br />
-&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;├── domain/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Modèle métier utilisé par le frontend.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Ne dépend ni de React ni du Gateway.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;├── entities/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Entités métier du frontend.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Exemple : User, Server, Channel, Message.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;└── models/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# Types et modèles utilisés par le frontend.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# Exemple : UserModel, MessageModel, ChannelModel.<br />
-&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;├── infrastructure/<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│ # Communication avec les systèmes externes.<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│ # HTTP, WebSocket, Gateway, stockage local, etc.<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;├── gateways/<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│ # Point d'accès aux communications avec le backend.<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;└── GatewayClient.ts<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;&emsp;# Contrat/client utilisé par le frontend pour<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;&emsp;# communiquer avec le Gateway.<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;├── persistence/<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│ # Implementation de le persistance pour le front-end.<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;└── local-storage/<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│ # Gestion du stockage local.<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;|&emsp;&emsp;├── LocalStorage.ts/<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│&emsp; # Accès au LocalStorage.<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;|&emsp;&emsp;├── MessageStorage.ts/<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│&emsp; # Gère la persistence des message.<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;|&emsp;&emsp;└── keys.ts/<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;&emsp; # Stockage des clés pour le localstorage.<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│&emsp;&emsp;<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;└── services/<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;&emsp;&emsp;# Services techniques du frontend.<br />
-&emsp;│&emsp;&emsp;&emsp;|&emsp;&emsp;&emsp;&emsp;# Exemple : AuthService, StorageService, NotificationService.<br />
-&emsp;│<br />
-&emsp;├── backend/<br />
-&emsp;│&emsp;│<br />
-&emsp;│&emsp;├── src/<br />
-&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;├── interface/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Point d'entrée du backend.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Reçoit les requêtes provenant de l'extérieur.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;├── http/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;│ # Communication HTTP/REST.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;├── controllers/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;│ # Reçoit une requête HTTP et appelle le<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;│ # Use Case approprié.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;│ # Exemple : MessageController.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;└── routes/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Déclare les routes HTTP.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Exemple : POST /channels/:id/messages.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;└── websocket/<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Gestion des connexions et événements WebSocket.<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Exemple : connexion d'un utilisateur,<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# nouveau message, typing, déconnexion.<br />
-&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;├── application/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Logique applicative du backend.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Définit ce que l'application peut faire.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;├── use-cases/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Cas d'utilisation de l'application.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Exemple :<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # SendMessage<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # GetMessages<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # CreateChannel<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # DeleteMessage<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # JoinServer<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;└── dto/<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Data Transfer Objects.<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Définit les données échangées entre les couches.<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Exemple : SendMessageDto, CreateChannelDto.<br />
-&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;├── domain/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # CŒUR MÉTIER DE L'APPLICATION.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Cette couche ne dépend pas de HTTP, WebSocket,<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # base de données ou framework.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;├── entities/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Entités métier.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Exemple : User, Server, Channel, Message.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;├── value-objects/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Objets représentant une valeur métier avec<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # ses propres règles de validation.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Exemple : UserId, ChannelId, MessageContent.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;├── events/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Événements métier.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Exemple : MessageCreated, MessageDeleted,<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # UserJoinedChannel.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;└── ports/<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Interfaces nécessaires au domaine/application.<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Elles décrivent CE DONT le métier a besoin,<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# sans définir COMMENT c'est implémenté.<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Exemple : MessageRepository, Gateway,<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# EventPublisher.<br />
-&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;└── infrastructure/<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│ # Implémentation technique des interfaces du domaine.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│ # Cette couche contient les détails techniques.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;├── persistence/<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│ # Implémentations de la persistance.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│ # Exemple : FileMessageRepository,<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│ # PostgresMessageRepository, etc.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;├── gateways/<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Implémentations des communications Gateway.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;├── MockGateway.ts<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Gateway temporaire utilisé pendant<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # le développement et les tests.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;└── WebSocketGateway.ts<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# Gateway réel utilisé pour communiquer<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# avec les clients via WebSocket.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;├── messaging/<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│ # Communication asynchrone entre composants/services.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│ # Exemple : Redis, RabbitMQ, Kafka, etc.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;└── config/<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;# Configuration technique de l'application.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;# Exemple : variables d'environnement,<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;# configuration DB, ports, Gateway, etc.<br />
-&emsp;│&emsp;│<br />
-&emsp;│&emsp;└── stockage/<br />
-&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│ # DONNÉES PHYSIQUES générées par l'application.<br />
-&emsp;│&emsp;&emsp;&emsp;│ # Ce dossier ne contient pas de logique métier.<br />
-&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;└── messages/<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;# Stockage temporaire des messages pendant<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;# le développement.<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;# Exemple : fichiers JSON contenant les messages.<br />
-&emsp;│<br />
-&emsp;└── shared/<br />
-&emsp;&emsp;&emsp;│<br />
-&emsp;&emsp;&emsp;│ # Éléments communs au frontend et au backend.<br />
-&emsp;&emsp;&emsp;│ # Permet d'éviter de dupliquer certains contrats/types.<br />
-&emsp;&emsp;&emsp;│<br />
-&emsp;&emsp;&emsp;├── types/<br />
-&emsp;&emsp;&emsp;│ # Types TypeScript communs.<br />
-&emsp;&emsp;&emsp;│ # Exemple : UserId, MessageId, ChannelId.<br />
-&emsp;&emsp;&emsp;│<br />
-&emsp;&emsp;&emsp;└── contracts/<br />
-&emsp;&emsp;&emsp;&emsp;&emsp;# Contrats de communication frontend/backend.<br />
-&emsp;&emsp;&emsp;&emsp;&emsp;# Exemple : SendMessageRequest,<br />
-&emsp;&emsp;&emsp;&emsp;&emsp;# MessageResponse, WebSocketEvent.<br />
-
-## Sécurité Electron
-
-Cette section documente les choix effectués pour sécuriser l'architecture Electron, conformément aux exigences du contrôle 1 (`Configurer Electron sécurisé`, issue #8).
-
-### Isolation du renderer
-
-| Réglage            | Valeur  | Rôle                                                                                                                                                                                    |
-| ------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `contextIsolation` | `true`  | Le contexte JS du `preload.js` est isolé de celui de la page web chargée. Le renderer ne peut pas accéder aux objets internes exposés par le preload autrement que via `contextBridge`. |
-| `nodeIntegration`  | `false` | Le renderer n'a aucun accès direct à Node.js (`require`, `process`, `fs`, etc.).                                                                                                        |
-| `sandbox`          | `true`  | Le processus renderer (y compris le preload) tourne dans un environnement restreint façon Chromium, avec un accès Node minimal même dans le preload.                                    |
-| `webviewTag`       | `false` | La balise `<webview>` est désactivée (surface d'attaque supplémentaire évitée).                                                                                                         |
-
-### API preload minimale
-
-Le renderer communique avec le processus Main **uniquement** via `window.chatAPI`, exposé par `preload.js` avec `contextBridge.exposeInMainWorld`. Aucune méthode générique (`send(channel, data)` / `on(channel, cb)`) n'est exposée : chaque canal IPC est déclaré en dur dans le preload, le renderer ne peut donc pas invoquer un canal arbitraire.
-
-### Navigation et fenêtres
-
-- `will-navigate` est intercepté : toute navigation hors de l'app (`file://` ou `localhost` en dev) est bloquée.
-- `setWindowOpenHandler` refuse systématiquement l'ouverture de nouvelles fenêtres Electron ; un lien `http(s)` est redirigé vers le navigateur système via `shell.openExternal`, jamais ouvert dans une fenêtre Electron non contrôlée.
-
-### Menu et interface
-
-- Le menu par défaut d'Electron est remplacé par un menu applicatif réduit (`Menu.setApplicationMenu`), sans les éléments de debug en production.
-- Les DevTools ne sont ouverts qu'en développement (`NODE_ENV === 'development'`), jamais en production.
-
-### Anti-XSS côté affichage
-
-Le renderer ne construit jamais de HTML sous forme de chaîne : tous les éléments sont créés via `document.createElement`/`createElementNS` et tout contenu dynamique (pseudo, contenu de message, nom de salon, etc.) est assigné via `textContent`, jamais `innerHTML` (voir la fabrique `creerEl()` dans `renderer.js`). Le texte d'un autre utilisateur ne peut donc jamais être interprété comme du HTML/JS, puisqu'il n'existe structurellement aucun point du code qui reparse une chaîne en HTML.
-
-### Exécuter les tests unitaires
+## 5. Qualité et tests
 
 ```bash
-npm install -D vitest@^2 @vitest/coverage-v8@^2
+npm run format
+npm run lint
+npm test
 npm run test:coverage
 ```
 
-### Notifications
+Le warning éventuel de `@typescript-eslint` concernant la version de TypeScript est un avertissement de compatibilité de l'outil et non une erreur ESLint.
 
-Lancer le projet en mode développement avec les notifications activées
+## 6. Builds de production
 
-### Lancer le projet en mode développement
+Chaque build commence par compiler la page de connexion avec Vite. Les artifacts Electron sont générés dans `release/`.
 
 ```bash
-NODE_ENV=development npm start
+npm run build:win
+npm run build:mac
+npm run build:linux
 ```
+
+Un build macOS doit être produit sur macOS. Le workflow `.github/workflows/builds.yml` exécute automatiquement les builds sur les bons runners Windows, macOS et Linux lors d'un tag `v*` ou manuellement avec **Run workflow**.
+
+Artifacts attendus :
+
+- Windows : installateur NSIS.
+- macOS : DMG.
+- Linux : AppImage.
+
+## 7. Scénarios de test pour la démonstration
+
+### Authentification et messages
+
+1. Lancer l'application.
+2. Entrer un pseudo local valide et unique.
+3. Rejoindre un salon public.
+4. Envoyer un message et vérifier l'horodatage.
+5. Modifier puis supprimer un de ses propres messages.
+6. Ouvrir les messages privés et envoyer un DM.
+
+### Salon privé et invitation
+
+1. Créer un salon privé.
+2. Inviter un utilisateur.
+3. Changer d'utilisateur simulé.
+4. Ouvrir **Invitations** puis accepter ou refuser l'invitation.
+5. Vérifier que l'accès au salon privé correspond à la réponse.
+
+### Présence et typing
+
+1. Vérifier la présence dans la liste des membres et dans un DM.
+2. Changer la présence en ligne/hors ligne pendant l'exécution.
+3. Commencer à écrire dans un salon ou un DM.
+4. Vérifier que l'indicateur « en train d'écrire » apparaît puis disparaît.
+
+### Réseau
+
+1. Cliquer **Coupure**.
+2. Vérifier l'état **Déconnecté** et la présence hors ligne de l'utilisateur courant.
+3. Vérifier qu'un message ne peut pas être envoyé hors réseau.
+4. Cliquer **Reconnexion**.
+5. Vérifier la transition **Reconnexion… → Connecté** et le retour de la présence en ligne.
+6. Répéter dans un salon et dans un DM.
+
+### Historique / pagination
+
+1. Ouvrir une conversation contenant plusieurs messages.
+2. Remonter en haut de la liste ou cliquer **Charger les messages plus anciens**.
+3. Vérifier que les anciens messages sont ajoutés sans perdre la position de défilement.
+
+### Notifications
+
+1. Choisir le mode de notification souhaité.
+2. Mettre la fenêtre hors focus ou afficher une autre conversation.
+3. Recevoir un message simulé et vérifier la notification système / l'indicateur non lu.
+
+## 8. Sécurité Electron vérifiée
+
+Dans la `BrowserWindow` :
+
+```text
+contextIsolation: true
+nodeIntegration: false
+```
+
+Autres mesures :
+
+- API limitée via `contextBridge` dans `preload.js`.
+- Canaux IPC explicites plutôt qu'un passthrough générique.
+- Validation de la provenance des appels IPC dans `main.js`.
+- CSP appliquée à la page de connexion.
+- Affichage des messages par `textContent` / création DOM, sans injection HTML utilisateur.
+- Aucun secret requis ou commité.
+- Menu Electron applicatif contrôlé et icône personnalisée.
+
+## 9. Limites connues et pistes d'amélioration
+
+- Le mock local fait confiance à `utilisateurId` fourni par le renderer dans les appels IPC. Il n'existe pas encore de session serveur cryptographiquement liée à l'utilisateur; cette limite concerne notamment la modification/suppression de messages ainsi que la simulation de présence et de coupure/reconnexion réseau. Ce comportement est volontaire pour ce jalon local, car le sélecteur d'utilisateur sert à tester plusieurs identités simulées sans véritable backend d'authentification.
+
+- Le backend est simulé localement; il n'y a pas encore de vraie authentification distante.
+- Les identités et autorisations sont adaptées à une maquette locale et devront être validées côté serveur dans la prochaine itération.
+- Les événements temps réel utilisent le mock local; ils devront être remplacés par WebSocket/HTTP.
+- La signature/code signing des builds n'est pas configurée.
+- Les builds macOS/Windows/Linux sont générés par leurs runners respectifs dans GitHub Actions.
+
+## Versionnage et remise
+
+Le projet utilise des branches et des pull requests; aucun push direct ne devrait être fait sur `main` ou `develop`. Avant la remise :
+
+```bash
+npm run format
+npm run lint
+npm test
+```
+
+Créer ensuite un tag sémantique (par exemple `v1.0.0`) afin de déclencher les trois builds dans GitHub Actions, puis joindre les artifacts à la remise.
+
+### Checklist finale
+
+- [ ] Démarrage via ce README sans aide.
+- [ ] Pseudo → salon → messages temps réel.
+- [ ] DM fonctionnels.
+- [ ] Présence + typing visibles.
+- [ ] États réseau testables : connecté / déconnecté / reconnexion.
+- [ ] Historique/pagination fonctionnels.
+- [ ] Notifications système testées.
+- [ ] `contextIsolation: true` et `nodeIntegration: false` vérifiés.
+- [ ] `format`, `lint` et `test` passent.
+- [ ] Artifact Windows produit.
+- [ ] Artifact macOS produit.
+- [ ] Artifact Linux produit.
+- [ ] Tag/version cohérents.

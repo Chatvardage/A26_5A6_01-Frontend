@@ -110,6 +110,16 @@ class MockGatewayRuntime {
 
     this.etatsSaisie = [];
 
+    // État réseau + événements temps réel. Le runtime Electron doit porter
+    // cette simulation lui-même : le MockGateway TypeScript n'est pas celui
+    // utilisé par main.js pendant l'exécution de l'application.
+    this.etatConnexion = { statut: 'deconnecte', depuis: now, reconnexions: 0 };
+    this.reconnexions = 0;
+    // Jeton monotone servant à invalider une reconnexion asynchrone si une
+    // nouvelle coupure/reconnexion survient avant la fin de son délai.
+    this.reconnexionJeton = 0;
+    this.ecouteurs = new Map();
+
     this.presences = {
       u1: 'en-ligne',
       u2: 'hors-ligne',
@@ -343,6 +353,138 @@ class MockGatewayRuntime {
     return salon;
   }
 
+  /** Abonnement léger aux événements temps réel du runtime. */
+  on(type, ecouteur) {
+    const liste = this.ecouteurs.get(type) ?? [];
+    liste.push(ecouteur);
+    this.ecouteurs.set(type, liste);
+    return () => {
+      const courants = this.ecouteurs.get(type) ?? [];
+      this.ecouteurs.set(
+        type,
+        courants.filter((item) => item !== ecouteur)
+      );
+    };
+  }
+
+  emettre(type, donnees) {
+    for (const ecouteur of this.ecouteurs.get(type) ?? []) {
+      ecouteur(structuredClone(donnees));
+    }
+  }
+
+  definirEtatConnexion(statut) {
+    this.etatConnexion = {
+      statut,
+      depuis: Date.now(),
+      reconnexions: this.reconnexions,
+    };
+    this.emettre('etat-connexion', this.etatConnexion);
+    return { ...this.etatConnexion };
+  }
+
+  obtenirEtatConnexion() {
+    return { ...this.etatConnexion };
+  }
+
+  /**
+   * Empêche les opérations qui nécessitent le transport simulé lorsque le
+   * réseau n'est pas connecté. L'UI désactive déjà les contrôles, mais cette
+   * validation garde la règle dans le gateway (et non seulement dans la vue).
+   */
+  verifierReseauConnecte() {
+    if (this.etatConnexion.statut !== 'connecte') {
+      throw new Error('ERR_RESEAU_NON_CONNECTE');
+    }
+  }
+
+  obtenirPresences() {
+    return { ...this.presences };
+  }
+
+  definirPresenceInterne({ utilisateurId, statut }) {
+    this.verifierUtilisateur(utilisateurId);
+    if (!['en-ligne', 'hors-ligne'].includes(statut)) {
+      throw new Error('ERR_PRESENCE_INVALIDE');
+    }
+    this.presences[utilisateurId] = statut;
+    const presence = { utilisateurId, statut, vuLaDerniereFois: Date.now() };
+    this.emettre('presence', presence);
+    return presence;
+  }
+
+  modifierPresence({ utilisateurId, statut }) {
+    this.verifierReseauConnecte();
+    return this.definirPresenceInterne({ utilisateurId, statut });
+  }
+
+  /** Simule une coupure réseau sans détruire l'utilisateur de la session. */
+  simulerCoupure(utilisateurId = this.utilisateurConnecteId) {
+    utilisateurId = utilisateurId ?? this.utilisateurConnecteId;
+    // Invalide toute reconnexion encore en attente : son timer pourra finir,
+    // mais il ne devra plus remettre le réseau en ligne.
+    this.reconnexionJeton += 1;
+    if (utilisateurId) {
+      this.definirPresenceInterne({
+        utilisateurId,
+        statut: 'hors-ligne',
+      });
+    }
+    return this.definirEtatConnexion('deconnecte');
+  }
+
+  /**
+   * Simule la transition déconnecté -> reconnexion -> connecté. L'état
+   * intermédiaire est poussé immédiatement à l'UI avant le délai simulé.
+   */
+  async simulerReconnexion(
+    delaiMs = 900,
+    utilisateurId = this.utilisateurConnecteId
+  ) {
+    utilisateurId = utilisateurId ?? this.utilisateurConnecteId;
+    if (!this.utilisateurConnecteId) {
+      throw new Error('ERR_AUCUN_UTILISATEUR_CONNECTE');
+    }
+
+    // Une reconnexion n'a de sens que depuis l'état déconnecté. Le gateway
+    // protège aussi cet invariant afin de ne pas dépendre uniquement de l'UI.
+    if (this.etatConnexion.statut === 'connecte') {
+      return this.obtenirEtatConnexion();
+    }
+
+    // Une reconnexion déjà en cours ne doit pas être relancée : deux appels
+    // rapprochés (double-clic ou IPC concurrent) ne doivent ni doubler le
+    // compteur ni faire courir deux transitions réseau en parallèle.
+    if (this.etatConnexion.statut === 'reconnexion') {
+      return this.obtenirEtatConnexion();
+    }
+
+    const jeton = ++this.reconnexionJeton;
+    this.definirEtatConnexion('reconnexion');
+    await new Promise((resolve) => setTimeout(resolve, Math.max(0, delaiMs)));
+
+    // Une coupure (ou une autre reconnexion) a pu arriver pendant le délai.
+    // Dans ce cas cette tentative est obsolète et ne doit pas écraser l'état
+    // réseau plus récent.
+    if (
+      jeton !== this.reconnexionJeton ||
+      this.etatConnexion.statut !== 'reconnexion'
+    ) {
+      return this.obtenirEtatConnexion();
+    }
+
+    if (utilisateurId) {
+      this.definirPresenceInterne({
+        utilisateurId,
+        statut: 'en-ligne',
+      });
+    }
+    // Le compteur représente les reconnexions réellement terminées, pas les
+    // tentatives démarrées puis invalidées par une nouvelle coupure.
+    this.reconnexions += 1;
+    return this.definirEtatConnexion('connecte');
+  }
+
   /**
    * Vérifie si un pseudo est disponible (aucun utilisateur enregistré ne le
    * porte déjà), comparaison insensible à la casse. Utilisé par l'écran de
@@ -394,7 +536,8 @@ class MockGatewayRuntime {
       this.utilisateurs.push({ id, pseudo });
     }
     this.utilisateurConnecteId = id;
-    return { statut: 'connecte', reconnexions: 0 };
+    this.definirPresenceInterne({ utilisateurId: id, statut: 'en-ligne' });
+    return this.definirEtatConnexion('connecte');
   }
 
   /**
@@ -659,6 +802,7 @@ class MockGatewayRuntime {
   }
 
   envoyerMessage({ salonId, utilisateurId, contenu }) {
+    this.verifierReseauConnecte();
     this.verifierUtilisateur(utilisateurId);
     const salon = this.trouverSalon(salonId);
     // Un salon public accepte implicitement tout le monde comme membre :
@@ -677,9 +821,9 @@ class MockGatewayRuntime {
     if (!salon.membreIds.includes(utilisateurId)) {
       throw new Error('ERR_ACCES_REFUSE_SALON');
     }
-    const texte =
-      typeof contenu === 'string' ? contenu.trim().slice(0, 2000) : '';
+    const texte = typeof contenu === 'string' ? contenu.trim() : '';
     if (!texte) throw new Error('ERR_MESSAGE_VIDE');
+    if (texte.length > 2000) throw new Error('ERR_MESSAGE_TROP_LONG');
     const message = {
       id: `msg-s-${this.prochainMessageSalonIndex++}`,
       auteurId: utilisateurId,
@@ -691,6 +835,7 @@ class MockGatewayRuntime {
   }
 
   envoyerMessagePrive({ conversationId, contenu, utilisateurId }) {
+    this.verifierReseauConnecte();
     const utilisateurActuelId = utilisateurId ?? 'u1';
     this.verifierUtilisateur(utilisateurActuelId);
     const conversation = this.conversationsPrivees.find(
@@ -700,9 +845,9 @@ class MockGatewayRuntime {
     if (!conversation.participantIds.includes(utilisateurActuelId)) {
       throw new Error('ERR_ACCES_REFUSE_CONVERSATION');
     }
-    const texte =
-      typeof contenu === 'string' ? contenu.trim().slice(0, 2000) : '';
+    const texte = typeof contenu === 'string' ? contenu.trim() : '';
     if (!texte) throw new Error('ERR_MESSAGE_VIDE');
+    if (texte.length > 2000) throw new Error('ERR_MESSAGE_TROP_LONG');
     this.prochainMessagePriveIndex += 1;
     const message = {
       id: `mp-${this.prochainMessagePriveIndex}`,
@@ -713,6 +858,74 @@ class MockGatewayRuntime {
     };
     this.messagesPrives.push(message);
     return { ...message };
+  }
+
+  trouverMessageAccessible(messageId, utilisateurId) {
+    for (const salon of this.salons) {
+      const salonAccessible =
+        salon.visibilite === 'public' ||
+        salon.membreIds.includes(utilisateurId);
+      if (!salonAccessible) continue;
+
+      const index = salon.messages.findIndex(
+        (message) => message.id === messageId
+      );
+      if (index !== -1) {
+        return { type: 'salon', collection: salon.messages, index };
+      }
+    }
+
+    const indexPrive = this.messagesPrives.findIndex((message) => {
+      if (message.id !== messageId) return false;
+      const conversation = this.conversationsPrivees.find(
+        (item) => item.id === message.conversationId
+      );
+      return conversation?.participantIds.includes(utilisateurId);
+    });
+
+    if (indexPrive !== -1) {
+      return { type: 'dm', collection: this.messagesPrives, index: indexPrive };
+    }
+
+    return null;
+  }
+
+  modifierMessage({ messageId, utilisateurId, contenu }) {
+    this.verifierReseauConnecte();
+    this.verifierUtilisateur(utilisateurId);
+    const texte = typeof contenu === 'string' ? contenu.trim() : '';
+    if (!texte) throw new Error('ERR_MESSAGE_VIDE');
+    if (texte.length > 2000) throw new Error('ERR_MESSAGE_TROP_LONG');
+
+    const resultat = this.trouverMessageAccessible(messageId, utilisateurId);
+    if (!resultat) throw new Error('ERR_MESSAGE_INTROUVABLE');
+
+    const message = resultat.collection[resultat.index];
+    if (message.auteurId !== utilisateurId) {
+      throw new Error('ERR_MESSAGE_NON_AUTORISE');
+    }
+
+    const modifie = { ...message, contenu: texte, modification: Date.now() };
+    resultat.collection[resultat.index] = modifie;
+    this.emettre('message-modifie', modifie);
+    return structuredClone(modifie);
+  }
+
+  supprimerMessage({ messageId, utilisateurId }) {
+    this.verifierReseauConnecte();
+    this.verifierUtilisateur(utilisateurId);
+
+    const resultat = this.trouverMessageAccessible(messageId, utilisateurId);
+    if (!resultat) throw new Error('ERR_MESSAGE_INTROUVABLE');
+
+    const message = resultat.collection[resultat.index];
+    if (message.auteurId !== utilisateurId) {
+      throw new Error('ERR_MESSAGE_NON_AUTORISE');
+    }
+
+    resultat.collection.splice(resultat.index, 1);
+    this.emettre('message-supprime', { messageId });
+    return { messageId };
   }
 
   obtenirEtatsSaisie(param) {
@@ -726,6 +939,7 @@ class MockGatewayRuntime {
   }
 
   modifierEtatSaisie({ conversationId, utilisateurId, est_saisie }) {
+    this.verifierReseauConnecte();
     this.verifierUtilisateur(utilisateurId);
 
     // 1. Chercher si la cible est un DM ou un Salon

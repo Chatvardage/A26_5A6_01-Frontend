@@ -36,7 +36,6 @@
       "addServer": "Ajouter un serveur",
       "invitations": "Invitations",
       "chatName": "Nom du chat",
-      "onlineStatus": "En ligne",
       "simulatedUser": "Utilisateur simulé",
       "backHome": "Retour à l'accueil"
     },
@@ -68,8 +67,7 @@
       "invitationAccepted": "Invitation acceptée.",
       "invitationDeclined": "Invitation refusée.",
       "membersOf": "Membres de #{name}",
-      "system": "Système",
-      "connected": "Connecté"
+      "system": "Système"
     },
     "notifications": {
       "title": "Notifications",
@@ -127,7 +125,32 @@
       "ERR_CONVERSATION_AVEC_SOI_MEME": "Impossible de démarrer une conversation avec soi-même.",
       "ERR_CONVERSATION_PRIVEE_INTROUVABLE": "Conversation privée introuvable.",
       "ERR_ACCES_REFUSE_CONVERSATION": "Accès refusé à cette conversation.",
-      "ERR_CONVERSATION_OU_SALON_INTROUVABLE": "Conversation ou salon introuvable."
+      "ERR_CONVERSATION_OU_SALON_INTROUVABLE": "Conversation ou salon introuvable.",
+      "ERR_RESEAU_NON_CONNECTE": "Le réseau n’est pas connecté. Reconnectez-vous avant de continuer.",
+      "ERR_MESSAGE_INTROUVABLE": "Message introuvable.",
+      "ERR_MESSAGE_NON_AUTORISE": "Vous pouvez seulement modifier ou supprimer vos propres messages.",
+      "ERR_PRESENCE_INVALIDE": "Statut de présence invalide.",
+      "ERR_AUCUN_UTILISATEUR_CONNECTE": "Aucun utilisateur connecté.",
+      "ERR_MESSAGE_TROP_LONG": "Le message dépasse la limite de 2000 caractères."
+    },
+    "network": {
+      "connected": "Connecté",
+      "disconnected": "Déconnecté",
+      "reconnecting": "Reconnexion…",
+      "online": "En ligne",
+      "offline": "Hors ligne",
+      "cut": "Coupure",
+      "reconnect": "Reconnexion",
+      "changePresence": "Changer la présence"
+    },
+    "messages": {
+      "edit": "Modifier",
+      "delete": "Supprimer",
+      "edited": "modifié",
+      "deleteConfirm": "Supprimer ce message ?",
+      "cancel": "Annuler",
+      "updated": "Message modifié.",
+      "deleted": "Message supprimé."
     }
   },
   "en": {
@@ -167,7 +190,6 @@
       "addServer": "Add a server",
       "invitations": "Invitations",
       "chatName": "Chat name",
-      "onlineStatus": "Online",
       "simulatedUser": "Simulated user",
       "backHome": "Back to home"
     },
@@ -199,8 +221,7 @@
       "invitationAccepted": "Invitation accepted.",
       "invitationDeclined": "Invitation declined.",
       "membersOf": "Members of #{name}",
-      "system": "System",
-      "connected": "Connected"
+      "system": "System"
     },
     "notifications": {
       "title": "Notifications",
@@ -258,7 +279,32 @@
       "ERR_CONVERSATION_AVEC_SOI_MEME": "You cannot start a conversation with yourself.",
       "ERR_CONVERSATION_PRIVEE_INTROUVABLE": "Private conversation not found.",
       "ERR_ACCES_REFUSE_CONVERSATION": "Access denied to this conversation.",
-      "ERR_CONVERSATION_OU_SALON_INTROUVABLE": "Conversation or channel not found."
+      "ERR_CONVERSATION_OU_SALON_INTROUVABLE": "Conversation or channel not found.",
+      "ERR_RESEAU_NON_CONNECTE": "The network is not connected. Reconnect before continuing.",
+      "ERR_MESSAGE_INTROUVABLE": "Message not found.",
+      "ERR_MESSAGE_NON_AUTORISE": "You can only edit or delete your own messages.",
+      "ERR_PRESENCE_INVALIDE": "Invalid presence status.",
+      "ERR_AUCUN_UTILISATEUR_CONNECTE": "No user is currently signed in.",
+      "ERR_MESSAGE_TROP_LONG": "The message exceeds the 2000-character limit."
+    },
+    "network": {
+      "connected": "Connected",
+      "disconnected": "Disconnected",
+      "reconnecting": "Reconnecting…",
+      "online": "Online",
+      "offline": "Offline",
+      "cut": "Disconnect",
+      "reconnect": "Reconnect",
+      "changePresence": "Change presence"
+    },
+    "messages": {
+      "edit": "Edit",
+      "delete": "Delete",
+      "edited": "edited",
+      "deleteConfirm": "Delete this message?",
+      "cancel": "Cancel",
+      "updated": "Message updated.",
+      "deleted": "Message deleted."
     }
   }
 }
