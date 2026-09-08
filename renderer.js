@@ -276,6 +276,7 @@ async function reessayerMessageEnAttenteSalon(message) {
   // rafraîchissement ci-dessous.
   retirerMessageEnAttenteSalon(message.conversationId, message.id);
   messagesEnAttenteEnCoursSalon.delete(message.id);
+  afficherMessages({ conserverPositionScroll: true });
   await actualiser();
 }
 
