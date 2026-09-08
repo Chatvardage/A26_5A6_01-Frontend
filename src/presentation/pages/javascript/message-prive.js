@@ -742,6 +742,11 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
       definirConversationActivePourNotifs(null);
       reinitialiserHistoriqueDm();
+      // composerAutorise (voir afficherEtatReseau) est calculé à partir de
+      // state.activeConversationId : sans ce rappel, un composer resterait
+      // activé alors qu'il n'y a plus de conversation active pour recevoir
+      // le message tapé.
+      afficherEtatReseau();
       return;
     }
 
@@ -761,8 +766,27 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
       definirConversationActivePourNotifs(null);
       reinitialiserHistoriqueDm();
+      // Voir le commentaire équivalent plus haut : activeConversationId
+      // vient d'être remis à null, composerAutorise doit être recalculé en
+      // conséquence.
+      afficherEtatReseau();
       return;
     }
+
+    // On rappelle explicitement afficherEtatReseau() ici : composerAutorise
+    // (voir sa définition plus haut) est calculé à partir de
+    // state.activeConversationId, qui vient potentiellement d'être fixé par
+    // un appelant qui ne passe PAS par refreshConversations() (ex. un clic
+    // direct sur une conversation dans la liste, ou un changement de filtre
+    // — voir leurs listeners plus bas) — refreshConversations() rappelle
+    // bien afficherEtatReseau() de son côté, mais ces deux-là appellent
+    // renderActiveConversation() directement. Sans cet appel ici,
+    // composerAutorise resterait figé sur sa dernière valeur connue (par ex.
+    // désactivé s'il n'y avait provisoirement aucune conversation active),
+    // même après qu'une conversation valide soit redevenue active — voir
+    // afficherEtatReseau() dans renderer.js (afficherMessages()) pour
+    // l'équivalent salon et le même raisonnement.
+    afficherEtatReseau();
 
     // Changement de conversation active : on repart d'un historique manuel
     // vide (voir chargerMessagesPlusAnciensDm et reinitialiserHistoriqueDm).

@@ -277,7 +277,20 @@ async function reessayerMessageEnAttenteSalon(message) {
   retirerMessageEnAttenteSalon(message.conversationId, message.id);
   messagesEnAttenteEnCoursSalon.delete(message.id);
   afficherMessages({ conserverPositionScroll: true });
-  await actualiser();
+  try {
+    await actualiser();
+  } catch (erreur) {
+    // Garde défensive pure : actualiser() attrape déjà ses propres erreurs
+    // en interne et ne les relance jamais (voir sa définition), donc ce
+    // bloc ne devrait jamais s'exécuter aujourd'hui. Il existe pour ne pas
+    // dépendre implicitement de ce contrat non appliqué par le compilateur —
+    // si un futur refactor d'actualiser() laissait une erreur se propager,
+    // on veut une notification "échec" propre (comme côté DM, où
+    // refreshConversations() propage réellement les siennes — voir
+    // reessayerMessageEnAttenteDm dans message-prive.js) plutôt qu'un rejet
+    // de promesse non géré.
+    notifier(messageErreur(erreur), true);
+  }
 }
 
 function supprimerMessageEnAttenteSalon(message) {
@@ -1285,7 +1298,14 @@ el.formulaire.addEventListener('submit', async (event) => {
     notifier(messageErreur(erreur), true);
     return;
   }
-  await actualiser();
+  try {
+    await actualiser();
+  } catch (erreur) {
+    // Garde défensive pure — voir le commentaire équivalent dans
+    // reessayerMessageEnAttenteSalon plus haut pour le détail du pourquoi
+    // (actualiser() n'est pas censée relancer d'erreur aujourd'hui).
+    notifier(messageErreur(erreur), true);
+  }
 });
 
 el.utilisateur.addEventListener('change', async (event) => {
