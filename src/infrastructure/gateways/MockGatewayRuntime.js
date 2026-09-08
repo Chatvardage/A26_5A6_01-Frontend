@@ -860,6 +860,36 @@ class MockGatewayRuntime {
     return { ...message };
   }
 
+  trouverMessageAccessible(messageId, utilisateurId) {
+    for (const salon of this.salons) {
+      const salonAccessible =
+        salon.visibilite === 'public' ||
+        salon.membreIds.includes(utilisateurId);
+      if (!salonAccessible) continue;
+
+      const index = salon.messages.findIndex(
+        (message) => message.id === messageId
+      );
+      if (index !== -1) {
+        return { type: 'salon', collection: salon.messages, index };
+      }
+    }
+
+    const indexPrive = this.messagesPrives.findIndex((message) => {
+      if (message.id !== messageId) return false;
+      const conversation = this.conversationsPrivees.find(
+        (item) => item.id === message.conversationId
+      );
+      return conversation?.participantIds.includes(utilisateurId);
+    });
+
+    if (indexPrive !== -1) {
+      return { type: 'dm', collection: this.messagesPrives, index: indexPrive };
+    }
+
+    return null;
+  }
+
   modifierMessage({ messageId, utilisateurId, contenu }) {
     this.verifierReseauConnecte();
     this.verifierUtilisateur(utilisateurId);
@@ -867,91 +897,35 @@ class MockGatewayRuntime {
     if (!texte) throw new Error('ERR_MESSAGE_VIDE');
     if (texte.length > 2000) throw new Error('ERR_MESSAGE_TROP_LONG');
 
-    for (const salon of this.salons) {
-      const salonAccessible =
-        salon.visibilite === 'public' ||
-        salon.membreIds.includes(utilisateurId);
-      if (!salonAccessible) continue;
+    const resultat = this.trouverMessageAccessible(messageId, utilisateurId);
+    if (!resultat) throw new Error('ERR_MESSAGE_INTROUVABLE');
 
-      const index = salon.messages.findIndex(
-        (message) => message.id === messageId
-      );
-      if (index !== -1) {
-        const message = salon.messages[index];
-        if (message.auteurId !== utilisateurId)
-          throw new Error('ERR_MESSAGE_NON_AUTORISE');
-        const modifie = {
-          ...message,
-          contenu: texte,
-          modification: Date.now(),
-        };
-        salon.messages[index] = modifie;
-        this.emettre('message-modifie', modifie);
-        return structuredClone(modifie);
-      }
+    const message = resultat.collection[resultat.index];
+    if (message.auteurId !== utilisateurId) {
+      throw new Error('ERR_MESSAGE_NON_AUTORISE');
     }
 
-    const indexPrive = this.messagesPrives.findIndex((message) => {
-      if (message.id !== messageId) return false;
-      const conversation = this.conversationsPrivees.find(
-        (item) => item.id === message.conversationId
-      );
-      return conversation?.participantIds.includes(utilisateurId);
-    });
-    if (indexPrive !== -1) {
-      const message = this.messagesPrives[indexPrive];
-      if (message.auteurId !== utilisateurId)
-        throw new Error('ERR_MESSAGE_NON_AUTORISE');
-      const modifie = { ...message, contenu: texte, modification: Date.now() };
-      this.messagesPrives[indexPrive] = modifie;
-      this.emettre('message-modifie', modifie);
-      return { ...modifie };
-    }
-
-    throw new Error('ERR_MESSAGE_INTROUVABLE');
+    const modifie = { ...message, contenu: texte, modification: Date.now() };
+    resultat.collection[resultat.index] = modifie;
+    this.emettre('message-modifie', modifie);
+    return structuredClone(modifie);
   }
 
   supprimerMessage({ messageId, utilisateurId }) {
     this.verifierReseauConnecte();
     this.verifierUtilisateur(utilisateurId);
 
-    for (const salon of this.salons) {
-      const salonAccessible =
-        salon.visibilite === 'public' ||
-        salon.membreIds.includes(utilisateurId);
-      if (!salonAccessible) continue;
+    const resultat = this.trouverMessageAccessible(messageId, utilisateurId);
+    if (!resultat) throw new Error('ERR_MESSAGE_INTROUVABLE');
 
-      const index = salon.messages.findIndex(
-        (message) => message.id === messageId
-      );
-      if (index !== -1) {
-        if (salon.messages[index].auteurId !== utilisateurId) {
-          throw new Error('ERR_MESSAGE_NON_AUTORISE');
-        }
-        salon.messages.splice(index, 1);
-        this.emettre('message-supprime', { messageId });
-        return { messageId };
-      }
+    const message = resultat.collection[resultat.index];
+    if (message.auteurId !== utilisateurId) {
+      throw new Error('ERR_MESSAGE_NON_AUTORISE');
     }
 
-    const indexPrive = this.messagesPrives.findIndex((message) => {
-      if (message.id !== messageId) return false;
-      const conversation = this.conversationsPrivees.find(
-        (item) => item.id === message.conversationId
-      );
-      return conversation?.participantIds.includes(utilisateurId);
-    });
-    if (indexPrive !== -1) {
-      const message = this.messagesPrives[indexPrive];
-      if (message.auteurId !== utilisateurId) {
-        throw new Error('ERR_MESSAGE_NON_AUTORISE');
-      }
-      this.messagesPrives.splice(indexPrive, 1);
-      this.emettre('message-supprime', { messageId });
-      return { messageId };
-    }
-
-    throw new Error('ERR_MESSAGE_INTROUVABLE');
+    resultat.collection.splice(resultat.index, 1);
+    this.emettre('message-supprime', { messageId });
+    return { messageId };
   }
 
   obtenirEtatsSaisie(param) {
