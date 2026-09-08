@@ -1070,13 +1070,16 @@ dialog::backdrop {
 }
 
 /* Scopée à .message-row.non-livre .message-actions (spécificité (0,3,0))
-   plutôt qu'à .message-non-livre-actions seul (0,1,0) : cette dernière ne
-   l'emportait sur la règle opacity:0 de .message-actions ci-dessus que
-   parce qu'elle est déclarée plus bas dans ce fichier — un futur
-   réarrangement (ou l'ajout d'une règle .message-actions plus spécifique)
-   aurait pu masquer à nouveau réessayer/supprimer par erreur. Cette forme
-   gagne quel que soit l'ordre des règles, et documente explicitement
-   qu'elle vise les actions d'un message non livré. */
+   plutôt qu'à une classe dédiée du type .message-non-livre-actions seule
+   (0,1,0) : une telle classe ne l'emporterait sur la règle opacity:0 de
+   .message-actions ci-dessus que grâce à son ordre de déclaration dans ce
+   fichier — un futur réarrangement (ou l'ajout d'une règle .message-actions
+   plus spécifique) pourrait masquer à nouveau réessayer/supprimer par
+   erreur. Cette forme gagne quel que soit l'ordre des règles, et documente
+   explicitement qu'elle vise les actions d'un message non livré. (Une
+   classe .message-non-livre-actions avait été ajoutée en plus dans
+   chat-ui-shared.js mais n'était jamais ciblée par une règle CSS — elle a
+   été retirée comme code mort.) */
 .message-row.non-livre .message-actions {
   opacity: 1;
 }

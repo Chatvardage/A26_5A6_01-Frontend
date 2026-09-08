@@ -411,7 +411,11 @@
     badge.textContent = t('messages.notDelivered');
 
     const actions = document.createElement('div');
-    actions.classList.add('message-actions', 'message-non-livre-actions');
+    // Pas de classe 'message-non-livre-actions' ici : aucune règle CSS ne la
+    // cible (voir styles.css, qui scope volontairement l'opacité via
+    // .message-row.non-livre .message-actions pour des raisons de
+    // spécificité) — l'ajouter n'avait donc aucun effet, elle était morte.
+    actions.classList.add('message-actions');
 
     const reessayer = document.createElement('button');
     reessayer.type = 'button';

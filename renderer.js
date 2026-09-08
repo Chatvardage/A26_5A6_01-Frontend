@@ -273,10 +273,16 @@ async function reessayerMessageEnAttenteSalon(message) {
   }
 
   // Envoi réussi : retiré de la liste d'attente quoi qu'il arrive au
-  // rafraîchissement ci-dessous.
+  // rafraîchissement ci-dessous. Pas de afficherMessages() intermédiaire ici
+  // (contrairement à une version précédente) : le message vient d'être
+  // retiré de messagesEnAttenteSalon mais n'est pas encore dans les données
+  // fraîches du serveur, donc un rendu à ce stade précis le ferait
+  // disparaître brièvement de l'écran avant que actualiser() (via
+  // afficherTout -> afficherMessages, voir plus bas) ne le réaffiche à
+  // partir des données serveur. Symétrique avec reessayerMessageEnAttenteDm
+  // dans message-prive.js, qui n'a jamais eu ce rendu intermédiaire.
   retirerMessageEnAttenteSalon(message.conversationId, message.id);
   messagesEnAttenteEnCoursSalon.delete(message.id);
-  afficherMessages({ conserverPositionScroll: true });
   try {
     await actualiser();
   } catch (erreur) {
@@ -336,6 +342,49 @@ function fusionnerHistorique(messagesAnciens, messagesRecents, champDate) {
     parId.set(message.id, message);
   });
   return Array.from(parId.values()).sort((a, b) => a[champDate] - b[champDate]);
+}
+
+/**
+ * Fusionne `messagesTries` (déjà trié par `champDate`, typiquement le
+ * résultat de fusionnerHistorique) avec `messagesEnAttente` (0, 1 ou 2
+ * brouillons non livrés en général) sans re-trier l'ensemble.
+ *
+ * afficherMessages() est rappelé très souvent (indicateur de saisie, arrivée
+ * d'un message d'un autre utilisateur, etc.) et pas seulement quand un
+ * brouillon change : tant qu'au moins un message est en attente, un simple
+ * `[...messagesTries, ...messagesEnAttente].sort(...)` retrierait tout
+ * l'historique du salon à CHAQUE rendu, alors que seule la position des
+ * quelques brouillons a besoin d'être recalculée. On trie seulement
+ * `messagesEnAttente` (petit) puis on fait une fusion linéaire des deux
+ * tableaux triés (comme un merge sort), en O(n) plutôt que O(n log n) sur
+ * l'ensemble.
+ *
+ * @param {Array<Record<string, number>>} messagesTries
+ * @param {Array<Record<string, number>>} messagesEnAttente
+ * @param {string} champDate
+ */
+function fusionnerAvecMessagesEnAttente(
+  messagesTries,
+  messagesEnAttente,
+  champDate
+) {
+  if (!messagesEnAttente.length) return messagesTries;
+  const brouillonsTries = [...messagesEnAttente].sort(
+    (a, b) => a[champDate] - b[champDate]
+  );
+  const resultat = [];
+  let i = 0;
+  let j = 0;
+  while (i < messagesTries.length && j < brouillonsTries.length) {
+    if (messagesTries[i][champDate] <= brouillonsTries[j][champDate]) {
+      resultat.push(messagesTries[i++]);
+    } else {
+      resultat.push(brouillonsTries[j++]);
+    }
+  }
+  while (i < messagesTries.length) resultat.push(messagesTries[i++]);
+  while (j < brouillonsTries.length) resultat.push(brouillonsTries[j++]);
+  return resultat;
 }
 
 /**
@@ -807,13 +856,16 @@ function afficherMessages(options = {}) {
   );
   // fusionnerHistorique() renvoie déjà un tableau trié par date : pas besoin
   // de re-trier l'ensemble à chaque rendu quand il n'y a aucun message en
-  // attente (le cas de loin le plus fréquent) — seule la présence de
-  // brouillons justifie le re-tri complet ci-dessous.
-  const tousLesMessages = messagesEnAttenteDuSalon.length
-    ? [...messagesHistorique, ...messagesEnAttenteDuSalon].sort(
-        (a, b) => a.date - b.date
-      )
-    : messagesHistorique;
+  // attente (le cas de loin le plus fréquent). Quand il y en a, on fusionne
+  // au lieu de tout retrier (voir fusionnerAvecMessagesEnAttente) : sinon
+  // TOUT l'historique du salon serait retrié à chaque rendu tant qu'un seul
+  // brouillon reste en attente — y compris pour des rendus qui n'ont rien à
+  // voir avec lui (indicateur de saisie, etc.).
+  const tousLesMessages = fusionnerAvecMessagesEnAttente(
+    messagesHistorique,
+    messagesEnAttenteDuSalon,
+    'date'
+  );
 
   // Mémorise la position de défilement AVANT de reconstruire la liste : sans
   // ça, remplacer le contenu de #message-list (replaceChildren) réinitialise

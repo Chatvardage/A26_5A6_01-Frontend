@@ -473,6 +473,33 @@ window.addEventListener('DOMContentLoaded', async () => {
     return Array.from(parId.values()).sort((a, b) => a.envoi - b.envoi);
   }
 
+  // Fusionne `messagesTries` (déjà trié par `envoi`, typiquement le résultat
+  // de fusionnerHistoriqueDm) avec `messagesEnAttente` (0, 1 ou 2 brouillons
+  // non livrés en général) sans re-trier tout l'historique — voir
+  // fusionnerAvecMessagesEnAttente dans renderer.js pour l'équivalent salon
+  // et le détail du pourquoi (renderActiveConversation est rappelé très
+  // souvent pour des raisons sans rapport avec les brouillons, ex.
+  // indicateur de saisie).
+  function fusionnerAvecMessagesEnAttenteDm(messagesTries, messagesEnAttente) {
+    if (!messagesEnAttente.length) return messagesTries;
+    const brouillonsTries = [...messagesEnAttente].sort(
+      (a, b) => a.envoi - b.envoi
+    );
+    const resultat = [];
+    let i = 0;
+    let j = 0;
+    while (i < messagesTries.length && j < brouillonsTries.length) {
+      if (messagesTries[i].envoi <= brouillonsTries[j].envoi) {
+        resultat.push(messagesTries[i++]);
+      } else {
+        resultat.push(brouillonsTries[j++]);
+      }
+    }
+    while (i < messagesTries.length) resultat.push(messagesTries[i++]);
+    while (j < brouillonsTries.length) resultat.push(brouillonsTries[j++]);
+    return resultat;
+  }
+
   // Construit l'élément affiché en haut de la liste des messages pour
   // représenter l'état de l'historique — voir creerStatutHistorique dans
   // renderer.js pour l'équivalent salon (même comportement : chargement en
@@ -842,13 +869,14 @@ window.addEventListener('DOMContentLoaded', async () => {
     );
     // fusionnerHistoriqueDm() renvoie déjà un tableau trié par `envoi` : pas
     // besoin de re-trier l'ensemble à chaque rendu quand il n'y a aucun
-    // message en attente (le cas de loin le plus fréquent) — voir le
-    // commentaire équivalent dans renderer.js.
-    const messages = messagesEnAttenteDeLaConversation.length
-      ? [...messagesHistorique, ...messagesEnAttenteDeLaConversation].sort(
-          (a, b) => a.envoi - b.envoi
-        )
-      : messagesHistorique;
+    // message en attente (le cas de loin le plus fréquent). Quand il y en a,
+    // on fusionne au lieu de tout retrier — voir
+    // fusionnerAvecMessagesEnAttenteDm ci-dessus et son équivalent salon dans
+    // renderer.js.
+    const messages = fusionnerAvecMessagesEnAttenteDm(
+      messagesHistorique,
+      messagesEnAttenteDeLaConversation
+    );
     const otherUser = conversation.otherUser;
 
     if (topbarName) {
