@@ -89,6 +89,20 @@
     });
   }
 
+  const etatsActionsMessage = new Map();
+
+  function lireEtatAction(messageId) {
+    return etatsActionsMessage.get(messageId) ?? { mode: 'normal' };
+  }
+
+  function definirEtatAction(messageId, etat) {
+    if (!etat || etat.mode === 'normal') {
+      etatsActionsMessage.delete(messageId);
+      return;
+    }
+    etatsActionsMessage.set(messageId, etat);
+  }
+
   function creerActionsMessage({
     message,
     texteEl,
@@ -108,7 +122,13 @@
     modifier.textContent = t('messages.edit');
     modifier.title = t('messages.edit');
 
-    modifier.addEventListener('click', () => {
+    const supprimer = document.createElement('button');
+    supprimer.type = 'button';
+    supprimer.classList.add('message-action');
+    supprimer.textContent = t('messages.delete');
+    supprimer.title = t('messages.delete');
+
+    const afficherEdition = (brouillon) => {
       const contenuInitial = message.contenu;
       const editeur = document.createElement('div');
       editeur.classList.add('message-edit-row');
@@ -116,7 +136,7 @@
       const champ = document.createElement('input');
       champ.type = 'text';
       champ.classList.add('message-edit-input');
-      champ.value = contenuInitial;
+      champ.value = brouillon ?? contenuInitial;
       champ.maxLength = 2000;
 
       const enregistrer = document.createElement('button');
@@ -131,19 +151,30 @@
       annuler.textContent = '✕';
       annuler.title = t('messages.cancel');
 
-      const restaurer = () => {
+      const restaurerEdition = () => {
+        definirEtatAction(message.id, { mode: 'normal' });
         editeur.replaceWith(texteEl);
         actions.hidden = false;
       };
 
+      champ.addEventListener('input', () => {
+        definirEtatAction(message.id, {
+          mode: 'edition',
+          brouillon: champ.value,
+        });
+      });
+
       const sauvegarder = async () => {
         const nouveauContenu = champ.value.trim();
         if (!nouveauContenu || nouveauContenu === contenuInitial) {
-          restaurer();
+          restaurerEdition();
           return;
         }
+
         enregistrer.disabled = true;
         annuler.disabled = true;
+        const etatAvantEnvoi = { mode: 'edition', brouillon: champ.value };
+        definirEtatAction(message.id, { mode: 'normal' });
         try {
           await api.modifierMessage({
             messageId: message.id,
@@ -151,6 +182,7 @@
             contenu: nouveauContenu,
           });
         } catch (erreur) {
+          definirEtatAction(message.id, etatAvantEnvoi);
           notifier(messageErreur(erreur), true);
           enregistrer.disabled = false;
           annuler.disabled = false;
@@ -159,31 +191,30 @@
       };
 
       enregistrer.addEventListener('click', sauvegarder);
-      annuler.addEventListener('click', restaurer);
+      annuler.addEventListener('click', restaurerEdition);
       champ.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
           event.preventDefault();
           void sauvegarder();
         } else if (event.key === 'Escape') {
           event.preventDefault();
-          restaurer();
+          restaurerEdition();
         }
       });
 
       editeur.append(champ, enregistrer, annuler);
       texteEl.replaceWith(editeur);
       actions.hidden = true;
-      champ.focus();
-      champ.select();
-    });
+      return champ;
+    };
 
-    const supprimer = document.createElement('button');
-    supprimer.type = 'button';
-    supprimer.classList.add('message-action');
-    supprimer.textContent = t('messages.delete');
-    supprimer.title = t('messages.delete');
+    const restaurerActions = () => {
+      definirEtatAction(message.id, { mode: 'normal' });
+      actions.classList.remove('confirming-delete');
+      actions.replaceChildren(modifier, supprimer);
+    };
 
-    supprimer.addEventListener('click', () => {
+    const afficherConfirmationSuppression = () => {
       const question = document.createElement('span');
       question.classList.add('message-delete-question');
       question.textContent = t('messages.deleteConfirm');
@@ -198,16 +229,15 @@
       confirmerSuppression.classList.add('message-action', 'danger');
       confirmerSuppression.textContent = t('messages.delete');
 
-      const restaurerActions = () => {
-        actions.classList.remove('confirming-delete');
-        actions.replaceChildren(modifier, supprimer);
+      annulerSuppression.addEventListener('click', () => {
+        restaurerActions();
         supprimer.focus();
-      };
+      });
 
-      annulerSuppression.addEventListener('click', restaurerActions);
       confirmerSuppression.addEventListener('click', async () => {
         annulerSuppression.disabled = true;
         confirmerSuppression.disabled = true;
+        definirEtatAction(message.id, { mode: 'normal' });
         try {
           await api.supprimerMessage({
             messageId: message.id,
@@ -220,6 +250,7 @@
             }
           });
         } catch (erreur) {
+          definirEtatAction(message.id, { mode: 'suppression' });
           notifier(messageErreur(erreur), true);
           annulerSuppression.disabled = false;
           confirmerSuppression.disabled = false;
@@ -232,10 +263,37 @@
         annulerSuppression,
         confirmerSuppression
       );
-      confirmerSuppression.focus();
+      return confirmerSuppression;
+    };
+
+    modifier.addEventListener('click', () => {
+      definirEtatAction(message.id, {
+        mode: 'edition',
+        brouillon: message.contenu,
+      });
+      const champ = afficherEdition(message.contenu);
+      champ.focus();
+      champ.select();
+    });
+
+    supprimer.addEventListener('click', () => {
+      definirEtatAction(message.id, { mode: 'suppression' });
+      afficherConfirmationSuppression().focus();
     });
 
     actions.append(modifier, supprimer);
+
+    const etat = lireEtatAction(message.id);
+    if (etat.mode === 'edition') {
+      requestAnimationFrame(() => {
+        afficherEdition(etat.brouillon);
+      });
+    } else if (etat.mode === 'suppression') {
+      requestAnimationFrame(() => {
+        afficherConfirmationSuppression();
+      });
+    }
+
     return actions;
   }
 

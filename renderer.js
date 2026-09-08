@@ -570,6 +570,7 @@ function afficherMessages(options = {}) {
     el.nomSalon.textContent = t('channels.noChannelAccessible');
     el.prive.hidden = true;
     el.message.disabled = true;
+    if (el.envoyer) el.envoyer.disabled = true;
     // channels.sendMessagePlaceholder attend un paramètre {name} (voir plus
     // bas) : il n'est donc PAS dans le balayage générique data-i18n-*
     // (appliquerTraductionsStatiques), qui appelle t() sans paramètres.
@@ -628,7 +629,9 @@ function afficherMessages(options = {}) {
   definirConversationActivePourNotifs(salon.id);
   remplirLabelSalon(el.nomSalon, salon);
   el.prive.hidden = salon.visibilite !== 'prive';
-  el.message.disabled = false;
+  const reseauBloque = etatReseau.statut !== 'connecte';
+  el.message.disabled = reseauBloque;
+  if (el.envoyer) el.envoyer.disabled = reseauBloque;
   el.message.placeholder = t('channels.sendMessagePlaceholder', {
     name: salon.nom,
   });

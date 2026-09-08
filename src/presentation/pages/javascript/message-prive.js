@@ -1224,7 +1224,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   window.electronAPI.onPresenceChange(async (presence) => {
     presences[presence.utilisateurId] = presence.statut;
     afficherPresenceCourante();
-    await refreshConversations();
+    await refreshConversations({ conserverPositionScroll: true });
   });
 
   window.electronAPI.onMessageModifieChange(async () => {
