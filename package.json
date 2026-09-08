@@ -88,5 +88,11 @@
       "icon": "assets/icon.png",
       "category": "Network"
     }
+  },
+  "lavamoat": {
+    "allowScripts": {
+      "electron-builder>app-builder-lib>electron-builder-squirrel-windows>electron-winstaller#5.4.0": false,
+      "vite>esbuild#0.25.12": false
+    }
   }
 }
