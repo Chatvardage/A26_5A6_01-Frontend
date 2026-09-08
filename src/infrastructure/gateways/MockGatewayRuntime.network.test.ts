@@ -83,6 +83,24 @@ describe('MockGatewayRuntime - réseau et présence', () => {
     expect(gateway.obtenirEtatConnexion().statut).toBe('deconnecte');
   });
 
+  it('ne compte pas une reconnexion invalidée par une nouvelle coupure', async () => {
+    vi.useFakeTimers();
+    const gateway = new MockGatewayRuntime();
+    gateway.connexion({ id: 'u1', pseudo: 'sam' });
+    gateway.simulerCoupure('u1');
+
+    const reconnexion = gateway.simulerReconnexion(500, 'u1');
+    expect(gateway.obtenirEtatConnexion().statut).toBe('reconnexion');
+
+    gateway.simulerCoupure('u1');
+    await vi.advanceTimersByTimeAsync(500);
+    await reconnexion;
+
+    expect(gateway.obtenirEtatConnexion().statut).toBe('deconnecte');
+    expect(gateway.obtenirEtatConnexion().reconnexions).toBe(0);
+    vi.useRealTimers();
+  });
+
   it('refuse les messages pendant une coupure réseau puis les accepte après reconnexion', async () => {
     vi.useFakeTimers();
     const gateway = new MockGatewayRuntime();

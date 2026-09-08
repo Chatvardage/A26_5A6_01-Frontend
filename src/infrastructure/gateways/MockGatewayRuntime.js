@@ -459,7 +459,6 @@ class MockGatewayRuntime {
       return this.obtenirEtatConnexion();
     }
 
-    this.reconnexions += 1;
     const jeton = ++this.reconnexionJeton;
     this.definirEtatConnexion('reconnexion');
     await new Promise((resolve) => setTimeout(resolve, Math.max(0, delaiMs)));
@@ -480,6 +479,9 @@ class MockGatewayRuntime {
         statut: 'en-ligne',
       });
     }
+    // Le compteur représente les reconnexions réellement terminées, pas les
+    // tentatives démarrées puis invalidées par une nouvelle coupure.
+    this.reconnexions += 1;
     return this.definirEtatConnexion('connecte');
   }
 

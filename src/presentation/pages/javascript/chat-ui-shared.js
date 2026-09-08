@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  function afficherEtatReseau({ etat, elements, t }) {
+  function afficherEtatReseau({ etat, elements, t, composerAutorise = true }) {
     if (!etat) return;
     const {
       statutConnexion,
@@ -24,8 +24,9 @@
     }
 
     const bloque = etat.statut !== 'connecte';
-    if (messageInput) messageInput.disabled = bloque;
-    if (submitButton) submitButton.disabled = bloque;
+    const composerBloque = bloque || !composerAutorise;
+    if (messageInput) messageInput.disabled = composerBloque;
+    if (submitButton) submitButton.disabled = composerBloque;
     if (presenceCourante) presenceCourante.disabled = bloque;
     if (couperReseau) couperReseau.disabled = bloque;
     if (reconnecterReseau)

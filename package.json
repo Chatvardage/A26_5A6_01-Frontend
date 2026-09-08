@@ -61,6 +61,8 @@
       "preload.js",
       "renderer.js",
       "src/**/*",
+      "!src/**/*.test.js",
+      "!src/**/*.test.ts",
       "assets/**/*",
       "dist/**/*",
       "package.json"

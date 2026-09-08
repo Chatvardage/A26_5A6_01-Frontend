@@ -125,6 +125,9 @@ function afficherEtatReseau(nouvelEtat = etatReseau) {
       reconnecterReseau: el.reconnecterReseau,
     },
     t,
+    composerAutorise: Boolean(
+      salonActifId && etat.salons.some((salon) => salon.id === salonActifId)
+    ),
   });
 }
 
@@ -1108,8 +1111,10 @@ if (el.langue) {
       // canal échoue.
     }
     el.langue.value = I18n.obtenirLangue();
-    afficherTout();
+    // Appliquer d'abord l'état réseau, puis laisser le rendu du salon
+    // imposer ses contraintes propres (ex. aucun salon sélectionné).
     afficherEtatReseau();
+    afficherTout();
     afficherPresenceCourante();
   });
 }

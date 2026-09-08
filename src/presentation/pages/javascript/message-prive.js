@@ -129,6 +129,12 @@ window.addEventListener('DOMContentLoaded', async () => {
         reconnecterReseau: simulateNetworkReconnect,
       },
       t,
+      composerAutorise: Boolean(
+        state.activeConversationId &&
+        state.conversations.some(
+          (conversation) => conversation.id === state.activeConversationId
+        )
+      ),
     });
   }
 
