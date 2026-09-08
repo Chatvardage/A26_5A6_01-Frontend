@@ -1041,6 +1041,38 @@ dialog::backdrop {
   color: var(--text-primary);
 }
 
+/* Message "non livré" : tapé/renvoyé hors ligne, jamais parti vers le
+   serveur (voir creerMessageEnAttente / creerActionsMessageNonLivre dans
+   chat-ui-shared.js). La bulle reste visible mais estompée pour signaler
+   qu'elle n'est pas encore confirmée, avec un badge + réessayer/supprimer
+   toujours affichés (pas seulement au survol, contrairement à
+   .message-actions normal) puisque l'utilisateur doit voir l'échec sans
+   avoir à chercher. */
+.message-row.non-livre .text {
+  opacity: 0.6;
+}
+
+.message-non-livre {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.message-row.own .message-non-livre,
+.message-row.own-message .message-non-livre {
+  flex-direction: row-reverse;
+}
+
+.message-non-livre-badge {
+  font-size: 0.72rem;
+  color: var(--offline, #ef4444);
+}
+
+.message-non-livre-actions {
+  opacity: 1;
+}
+
 .edited-label {
   margin-left: 4px;
   color: var(--text-muted);

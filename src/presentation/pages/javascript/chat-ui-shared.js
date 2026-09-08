@@ -23,10 +23,20 @@
       libelleConnexion.textContent = libelles[etat.statut] ?? etat.statut;
     }
 
-    const bloque = etat.statut !== 'connecte';
-    const composerBloque = bloque || !composerAutorise;
+    // Le champ de message et son bouton d'envoi ne dépendent QUE de la
+    // présence d'une conversation active (composerAutorise) : un message tapé
+    // hors ligne reste envoyable depuis l'UI, il est simplement affiché
+    // immédiatement comme "non livré" avec des actions supprimer/réessayer
+    // tant que la connexion n'est pas revenue (voir creerMessageEnAttente et
+    // creerActionsMessageNonLivre plus bas, et leur usage dans renderer.js /
+    // message-prive.js). Ce composerBloque ne doit donc plus dépendre de
+    // l'état réseau, contrairement aux autres contrôles ci-dessous qui
+    // déclenchent, eux, un vrai aller-retour serveur.
+    const composerBloque = !composerAutorise;
     if (messageInput) messageInput.disabled = composerBloque;
     if (submitButton) submitButton.disabled = composerBloque;
+
+    const bloque = etat.statut !== 'connecte';
     if (presenceCourante) presenceCourante.disabled = bloque;
     if (couperReseau) couperReseau.disabled = bloque;
     if (reconnecterReseau)
@@ -319,6 +329,102 @@
     return actions;
   }
 
+  let compteurMessageLocal = 0;
+
+  /**
+   * Génère un identifiant local pour un message pas encore livré au serveur
+   * (préfixé "local-" pour ne jamais entrer en collision avec les
+   * identifiants "msg-..." générés côté MockGateway une fois l'envoi
+   * réellement accepté).
+   */
+  function genererIdMessageLocal() {
+    compteurMessageLocal += 1;
+    return `local-${Date.now()}-${compteurMessageLocal}`;
+  }
+
+  /**
+   * Crée l'objet représentant un message tapé alors que la connexion au
+   * serveur est coupée (ou dont l'envoi a échoué en cours de route) : affiché
+   * immédiatement dans la liste comme les autres messages, mais marqué
+   * `nonLivre: true` pour que l'appelant lui substitue les actions
+   * supprimer/réessayer (voir creerActionsMessageNonLivre) plutôt que les
+   * actions modifier/supprimer normales. `envoi` et `date` portent la même
+   * valeur : la conversation privée (message-prive.js) trie par `envoi`, le
+   * salon (renderer.js) par `date` — dupliquer le champ ici évite à chaque
+   * page de connaître le détail de champ de tri de l'autre.
+   *
+   * @param conversationId Identifiant du salon ou de la conversation privée visé.
+   * @param auteurId Identifiant de l'utilisateur courant (auteur du message).
+   * @param contenu Contenu texte du message.
+   *
+   * @returns Un objet "Message"-compatible, avec `nonLivre: true`.
+   */
+  function creerMessageEnAttente({ conversationId, auteurId, contenu }) {
+    const maintenant = Date.now();
+    return {
+      id: genererIdMessageLocal(),
+      conversationId,
+      auteurId,
+      contenu,
+      type: 'texte',
+      envoi: maintenant,
+      date: maintenant,
+      nonLivre: true,
+    };
+  }
+
+  /**
+   * Construit la ligne d'actions d'un message "non livré" (jamais parti vers
+   * le serveur, faute de connexion) : un badge indiquant l'échec, plus les
+   * boutons réessayer/supprimer. Contrairement à creerActionsMessage, ces
+   * actions ne sont JAMAIS désactivées par l'état de connexion — un message
+   * en attente doit toujours pouvoir être supprimé, et "réessayer" est
+   * justement ce qui re-teste la connexion (c'est à la charge de l'appelant,
+   * via `onReessayer`, de vérifier l'état de connexion avant de retenter
+   * l'envoi et de laisser le message en attente sinon).
+   *
+   * @param message Le message en attente (voir creerMessageEnAttente).
+   * @param t Fonction de traduction (voir I18n.t).
+   * @param onReessayer Appelée avec le message quand l'utilisateur clique sur "Réessayer".
+   * @param onSupprimer Appelée avec le message quand l'utilisateur clique sur "Supprimer".
+   *
+   * @returns Un élément DOM à ajouter au corps du message (`.message-body`).
+   */
+  function creerActionsMessageNonLivre({
+    message,
+    t,
+    onReessayer,
+    onSupprimer,
+  }) {
+    const conteneur = document.createElement('div');
+    conteneur.classList.add('message-non-livre');
+
+    const badge = document.createElement('span');
+    badge.classList.add('message-non-livre-badge');
+    badge.textContent = t('messages.notDelivered');
+
+    const actions = document.createElement('div');
+    actions.classList.add('message-actions', 'message-non-livre-actions');
+
+    const reessayer = document.createElement('button');
+    reessayer.type = 'button';
+    reessayer.classList.add('message-action');
+    reessayer.textContent = t('messages.retry');
+    reessayer.title = t('messages.retry');
+    reessayer.addEventListener('click', () => onReessayer?.(message));
+
+    const supprimer = document.createElement('button');
+    supprimer.type = 'button';
+    supprimer.classList.add('message-action', 'danger');
+    supprimer.textContent = t('messages.delete');
+    supprimer.title = t('messages.delete');
+    supprimer.addEventListener('click', () => onSupprimer?.(message));
+
+    actions.append(reessayer, supprimer);
+    conteneur.append(badge, actions);
+    return conteneur;
+  }
+
   window.ChatUiShared = Object.freeze({
     afficherEtatReseau,
     afficherPresenceCourante,
@@ -326,5 +432,7 @@
     brancherControlesReseauPresence,
     creerActionsMessage,
     oublierEtatActionMessage,
+    creerMessageEnAttente,
+    creerActionsMessageNonLivre,
   });
 })();

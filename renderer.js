@@ -174,6 +174,75 @@ let etatHistoriqueSalon = {
   enChargement: false,
 };
 
+// --- Messages non livrés (hors ligne) --------------------------------------
+// Messages tapés pendant que etatReseau.statut !== 'connecte' (ou dont
+// l'envoi a échoué en cours de route) : jamais transmis au gateway, gardés
+// uniquement ici par salon en attendant que l'utilisateur clique "réessayer"
+// ou "supprimer" (voir creerActionsMessageNonLivre dans chat-ui-shared.js).
+// Volontairement PAS persisté (StockageLocal) : contrairement à l'historique
+// des salons, un brouillon jamais envoyé n'a pas vocation à survivre à un
+// redémarrage de l'app.
+const messagesEnAttenteSalon = new Map();
+
+function ajouterMessageEnAttenteSalon(salonId, message) {
+  const liste = messagesEnAttenteSalon.get(salonId) ?? [];
+  liste.push(message);
+  messagesEnAttenteSalon.set(salonId, liste);
+}
+
+function obtenirMessagesEnAttenteSalon(salonId) {
+  return messagesEnAttenteSalon.get(salonId) ?? [];
+}
+
+function retirerMessageEnAttenteSalon(salonId, messageId) {
+  const liste = messagesEnAttenteSalon.get(salonId);
+  if (!liste) return;
+  const restants = liste.filter((message) => message.id !== messageId);
+  if (restants.length) {
+    messagesEnAttenteSalon.set(salonId, restants);
+  } else {
+    messagesEnAttenteSalon.delete(salonId);
+  }
+}
+
+/**
+ * Retente l'envoi d'un message resté "non livré". Vérifie explicitement
+ * etatReseau (EtatConnexion) — jamais `presences` : simuler sa propre
+ * présence "hors-ligne" (voir brancherControlesReseauPresence) ne doit pas
+ * empêcher de réessayer, seule une vraie coupure réseau le doit.
+ */
+async function reessayerMessageEnAttenteSalon(message) {
+  if (etatReseau.statut !== 'connecte') {
+    notifier(t('messages.stillOffline'), true);
+    return;
+  }
+  try {
+    await window.electronAPI.envoyerMessageSalon({
+      salonId: message.conversationId,
+      utilisateurId: message.auteurId,
+      contenu: message.contenu,
+    });
+    retirerMessageEnAttenteSalon(message.conversationId, message.id);
+    await actualiser();
+  } catch (erreur) {
+    notifier(messageErreur(erreur), true);
+  }
+}
+
+function supprimerMessageEnAttenteSalon(message) {
+  retirerMessageEnAttenteSalon(message.conversationId, message.id);
+  afficherMessages({ conserverPositionScroll: true });
+}
+
+function creerActionsMessageNonLivre(message) {
+  return ChatUiShared.creerActionsMessageNonLivre({
+    message,
+    t,
+    onReessayer: reessayerMessageEnAttenteSalon,
+    onSupprimer: supprimerMessageEnAttenteSalon,
+  });
+}
+
 /**
  * Fusionne les messages déjà remontés manuellement (plus anciens) avec la
  * page récente renvoyée par le serveur, en dédoublonnant par `id` puis en
@@ -633,20 +702,35 @@ function afficherMessages(options = {}) {
   definirConversationActivePourNotifs(salon.id);
   remplirLabelSalon(el.nomSalon, salon);
   el.prive.hidden = salon.visibilite !== 'prive';
-  const reseauBloque = etatReseau.statut !== 'connecte';
-  el.message.disabled = reseauBloque;
-  if (el.envoyer) el.envoyer.disabled = reseauBloque;
+  // Le champ de saisie reste actif même hors ligne (voir ChatUiShared.
+  // afficherEtatReseau, qui ne le désactive plus que si aucun salon n'est
+  // sélectionné) : un message tapé sans connexion est affiché comme "non
+  // livré" avec réessayer/supprimer plutôt que d'empêcher la saisie.
+  // On rappelle explicitement afficherEtatReseau() ici : salonActifId vient
+  // tout juste d'être fixé par actualiser() (voir plus haut dans ce
+  // fichier), donc composerAutorise — calculé à partir de salonActifId —
+  // n'a encore jamais été recalculé avec CE salon. Sans cet appel, le
+  // premier chargerEtatReseauEtPresences() au démarrage (voir initialiser())
+  // a déjà figé messageInput/submitButton sur `disabled = true` (aucun salon
+  // actif à ce moment-là), et rien ne les réactivait plus jamais ensuite.
+  afficherEtatReseau();
   el.message.placeholder = t('channels.sendMessagePlaceholder', {
     name: salon.nom,
   });
 
   // Page récente (salon.messages) + historique manuellement remonté (voir
   // chargerMessagesPlusAnciensSalon) : voir fusionnerHistorique plus haut.
-  const tousLesMessages = fusionnerHistorique(
-    etatHistoriqueSalon.messagesAnciens,
-    salon.messages,
-    'date'
-  );
+  // Les messages non livrés du salon (voir messagesEnAttenteSalon) sont
+  // ajoutés à la suite : ils sont toujours plus récents que le reste, donc
+  // pas besoin de les faire entrer dans le tri par date ci-dessus.
+  const tousLesMessages = [
+    ...fusionnerHistorique(
+      etatHistoriqueSalon.messagesAnciens,
+      salon.messages,
+      'date'
+    ),
+    ...obtenirMessagesEnAttenteSalon(salon.id),
+  ];
 
   // Mémorise la position de défilement AVANT de reconstruire la liste : sans
   // ça, remplacer le contenu de #message-list (replaceChildren) réinitialise
@@ -682,8 +766,11 @@ function afficherMessages(options = {}) {
       const estMessagePersonnel = message.auteurId === utilisateurActuelId;
       const texteEl = creerEl('p', { classe: 'text' });
       remplirTexteMessage(texteEl, message.contenu);
+      const classesRow = ['message-row'];
+      if (estMessagePersonnel) classesRow.push('own');
+      if (message.nonLivre) classesRow.push('non-livre');
       const article = creerEl('article', {
-        classe: estMessagePersonnel ? 'message-row own' : 'message-row',
+        classe: classesRow.join(' '),
         enfants: [
           creerEl('div', {
             classe: 'avatar',
@@ -726,7 +813,11 @@ function afficherMessages(options = {}) {
           }),
         ],
       });
-      if (estMessagePersonnel) {
+      if (message.nonLivre) {
+        article
+          .querySelector('.message-body')
+          ?.appendChild(creerActionsMessageNonLivre(message));
+      } else if (estMessagePersonnel) {
         article
           .querySelector('.message-body')
           ?.appendChild(creerActionsMessage(message, texteEl));
@@ -1055,12 +1146,31 @@ el.membres.addEventListener('click', () => {
 
 el.formulaire.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const contenu = el.message.value;
-  if (!salonActifId || !contenu.trim() || etatReseau.statut !== 'connecte')
-    return;
+  const contenu = el.message.value.trim();
+  if (!salonActifId || !contenu) return;
 
   const auteurId = utilisateurActuelId;
   const salonId = salonActifId;
+  el.message.value = '';
+
+  // Hors ligne (etatReseau, JAMAIS `presences` — voir le commentaire sur
+  // messagesEnAttenteSalon) : le message est affiché tout de suite, marqué
+  // "non livré", sans jamais être transmis au gateway. Se mettre soi-même
+  // "hors-ligne" via le bouton de présence (brancherControlesReseauPresence)
+  // n'a donc aucun effet ici, seule une vraie coupure réseau simulée
+  // (#simulate-network-cut, qui change etatReseau) en a.
+  if (etatReseau.statut !== 'connecte') {
+    ajouterMessageEnAttenteSalon(
+      salonId,
+      ChatUiShared.creerMessageEnAttente({
+        conversationId: salonId,
+        auteurId,
+        contenu,
+      })
+    );
+    afficherMessages({ conserverPositionScroll: true });
+    return;
+  }
 
   // 1. Annule le timer actif de cet utilisateur s'il existe
   if (timersArretSaisie[auteurId]) {
@@ -1081,9 +1191,20 @@ el.formulaire.addEventListener('submit', async (event) => {
       utilisateurId: auteurId,
       contenu,
     });
-    el.message.value = '';
     await actualiser();
   } catch (erreur) {
+    // Connecté au moment de l'envoi mais échec en cours de route : même
+    // traitement qu'un envoi tenté hors ligne, plutôt que de perdre le texte
+    // tapé (voir le commentaire plus haut).
+    ajouterMessageEnAttenteSalon(
+      salonId,
+      ChatUiShared.creerMessageEnAttente({
+        conversationId: salonId,
+        auteurId,
+        contenu,
+      })
+    );
+    afficherMessages({ conserverPositionScroll: true });
     notifier(messageErreur(erreur), true);
   }
 });

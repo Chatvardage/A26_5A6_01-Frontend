@@ -339,6 +339,66 @@ window.addEventListener('DOMContentLoaded', async () => {
     enChargement: false,
   };
 
+  // --- Messages non livrés (hors ligne) ------------------------------------
+  // Messages tapés pendant que etatReseau.statut !== 'connecte' (ou dont
+  // l'envoi a échoué en cours de route) : jamais transmis au gateway, gardés
+  // uniquement ici par conversation en attendant que l'utilisateur clique
+  // "réessayer" ou "supprimer" (voir creerActionsMessageNonLivre dans
+  // chat-ui-shared.js). Voir messagesEnAttenteSalon dans renderer.js pour
+  // l'équivalent salon (même raisonnement, y compris le pourquoi de l'absence
+  // de persistance dans StockageLocal).
+  const messagesEnAttenteDm = new Map();
+
+  function ajouterMessageEnAttenteDm(conversationId, message) {
+    const liste = messagesEnAttenteDm.get(conversationId) ?? [];
+    liste.push(message);
+    messagesEnAttenteDm.set(conversationId, liste);
+  }
+
+  function obtenirMessagesEnAttenteDm(conversationId) {
+    return messagesEnAttenteDm.get(conversationId) ?? [];
+  }
+
+  function retirerMessageEnAttenteDm(conversationId, messageId) {
+    const liste = messagesEnAttenteDm.get(conversationId);
+    if (!liste) return;
+    const restants = liste.filter((message) => message.id !== messageId);
+    if (restants.length) {
+      messagesEnAttenteDm.set(conversationId, restants);
+    } else {
+      messagesEnAttenteDm.delete(conversationId);
+    }
+  }
+
+  /**
+   * Retente l'envoi d'un message resté "non livré". Vérifie explicitement
+   * etatReseau (EtatConnexion) — jamais `presences` : simuler sa propre
+   * présence "hors-ligne" (voir brancherControlesReseauPresence) ne doit pas
+   * empêcher de réessayer, seule une vraie coupure réseau le doit.
+   */
+  async function reessayerMessageEnAttenteDm(message) {
+    if (etatReseau.statut !== 'connecte') {
+      notifier(t('messages.stillOffline'), true);
+      return;
+    }
+    try {
+      await window.electronAPI.envoyerMessagePrive({
+        conversationId: message.conversationId,
+        contenu: message.contenu,
+        utilisateurId: message.auteurId,
+      });
+      retirerMessageEnAttenteDm(message.conversationId, message.id);
+      await refreshConversations();
+    } catch (erreur) {
+      notifier(messageErreur(erreur), true);
+    }
+  }
+
+  function supprimerMessageEnAttenteDm(message) {
+    retirerMessageEnAttenteDm(message.conversationId, message.id);
+    void renderActiveConversation();
+  }
+
   // Fusionne messages plus anciens déjà remontés et page récente en
   // dédoublonnant par id puis en triant par date d'envoi — voir
   // fusionnerHistorique dans renderer.js pour l'équivalent salon et le détail
@@ -458,6 +518,16 @@ window.addEventListener('DOMContentLoaded', async () => {
       );
       state.activeConversationId = firstOnline?.id ?? null;
     }
+
+    // state.activeConversationId vient tout juste d'être fixé (ou confirmé)
+    // ci-dessus : on rappelle explicitement afficherEtatReseau() ici, car
+    // composerAutorise (voir sa définition plus haut) est calculé à partir de
+    // cette valeur. Sans cet appel, le chargerEtatReseauEtPresences() du
+    // démarrage (voir l'initialisation en bas de fichier) a déjà figé
+    // messageInput/submitButton sur `disabled = true` (aucune conversation
+    // active à ce moment-là, avant le tout premier refreshConversations()),
+    // et rien ne les réactivait plus jamais ensuite.
+    afficherEtatReseau();
 
     // renderActiveConversation() doit s'exécuter avant renderConversationList() :
     // c'est elle qui marque la conversation active comme "lue"
@@ -669,11 +739,17 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // Page récente (conversation.messages) + historique manuellement remonté
     // (voir chargerMessagesPlusAnciensDm) : voir fusionnerHistoriqueDm plus
-    // haut.
-    const messages = fusionnerHistoriqueDm(
-      etatHistoriqueDm.messagesAnciens,
-      conversation.messages ?? []
-    );
+    // haut. Les messages non livrés de cette conversation (voir
+    // messagesEnAttenteDm) sont ajoutés à la suite : ils sont toujours plus
+    // récents que le reste, pas besoin de les faire entrer dans le tri par
+    // date ci-dessus.
+    const messages = [
+      ...fusionnerHistoriqueDm(
+        etatHistoriqueDm.messagesAnciens,
+        conversation.messages ?? []
+      ),
+      ...obtenirMessagesEnAttenteDm(conversation.id),
+    ];
     const otherUser = conversation.otherUser;
 
     if (topbarName) {
@@ -748,6 +824,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (isOwn) {
         row.classList.add('own-message');
       }
+      if (message.nonLivre) {
+        row.classList.add('non-livre');
+      }
 
       const avatar = document.createElement('div');
       avatar.classList.add('avatar');
@@ -781,7 +860,11 @@ window.addEventListener('DOMContentLoaded', async () => {
         meta.appendChild(edited);
       }
       body.append(meta, text);
-      if (isOwn) body.appendChild(creerActionsMessage(message, text));
+      if (message.nonLivre) {
+        body.appendChild(creerActionsMessageNonLivre(message));
+      } else if (isOwn) {
+        body.appendChild(creerActionsMessage(message, text));
+      }
       row.append(avatar, body);
       messageList.appendChild(row);
     });
@@ -818,6 +901,15 @@ window.addEventListener('DOMContentLoaded', async () => {
       messageErreur,
       champMessage: messageInput,
       getEtatReseau: () => etatReseau,
+    });
+  }
+
+  function creerActionsMessageNonLivre(message) {
+    return ChatUiShared.creerActionsMessageNonLivre({
+      message,
+      t,
+      onReessayer: reessayerMessageEnAttenteDm,
+      onSupprimer: supprimerMessageEnAttenteDm,
     });
   }
 
@@ -982,16 +1074,33 @@ window.addEventListener('DOMContentLoaded', async () => {
     messageForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       const content = messageInput.value.trim();
-      if (
-        !content ||
-        !state.activeConversationId ||
-        etatReseau.statut !== 'connecte'
-      ) {
+      if (!content || !state.activeConversationId) {
         return;
       }
 
       const auteurId = state.currentUserId;
       const conversationId = state.activeConversationId;
+      messageInput.value = '';
+
+      // Hors ligne (etatReseau, JAMAIS `presences` — voir le commentaire sur
+      // messagesEnAttenteDm) : le message est affiché tout de suite, marqué
+      // "non livré", sans jamais être transmis au gateway. Se mettre
+      // soi-même "hors-ligne" via le bouton de présence
+      // (brancherControlesReseauPresence) n'a donc aucun effet ici, seule
+      // une vraie coupure réseau simulée (#simulate-network-cut, qui change
+      // etatReseau) en a.
+      if (etatReseau.statut !== 'connecte') {
+        ajouterMessageEnAttenteDm(
+          conversationId,
+          ChatUiShared.creerMessageEnAttente({
+            conversationId,
+            auteurId,
+            contenu: content,
+          })
+        );
+        await renderActiveConversation();
+        return;
+      }
 
       // 1. Annule le timer d'inactivité de cet utilisateur s'il existe
       if (timersArretSaisieDm[auteurId]) {
@@ -1007,13 +1116,28 @@ window.addEventListener('DOMContentLoaded', async () => {
       });
 
       // 3. Envoie le message
-      await window.electronAPI.envoyerMessagePrive({
-        conversationId,
-        contenu: content,
-        utilisateurId: auteurId,
-      });
-      messageInput.value = '';
-      await refreshConversations();
+      try {
+        await window.electronAPI.envoyerMessagePrive({
+          conversationId,
+          contenu: content,
+          utilisateurId: auteurId,
+        });
+        await refreshConversations();
+      } catch (erreur) {
+        // Connecté au moment de l'envoi mais échec en cours de route : même
+        // traitement qu'un envoi tenté hors ligne, plutôt que de perdre le
+        // texte tapé (voir le commentaire plus haut).
+        ajouterMessageEnAttenteDm(
+          conversationId,
+          ChatUiShared.creerMessageEnAttente({
+            conversationId,
+            auteurId,
+            contenu: content,
+          })
+        );
+        await renderActiveConversation();
+        notifier(messageErreur(erreur), true);
+      }
     });
 
     messageInput.addEventListener('input', async (event) => {

@@ -150,7 +150,10 @@
       "deleteConfirm": "Supprimer ce message ?",
       "cancel": "Annuler",
       "updated": "Message modifié.",
-      "deleted": "Message supprimé."
+      "deleted": "Message supprimé.",
+      "notDelivered": "Non livré",
+      "retry": "Réessayer",
+      "stillOffline": "Toujours hors ligne : le message n'a pas pu être envoyé."
     }
   },
   "en": {
@@ -304,7 +307,10 @@
       "deleteConfirm": "Delete this message?",
       "cancel": "Cancel",
       "updated": "Message updated.",
-      "deleted": "Message deleted."
+      "deleted": "Message deleted.",
+      "notDelivered": "Not delivered",
+      "retry": "Retry",
+      "stillOffline": "Still offline: the message could not be sent."
     }
   }
 }
