@@ -371,9 +371,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   // ancien auteurId.
   function obtenirMessagesEnAttenteDm(conversationId) {
     const liste = messagesEnAttenteDm.get(conversationId) ?? [];
-    return liste.filter(
-      (message) => message.auteurId === state.currentUserId
-    );
+    return liste.filter((message) => message.auteurId === state.currentUserId);
   }
 
   function retirerMessageEnAttenteDm(conversationId, messageId) {
@@ -690,9 +688,9 @@ window.addEventListener('DOMContentLoaded', async () => {
           conversation.id,
           conversation.lastMessage
             ? {
-              auteurId: conversation.lastMessage.auteurId,
-              timestamp: conversation.lastMessage.envoi,
-            }
+                auteurId: conversation.lastMessage.auteurId,
+                timestamp: conversation.lastMessage.envoi,
+              }
             : null
         );
       const dot = document.createElement('span');
@@ -824,8 +822,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     // commentaire équivalent dans renderer.js.
     const messages = messagesEnAttenteDeLaConversation.length
       ? [...messagesHistorique, ...messagesEnAttenteDeLaConversation].sort(
-        (a, b) => a.envoi - b.envoi
-      )
+          (a, b) => a.envoi - b.envoi
+        )
       : messagesHistorique;
     const otherUser = conversation.otherUser;
 

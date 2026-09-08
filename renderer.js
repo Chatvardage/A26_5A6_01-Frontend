@@ -245,20 +245,38 @@ async function reessayerMessageEnAttenteSalon(message) {
   // boutons réessayer/supprimer de ce message pendant que la requête est en
   // vol — voir messagesEnAttenteEnCoursSalon.
   afficherMessages({ conserverPositionScroll: true });
+
+  // L'envoi et le rafraîchissement (actualiser()) ont chacun leur propre
+  // try/catch, volontairement séparés — voir reessayerMessageEnAttenteDm
+  // dans message-prive.js pour l'équivalent DM et le détail du pourquoi :
+  // les regrouper ferait qu'un actualiser() en échec APRÈS un envoi réussi
+  // tomberait dans le même bloc catch qu'un envoi raté, et serait alors
+  // traité comme tel (notification "échec"), alors que le message est déjà
+  // bien parti côté serveur à ce moment-là. (actualiser() attrape déjà ses
+  // propres erreurs en interne et ne les relance jamais, donc ce cas ne se
+  // produit pas aujourd'hui — cette séparation documente explicitement
+  // cette garantie plutôt que d'en dépendre implicitement, et garde les
+  // deux fichiers symétriques.)
   try {
     await window.electronAPI.envoyerMessageSalon({
       salonId: message.conversationId,
       utilisateurId: message.auteurId,
       contenu: message.contenu,
     });
-    retirerMessageEnAttenteSalon(message.conversationId, message.id);
-    messagesEnAttenteEnCoursSalon.delete(message.id);
-    await actualiser();
   } catch (erreur) {
+    // Ici seulement, l'envoi lui-même a échoué : le message reste "non
+    // livré" (rien à retirer de messagesEnAttenteSalon).
     messagesEnAttenteEnCoursSalon.delete(message.id);
     notifier(messageErreur(erreur), true);
     afficherMessages({ conserverPositionScroll: true });
+    return;
   }
+
+  // Envoi réussi : retiré de la liste d'attente quoi qu'il arrive au
+  // rafraîchissement ci-dessous.
+  retirerMessageEnAttenteSalon(message.conversationId, message.id);
+  messagesEnAttenteEnCoursSalon.delete(message.id);
+  await actualiser();
 }
 
 function supprimerMessageEnAttenteSalon(message) {
@@ -1236,13 +1254,20 @@ el.formulaire.addEventListener('submit', async (event) => {
     est_saisie: false,
   });
 
+  // L'envoi et le rafraîchissement (actualiser()) qui suit ont chacun leur
+  // propre try/catch (voir reessayerMessageEnAttenteSalon plus haut, et
+  // l'équivalent DM dans message-prive.js, pour le détail du pourquoi) :
+  // sans cette séparation, un actualiser() en échec APRÈS un envoi pourtant
+  // réussi tomberait dans le même bloc catch qu'un envoi raté — le message
+  // (déjà bien parti côté serveur) serait alors à tort remis en attente en
+  // double, avec un risque de renvoi réel en double si l'utilisateur clique
+  // ensuite sur "Réessayer" pour ce brouillon fantôme.
   try {
     await window.electronAPI.envoyerMessageSalon({
       salonId,
       utilisateurId: auteurId,
       contenu,
     });
-    await actualiser();
   } catch (erreur) {
     // Connecté au moment de l'envoi mais échec en cours de route : même
     // traitement qu'un envoi tenté hors ligne, plutôt que de perdre le texte
@@ -1257,7 +1282,9 @@ el.formulaire.addEventListener('submit', async (event) => {
     );
     afficherMessages({ conserverPositionScroll: true });
     notifier(messageErreur(erreur), true);
+    return;
   }
+  await actualiser();
 });
 
 el.utilisateur.addEventListener('change', async (event) => {
