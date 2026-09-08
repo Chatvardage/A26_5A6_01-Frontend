@@ -371,7 +371,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   // ancien auteurId.
   function obtenirMessagesEnAttenteDm(conversationId) {
     const liste = messagesEnAttenteDm.get(conversationId) ?? [];
-    return liste.filter((message) => message.auteurId === state.currentUserId);
+    return liste.filter(
+      (message) => message.auteurId === state.currentUserId
+    );
   }
 
   function retirerMessageEnAttenteDm(conversationId, messageId) {
@@ -403,19 +405,43 @@ window.addEventListener('DOMContentLoaded', async () => {
     messagesEnAttenteEnCoursDm.add(message.id);
     // Réaffiche tout de suite (avant l'await) pour désactiver visuellement
     // les boutons réessayer/supprimer de ce message pendant que la requête
-    // est en vol — voir messagesEnAttenteEnCoursDm.
+    // est en vol — voir messagesEnAttenteEnCoursDm. conserverPositionScroll
+    // évite de faire sauter la vue en bas de la conversation si
+    // l'utilisateur avait remonté dans l'historique (voir renderer.js pour
+    // l'équivalent salon).
     void renderActiveConversation({ conserverPositionScroll: true });
+
+    // L'envoi et le rafraîchissement de la liste ont chacun leur propre
+    // try/catch, volontairement séparés : les regrouper ferait qu'un
+    // refreshConversations() en échec APRÈS un envoi réussi tomberait dans
+    // le même bloc catch qu'un envoi raté, et serait alors traité comme tel
+    // (notification "échec", message remis en attente) — alors que le
+    // message est déjà bien parti côté serveur à ce moment-là.
     try {
       await window.electronAPI.envoyerMessagePrive({
         conversationId: message.conversationId,
         contenu: message.contenu,
         utilisateurId: message.auteurId,
       });
-      retirerMessageEnAttenteDm(message.conversationId, message.id);
+    } catch (erreur) {
+      // Ici seulement, l'envoi lui-même a échoué : le message reste "non
+      // livré" (rien à retirer de messagesEnAttenteDm).
       messagesEnAttenteEnCoursDm.delete(message.id);
+      notifier(messageErreur(erreur), true);
+      void renderActiveConversation({ conserverPositionScroll: true });
+      return;
+    }
+
+    // Envoi réussi : retiré de la liste d'attente quoi qu'il arrive au
+    // rafraîchissement ci-dessous.
+    retirerMessageEnAttenteDm(message.conversationId, message.id);
+    messagesEnAttenteEnCoursDm.delete(message.id);
+    try {
       await refreshConversations();
     } catch (erreur) {
-      messagesEnAttenteEnCoursDm.delete(message.id);
+      // Le message est bien parti ; seul le rechargement de la liste des
+      // conversations a échoué ensuite — à ne pas confondre avec un échec
+      // d'envoi (pas de remise en attente pour un message déjà livré).
       notifier(messageErreur(erreur), true);
       void renderActiveConversation({ conserverPositionScroll: true });
     }
@@ -429,7 +455,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     // envoyé.
     if (messagesEnAttenteEnCoursDm.has(message.id)) return;
     retirerMessageEnAttenteDm(message.conversationId, message.id);
-    void renderActiveConversation();
+    // conserverPositionScroll: true — voir le commentaire équivalent dans
+    // reessayerMessageEnAttenteDm ci-dessus (et supprimerMessageEnAttenteSalon
+    // dans renderer.js) : sans lui, supprimer un brouillon fait sauter la vue
+    // en bas de la conversation même si l'utilisateur lisait plus haut dans
+    // l'historique.
+    void renderActiveConversation({ conserverPositionScroll: true });
   }
 
   // Fusionne messages plus anciens déjà remontés et page récente en
@@ -659,9 +690,9 @@ window.addEventListener('DOMContentLoaded', async () => {
           conversation.id,
           conversation.lastMessage
             ? {
-                auteurId: conversation.lastMessage.auteurId,
-                timestamp: conversation.lastMessage.envoi,
-              }
+              auteurId: conversation.lastMessage.auteurId,
+              timestamp: conversation.lastMessage.envoi,
+            }
             : null
         );
       const dot = document.createElement('span');
@@ -780,13 +811,22 @@ window.addEventListener('DOMContentLoaded', async () => {
     // message réel plus récent peut arriver via refreshConversations()
     // pendant qu'un brouillon plus ancien attend encore, ou deux brouillons
     // peuvent être retentés dans le désordre).
-    const messages = [
-      ...fusionnerHistoriqueDm(
-        etatHistoriqueDm.messagesAnciens,
-        conversation.messages ?? []
-      ),
-      ...obtenirMessagesEnAttenteDm(conversation.id),
-    ].sort((a, b) => a.envoi - b.envoi);
+    const messagesEnAttenteDeLaConversation = obtenirMessagesEnAttenteDm(
+      conversation.id
+    );
+    const messagesHistorique = fusionnerHistoriqueDm(
+      etatHistoriqueDm.messagesAnciens,
+      conversation.messages ?? []
+    );
+    // fusionnerHistoriqueDm() renvoie déjà un tableau trié par `envoi` : pas
+    // besoin de re-trier l'ensemble à chaque rendu quand il n'y a aucun
+    // message en attente (le cas de loin le plus fréquent) — voir le
+    // commentaire équivalent dans renderer.js.
+    const messages = messagesEnAttenteDeLaConversation.length
+      ? [...messagesHistorique, ...messagesEnAttenteDeLaConversation].sort(
+        (a, b) => a.envoi - b.envoi
+      )
+      : messagesHistorique;
     const otherUser = conversation.otherUser;
 
     if (topbarName) {
@@ -1136,7 +1176,11 @@ window.addEventListener('DOMContentLoaded', async () => {
             contenu: content,
           })
         );
-        await renderActiveConversation();
+        // conserverPositionScroll: true — voir reessayerMessageEnAttenteDm
+        // plus haut : sans lui, afficher ce brouillon "non livré" fait
+        // sauter la vue en bas de la conversation même si l'utilisateur
+        // lisait plus haut dans l'historique.
+        await renderActiveConversation({ conserverPositionScroll: true });
         return;
       }
 
@@ -1153,14 +1197,19 @@ window.addEventListener('DOMContentLoaded', async () => {
         est_saisie: false,
       });
 
-      // 3. Envoie le message
+      // 3. Envoie le message. L'envoi et le rafraîchissement qui suit ont
+      // chacun leur propre try/catch (voir reessayerMessageEnAttenteDm plus
+      // haut pour le détail du pourquoi) : sans cette séparation, un
+      // refreshConversations() en échec APRÈS un envoi pourtant réussi
+      // tomberait dans le même bloc catch qu'un envoi raté — le message
+      // (déjà bien parti côté serveur) serait alors à tort remis en
+      // attente en double, avec une notification d'échec trompeuse.
       try {
         await window.electronAPI.envoyerMessagePrive({
           conversationId,
           contenu: content,
           utilisateurId: auteurId,
         });
-        await refreshConversations();
       } catch (erreur) {
         // Connecté au moment de l'envoi mais échec en cours de route : même
         // traitement qu'un envoi tenté hors ligne, plutôt que de perdre le
@@ -1173,8 +1222,21 @@ window.addEventListener('DOMContentLoaded', async () => {
             contenu: content,
           })
         );
-        await renderActiveConversation();
+        // conserverPositionScroll: true — voir reessayerMessageEnAttenteDm
+        // plus haut pour le pourquoi.
+        await renderActiveConversation({ conserverPositionScroll: true });
         notifier(messageErreur(erreur), true);
+        return;
+      }
+      try {
+        await refreshConversations();
+      } catch (erreur) {
+        // Le message est bien parti ; seul le rechargement de la liste des
+        // conversations a échoué ensuite — à ne pas confondre avec un échec
+        // d'envoi (pas de brouillon "non livré" ajouté pour un message déjà
+        // livré).
+        notifier(messageErreur(erreur), true);
+        await renderActiveConversation({ conserverPositionScroll: true });
       }
     });
 

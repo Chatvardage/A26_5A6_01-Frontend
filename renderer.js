@@ -767,14 +767,21 @@ function afficherMessages(options = {}) {
   // renvoi), et deux messages en attente peuvent être retentés dans le
   // désordre. Un simple append donnerait alors un ordre chronologiquement
   // faux.
-  const tousLesMessages = [
-    ...fusionnerHistorique(
-      etatHistoriqueSalon.messagesAnciens,
-      salon.messages,
-      'date'
-    ),
-    ...obtenirMessagesEnAttenteSalon(salon.id),
-  ].sort((a, b) => a.date - b.date);
+  const messagesEnAttenteDuSalon = obtenirMessagesEnAttenteSalon(salon.id);
+  const messagesHistorique = fusionnerHistorique(
+    etatHistoriqueSalon.messagesAnciens,
+    salon.messages,
+    'date'
+  );
+  // fusionnerHistorique() renvoie déjà un tableau trié par date : pas besoin
+  // de re-trier l'ensemble à chaque rendu quand il n'y a aucun message en
+  // attente (le cas de loin le plus fréquent) — seule la présence de
+  // brouillons justifie le re-tri complet ci-dessous.
+  const tousLesMessages = messagesEnAttenteDuSalon.length
+    ? [...messagesHistorique, ...messagesEnAttenteDuSalon].sort(
+        (a, b) => a.date - b.date
+      )
+    : messagesHistorique;
 
   // Mémorise la position de défilement AVANT de reconstruire la liste : sans
   // ça, remplacer le contenu de #message-list (replaceChildren) réinitialise
