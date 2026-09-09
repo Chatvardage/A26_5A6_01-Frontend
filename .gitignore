@@ -10,6 +10,9 @@
 /dataSources.local.xml
 node_modules/
 coverage/
+# for the kilocode extension
+*.kilo
+
 
 # Flux de données NTFS "Mark of the Web" créé automatiquement par Windows
 # sur tout fichier téléchargé (ex. via WebStorm/git bash sur un checkout
