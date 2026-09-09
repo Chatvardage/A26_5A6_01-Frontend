@@ -15,10 +15,10 @@
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,html,css,md,txt}\"",
     "dev": "npm run start:dev",
-    "build:win": "npm run build:login && npx --yes electron-builder@26.0.12 --win",
-    "build:mac": "npm run build:login && npx --yes electron-builder@26.0.12 --mac",
-    "build:linux": "npm run build:login && npx --yes electron-builder@26.0.12 --linux",
-    "build:all": "npm run build:login && npx --yes electron-builder@26.0.12 --win --mac --linux"
+    "build:win": "npm run build:login && npx --yes electron-builder@26.0.12 --win --publish never",
+    "build:mac": "npm run build:login && npx --yes electron-builder@26.0.12 --mac --publish never",
+    "build:linux": "npm run build:login && npx --yes electron-builder@26.0.12 --linux --publish never",
+    "build:all": "npm run build:login && npx --yes electron-builder@26.0.12 --win --mac --linux --publish never"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
