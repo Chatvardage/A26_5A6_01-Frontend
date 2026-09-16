@@ -16,6 +16,30 @@
   --border: rgba(255, 255, 255, 0.08);
 }
 
+/* Thème clair : voir le même bloc (et le même commentaire) dans styles.css
+   — ces deux fichiers déclarent volontairement les mêmes tokens, puisque
+   message-prive.html charge les deux feuilles (styles.css puis
+   message-prive.css) : les valeurs doivent rester identiques entre les
+   deux, sans quoi celui chargé en second écraserait silencieusement
+   l'autre pour les variables en commun. */
+:root[data-theme='clair'] {
+  --bg-app: #1fb28d;
+  --bg-panel: #17987d;
+  --bg-panel-alt: #1a8a72;
+  --bg-bubble: #cfd8d5;
+
+  --accent-start: #3ddc97;
+  --accent-end: #8fe0c4;
+
+  --online: #22c55e;
+  --offline: #ef4444;
+
+  --text-primary: #023344;
+  --text-muted: #3a5a54;
+
+  --border: rgba(0, 0, 0, 0.12);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -36,8 +60,8 @@ body {
   color: var(--text-primary);
 
   font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
-    sans-serif;
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+          sans-serif;
 }
 
 #server-rail {
@@ -373,6 +397,23 @@ body {
 
 .text {
   margin: 4px 0 0;
+}
+
+/* Même traitement "bulle" que les salons (styles.css,
+   .message-row.own/.message-row:not(.own) .text) — juste avec le nom de
+   classe propre à cette page (.own-message, voir message-prive.js) au lieu
+   de .own. Sans ces deux règles, .text restait sans fond ni coin
+   asymétrique : du texte plat, pas une bulle, quel que soit le thème. */
+.message-row.own-message .text {
+  background: var(--accent-end);
+  padding: 8px 12px;
+  border-radius: 12px 12px 2px 12px;
+}
+
+.message-row:not(.own-message) .text {
+  background: var(--bg-bubble);
+  padding: 8px 12px;
+  border-radius: 12px 12px 12px 2px;
 }
 
 #typing-indicator {

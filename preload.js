@@ -108,6 +108,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   obtenirDictionnairesI18n: () => ipcRenderer.invoke('i18n:dictionnaires'),
   obtenirLangueParDefaut: () => ipcRenderer.invoke('i18n:langue-par-defaut'),
 
+  obtenirTheme: () => ipcRenderer.invoke('theme:obtenir'),
+  definirTheme: (theme) => ipcRenderer.invoke('theme:definir', { theme }),
+  obtenirThemeParDefaut: () => ipcRenderer.invoke('theme:par-defaut'),
+
   obtenirEtatSalons: (utilisateurId) =>
     ipcRenderer.invoke('salons:etat', { utilisateurId }),
   // Pagination "charger plus ancien" de l'historique d'un salon (voir

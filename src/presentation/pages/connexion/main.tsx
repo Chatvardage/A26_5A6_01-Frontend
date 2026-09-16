@@ -38,6 +38,12 @@ function nettoyerPrefixeIpc(err: unknown): string {
 
 function App() {
   const [langue, setLangue] = useState<string>(LANGUE_PAR_DEFAUT);
+  // 'sombre' en dur ici (pas de constante partagée façon LANGUE_PAR_DEFAUT) :
+  // seules deux valeurs fixes existent pour le thème, jamais traduites
+  // elles-mêmes (voir THEMES_SUPPORTEES dans LoginPage.tsx) — un module
+  // dédié n'apporterait rien pour un cas aussi simple. Doit rester
+  // identique à THEME_PAR_DEFAUT côté main.js.
+  const [theme, setTheme] = useState<string>('sombre');
 
   // Initialise depuis la langue courante côté main (voir main.js), au cas
   // où elle aurait déjà été changée dans cette même session (ex. l'app a
@@ -73,6 +79,38 @@ function App() {
       });
   }, []);
 
+  // Même logique que pour la langue ci-dessus : au démarrage, on récupère le
+  // thème courant côté main (voir main.js), puis on l'applique sur <html>.
+  // C'est LoginPage.tsx qui pose data-theme via son propre effet (voir son
+  // commentaire) ; on le fait aussi ici pour couvrir la fraction de seconde
+  // avant le premier rendu de LoginPage — même repli que pour `lang` juste
+  // au-dessus.
+  useEffect(() => {
+    window.electronAPI
+      .obtenirTheme()
+      .then((themeResolu) => {
+        setTheme(themeResolu);
+        document.documentElement.dataset.theme = themeResolu;
+      })
+      .catch(() => {
+        // Repli silencieux sur la valeur initiale ('sombre') si le canal
+        // échoue.
+      });
+  }, []);
+
+  const changerTheme = useCallback((nouveauTheme: string) => {
+    window.electronAPI
+      .definirTheme(nouveauTheme)
+      .then((themeConfirme) => {
+        setTheme(themeConfirme);
+        document.documentElement.dataset.theme = themeConfirme;
+      })
+      .catch(() => {
+        // Si l'IPC échoue, on ne change rien : mieux vaut rester dans le
+        // thème actuel (cohérent) qu'afficher un mélange des deux.
+      });
+  }, []);
+
   // Aucune dépendance sur `langue` ici : l'adaptateur ne traduit plus rien
   // lui-même (voir nettoyerPrefixeIpc ci-dessus), donc il n'a pas besoin
   // d'être reconstruit quand la langue change.
@@ -98,6 +136,8 @@ function App() {
       gateway={gateway}
       langue={langue}
       changerLangue={changerLangue}
+      theme={theme}
+      changerTheme={changerTheme}
     />
   );
 }

@@ -33,6 +33,20 @@ if (!ChatUiShared) {
   throw new Error('chat-ui-shared.js doit être chargé avant message-prive.js');
 }
 
+// ThemeManager vient de theme-browser.js, même pattern que I18n ci-dessus.
+const ThemeManager =
+  window.ThemeManager ??
+  (() => {
+    console.error(
+      '[message-prive] window.ThemeManager est introuvable : theme-browser.js doit être chargé avant ce script (voir message-prive.html). Le thème reste bloqué sur sombre pour cette session.'
+    );
+    return {
+      appliquerTheme: () => {},
+      obtenirTheme: () => 'sombre',
+      initialiserDepuisElectronAPI: async () => 'sombre',
+    };
+  })();
+
 // Icône de main qui salue, en remplacement de l'emoji 👋 : voir le
 // commentaire équivalent (et le même SVG) dans renderer.js — l'emoji ne
 // s'affiche pas de façon fiable dans Electron selon les polices installées
@@ -97,6 +111,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   const filterButtons = document.querySelectorAll('.filter-button');
   const currentUserSelect = document.getElementById('current-user-select');
   const langueSelect = document.getElementById('language-select');
+  const themeSelect = document.getElementById('theme-select');
   const openNewDmBtn = document.getElementById('open-new-dm');
   const dmDialog = document.getElementById('dm-dialog');
   const dmDialogContent = document.getElementById('dialog-content');
@@ -172,6 +187,32 @@ window.addEventListener('DOMContentLoaded', async () => {
     await I18n.initialiserDepuisElectronAPI(window.electronAPI);
   }
   appliquerTraductionsStatiques();
+
+  // Même principe pour le thème (voir ThemeManager.initialiserDepuisElectronAPI
+  // dans theme-browser.js) : appliqué sur <html> avant le premier rendu
+  // visible de cette page.
+  if (themeSelect) {
+    themeSelect.value = await ThemeManager.initialiserDepuisElectronAPI(
+      window.electronAPI
+    );
+  } else {
+    await ThemeManager.initialiserDepuisElectronAPI(window.electronAPI);
+  }
+
+  if (themeSelect) {
+    themeSelect.addEventListener('change', async (event) => {
+      try {
+        const themeConfirme = await window.electronAPI.definirTheme(
+          event.target.value
+        );
+        ThemeManager.appliquerTheme(themeConfirme);
+      } catch {
+        // Repli silencieux : le thème affiché reste celui d'avant si le
+        // canal échoue.
+      }
+      themeSelect.value = ThemeManager.obtenirTheme();
+    });
+  }
 
   if (langueSelect) {
     langueSelect.addEventListener('change', async (event) => {
