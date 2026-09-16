@@ -26,6 +26,7 @@ Le sujet du Contrôle 2 impose de faire évoluer `ChatGateway` pour qu'il
 communique avec une vraie API (HTTP + WebSocket) au lieu de
 `MockGatewayRuntime.js` uniquement. Points à respecter si une tâche touche
 à ça :
+
 - `MockGateway`/`MockGatewayRuntime.js` doivent **rester utilisables**
   pour les tests et le développement hors ligne (exigence explicite de
   l'énoncé) — ne pas les supprimer, prévoir une implémentation

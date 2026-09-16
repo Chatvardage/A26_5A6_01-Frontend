@@ -1,325 +1,325 @@
 <!doctype html>
 <html lang="fr">
-<head>
-  <meta charset="UTF-8" />
-  <meta
-    http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self'; img-src 'self' data:;"
-  />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ChatVardage — Messages privés</title>
-  <link rel="stylesheet" href="css/styles.css" />
-  <link rel="stylesheet" href="css/message-prive.css" />
-</head>
-<body>
-<nav
-  id="server-rail"
-  aria-label="Navigation principale"
-  data-i18n-aria-label="nav.mainNavigation"
->
-  <button
-    id="home-btn"
-    title="Retour à l'accueil"
-    aria-label="Retour à l'accueil"
-    data-i18n-title="nav.backHome"
-    data-i18n-aria-label="nav.backHome"
-  >
-    <img
-      class="app-logo"
-      src="../../../assets/icon.png"
-      alt="ChatVardage"
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; img-src 'self' data:;"
     />
-    <span class="notif-dot notif-dot--rail" hidden></span>
-  </button>
-  <div class="rail-divider"></div>
-  <button
-    class="server-icon"
-    title="Projet"
-    aria-label="Serveur : Projet"
-    data-i18n-title="nav.project"
-    data-i18n-aria-label="nav.project"
-  >
-    P
-    <span class="notif-dot notif-dot--rail" hidden></span>
-  </button>
-  <button
-    class="server-icon"
-    title="Ajouter un serveur"
-    aria-label="Ajouter un serveur"
-    data-i18n-title="nav.addServer"
-    data-i18n-aria-label="nav.addServer"
-  >
-    +
-  </button>
-</nav>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChatVardage — Messages privés</title>
+    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/message-prive.css" />
+  </head>
+  <body>
+    <nav
+      id="server-rail"
+      aria-label="Navigation principale"
+      data-i18n-aria-label="nav.mainNavigation"
+    >
+      <button
+        id="home-btn"
+        title="Retour à l'accueil"
+        aria-label="Retour à l'accueil"
+        data-i18n-title="nav.backHome"
+        data-i18n-aria-label="nav.backHome"
+      >
+        <img
+          class="app-logo"
+          src="../../../assets/icon.png"
+          alt="ChatVardage"
+        />
+        <span class="notif-dot notif-dot--rail" hidden></span>
+      </button>
+      <div class="rail-divider"></div>
+      <button
+        class="server-icon"
+        title="Projet"
+        aria-label="Serveur : Projet"
+        data-i18n-title="nav.project"
+        data-i18n-aria-label="nav.project"
+      >
+        P
+        <span class="notif-dot notif-dot--rail" hidden></span>
+      </button>
+      <button
+        class="server-icon"
+        title="Ajouter un serveur"
+        aria-label="Ajouter un serveur"
+        data-i18n-title="nav.addServer"
+        data-i18n-aria-label="nav.addServer"
+      >
+        +
+      </button>
+    </nav>
 
-<aside id="dm-sidebar">
-  <div class="sidebar-header">
-    <span data-i18n="dm.title">Messages privés</span>
-    <button
-      id="open-new-dm"
-      class="icon-action"
-      title="Nouveau message privé"
-      aria-label="Nouveau message privé"
-      data-i18n-title="dm.newDm"
-      data-i18n-aria-label="dm.newDm"
-    >
-      +
-    </button>
-  </div>
-  <div class="friends-actions" aria-label="Filtres des messages privés">
-    <button
-      type="button"
-      class="filter-button active"
-      data-filter="all"
-      data-i18n="dm.filterAll"
-    >
-      Tous
-    </button>
-    <button
-      type="button"
-      class="filter-button"
-      data-filter="online"
-      data-i18n="dm.filterOnline"
-    >
-      En ligne
-    </button>
-  </div>
-  <ul
-    id="conversation-list"
-    aria-label="Liste des conversations privées"
-  ></ul>
-  <div id="user-panel">
-    <div class="avatar"></div>
-    <div class="user-info">
-      <select
-        id="current-user-select"
-        aria-label="Utilisateur simulé"
-        data-i18n-aria-label="nav.simulatedUser"
-      ></select>
-      <div class="user-meta">
+    <aside id="dm-sidebar">
+      <div class="sidebar-header">
+        <span data-i18n="dm.title">Messages privés</span>
         <button
-          class="presence-label presence-toggle"
-          id="current-user-presence"
+          id="open-new-dm"
+          class="icon-action"
+          title="Nouveau message privé"
+          aria-label="Nouveau message privé"
+          data-i18n-title="dm.newDm"
+          data-i18n-aria-label="dm.newDm"
+        >
+          +
+        </button>
+      </div>
+      <div class="friends-actions" aria-label="Filtres des messages privés">
+        <button
           type="button"
-          data-i18n-title="network.changePresence"
+          class="filter-button active"
+          data-filter="all"
+          data-i18n="dm.filterAll"
+        >
+          Tous
+        </button>
+        <button
+          type="button"
+          class="filter-button"
+          data-filter="online"
+          data-i18n="dm.filterOnline"
         >
           En ligne
         </button>
-        <select
-          id="language-select"
-          aria-label="Langue / Language"
-          class="language-select"
-        >
-          <option value="fr">FR</option>
-          <option value="en">EN</option>
-        </select>
-        <select
-          id="theme-select"
-          aria-label="Thème"
-          data-i18n-aria-label="theme.label"
-        >
-          <option value="sombre" data-i18n="theme.dark">Sombre</option>
-          <option value="clair" data-i18n="theme.light">Clair</option>
-        </select>
       </div>
-    </div>
-    <button
-      id="open-notif-settings"
-      class="notif-settings-btn"
-      type="button"
-      title="Notifications"
-      aria-label="Paramètres de notifications"
-      aria-haspopup="true"
-      aria-expanded="false"
-      data-i18n-title="notifications.title"
-      data-i18n-aria-label="notifications.settingsAriaLabel"
-    >
-      <svg
-        viewBox="0 0 16 16"
-        width="16"
-        height="16"
-        aria-hidden="true"
-        focusable="false"
-      >
-        <path
-          fill="currentColor"
-          d="M8 1.4c-.6 0-1.05.47-1.05 1.05v.57C4.83 3.55 3.4 5.5 3.4 7.65v2.5L2.1 11.9c-.32.4-.03.98.48.98h10.84c.51 0 .8-.58.48-.98l-1.3-1.75v-2.5c0-2.15-1.43-4.1-3.55-4.63v-.57C9.05 1.87 8.6 1.4 8 1.4Z"
-        />
-        <path fill="currentColor" d="M6.2 13.4a1.8 1.8 0 0 0 3.6 0Z" />
-      </svg>
-    </button>
-    <div
-      id="notif-menu"
-      class="notif-menu"
-      hidden
-      role="menu"
-      aria-label="Préférences de notification"
-      data-i18n-aria-label="notifications.menuAriaLabel"
-    >
-      <p class="notif-menu-title" data-i18n="notifications.title">
-        Notifications
-      </p>
-      <label class="notif-menu-option">
-        <input type="radio" name="notif-mode" value="systeme" />
-        <span class="notif-menu-option-text">
+      <ul
+        id="conversation-list"
+        aria-label="Liste des conversations privées"
+      ></ul>
+      <div id="user-panel">
+        <div class="avatar"></div>
+        <div class="user-info">
+          <select
+            id="current-user-select"
+            aria-label="Utilisateur simulé"
+            data-i18n-aria-label="nav.simulatedUser"
+          ></select>
+          <div class="user-meta">
+            <button
+              class="presence-label presence-toggle"
+              id="current-user-presence"
+              type="button"
+              data-i18n-title="network.changePresence"
+            >
+              En ligne
+            </button>
+            <select
+              id="language-select"
+              aria-label="Langue / Language"
+              class="language-select"
+            >
+              <option value="fr">FR</option>
+              <option value="en">EN</option>
+            </select>
+            <select
+              id="theme-select"
+              aria-label="Thème"
+              data-i18n-aria-label="theme.label"
+            >
+              <option value="sombre" data-i18n="theme.dark">Sombre</option>
+              <option value="clair" data-i18n="theme.light">Clair</option>
+            </select>
+          </div>
+        </div>
+        <button
+          id="open-notif-settings"
+          class="notif-settings-btn"
+          type="button"
+          title="Notifications"
+          aria-label="Paramètres de notifications"
+          aria-haspopup="true"
+          aria-expanded="false"
+          data-i18n-title="notifications.title"
+          data-i18n-aria-label="notifications.settingsAriaLabel"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              fill="currentColor"
+              d="M8 1.4c-.6 0-1.05.47-1.05 1.05v.57C4.83 3.55 3.4 5.5 3.4 7.65v2.5L2.1 11.9c-.32.4-.03.98.48.98h10.84c.51 0 .8-.58.48-.98l-1.3-1.75v-2.5c0-2.15-1.43-4.1-3.55-4.63v-.57C9.05 1.87 8.6 1.4 8 1.4Z"
+            />
+            <path fill="currentColor" d="M6.2 13.4a1.8 1.8 0 0 0 3.6 0Z" />
+          </svg>
+        </button>
+        <div
+          id="notif-menu"
+          class="notif-menu"
+          hidden
+          role="menu"
+          aria-label="Préférences de notification"
+          data-i18n-aria-label="notifications.menuAriaLabel"
+        >
+          <p class="notif-menu-title" data-i18n="notifications.title">
+            Notifications
+          </p>
+          <label class="notif-menu-option">
+            <input type="radio" name="notif-mode" value="systeme" />
+            <span class="notif-menu-option-text">
               <span
                 class="notif-menu-option-title"
                 data-i18n="notifications.systemTitle"
-              >Système + son</span
+                >Système + son</span
               >
               <span
                 class="notif-menu-option-desc"
                 data-i18n="notifications.systemDesc"
-              >Notification Windows avec son, et un rond sur la
+                >Notification Windows avec son, et un rond sur la
                 conversation</span
               >
             </span>
-      </label>
-      <label class="notif-menu-option">
-        <input type="radio" name="notif-mode" value="discret" />
-        <span class="notif-menu-option-text">
+          </label>
+          <label class="notif-menu-option">
+            <input type="radio" name="notif-mode" value="discret" />
+            <span class="notif-menu-option-text">
               <span
                 class="notif-menu-option-title"
                 data-i18n="notifications.discreteTitle"
-              >Discret</span
+                >Discret</span
               >
               <span
                 class="notif-menu-option-desc"
                 data-i18n="notifications.discreteDesc"
-              >Un rond sur la conversation, rien d'autre</span
+                >Un rond sur la conversation, rien d'autre</span
               >
             </span>
-      </label>
-      <label class="notif-menu-option">
-        <input type="radio" name="notif-mode" value="aucune" />
-        <span class="notif-menu-option-text">
+          </label>
+          <label class="notif-menu-option">
+            <input type="radio" name="notif-mode" value="aucune" />
+            <span class="notif-menu-option-text">
               <span
                 class="notif-menu-option-title"
                 data-i18n="notifications.noneTitle"
-              >Aucune</span
+                >Aucune</span
               >
               <span
                 class="notif-menu-option-desc"
                 data-i18n="notifications.noneDesc"
-              >Pas de notification</span
+                >Pas de notification</span
               >
             </span>
-      </label>
-    </div>
-  </div>
-</aside>
-
-<main id="main">
-  <header id="topbar">
-    <div class="dm-user">
-      <div class="avatar topbar-avatar"></div>
-      <div>
-        <div class="user-name" data-i18n="dm.selectConversation">
-          Sélectionnez une conversation
-        </div>
-        <div class="user-status" data-i18n="dm.noActiveConversation">
-          Aucune conversation active
+          </label>
         </div>
       </div>
-    </div>
-    <div class="network-simulation">
-      <button
-        id="simulate-network-cut"
-        class="network-test-button"
-        type="button"
-        data-i18n="network.cut"
-      >
-        Coupure
-      </button>
-      <button
-        id="simulate-network-reconnect"
-        class="network-test-button"
-        type="button"
-        data-i18n="network.reconnect"
-      >
-        Reconnexion
-      </button>
+    </aside>
+
+    <main id="main">
+      <header id="topbar">
+        <div class="dm-user">
+          <div class="avatar topbar-avatar"></div>
+          <div>
+            <div class="user-name" data-i18n="dm.selectConversation">
+              Sélectionnez une conversation
+            </div>
+            <div class="user-status" data-i18n="dm.noActiveConversation">
+              Aucune conversation active
+            </div>
+          </div>
+        </div>
+        <div class="network-simulation">
+          <button
+            id="simulate-network-cut"
+            class="network-test-button"
+            type="button"
+            data-i18n="network.cut"
+          >
+            Coupure
+          </button>
+          <button
+            id="simulate-network-reconnect"
+            class="network-test-button"
+            type="button"
+            data-i18n="network.reconnect"
+          >
+            Reconnexion
+          </button>
+          <div
+            id="connection-status"
+            class="network-test-button"
+            data-state="deconnecte"
+            aria-live="polite"
+          >
+            <span class="dot"></span>
+            <span id="connection-label">Déconnecté</span>
+          </div>
+        </div>
+      </header>
+
+      <div id="message-list" aria-live="polite">
+        <article class="message-row">
+          <div class="message-body">
+            <p class="text" data-i18n="dm.noConversationSelected">
+              Aucune conversation sélectionnée.
+            </p>
+          </div>
+        </article>
+      </div>
+
       <div
-        id="connection-status"
-        class="network-test-button"
-        data-state="deconnecte"
+        id="typing-indicator"
+        class="typing-indicator"
         aria-live="polite"
+        hidden
       >
-        <span class="dot"></span>
-        <span id="connection-label">Déconnecté</span>
-      </div>
-    </div>
-  </header>
-
-  <div id="message-list" aria-live="polite">
-    <article class="message-row">
-      <div class="message-body">
-        <p class="text" data-i18n="dm.noConversationSelected">
-          Aucune conversation sélectionnée.
-        </p>
-      </div>
-    </article>
-  </div>
-
-  <div
-    id="typing-indicator"
-    class="typing-indicator"
-    aria-live="polite"
-    hidden
-  >
         <span class="typing-dots" aria-hidden="true">
           <span class="dot"></span>
           <span class="dot"></span>
           <span class="dot"></span>
         </span>
-    <span id="typing-text" class="typing-text"
-    ><strong id="is-typing-nom"></strong
-    ><span data-i18n="typing.suffix">
+        <span id="typing-text" class="typing-text"
+          ><strong id="is-typing-nom"></strong
+          ><span data-i18n="typing.suffix">
             est en train d'écrire...</span
-    ></span
-    >
-  </div>
+          ></span
+        >
+      </div>
 
-  <div id="composer">
-    <form id="message-form">
-      <input
-        id="message-input"
-        type="text"
-        placeholder="Écrire un message privé"
-        autocomplete="off"
-        maxlength="2000"
-        data-i18n-placeholder="dm.writeMessagePlaceholder"
-      />
-      <button type="submit" data-i18n="channels.send">Envoyer</button>
-    </form>
-  </div>
-</main>
+      <div id="composer">
+        <form id="message-form">
+          <input
+            id="message-input"
+            type="text"
+            placeholder="Écrire un message privé"
+            autocomplete="off"
+            maxlength="2000"
+            data-i18n-placeholder="dm.writeMessagePlaceholder"
+          />
+          <button type="submit" data-i18n="channels.send">Envoyer</button>
+        </form>
+      </div>
+    </main>
 
-<dialog id="dm-dialog">
-  <form method="dialog" id="dialog-form">
-    <div class="dialog-header">
-      <h2 id="dialog-title" data-i18n="dm.newDm">Nouveau message privé</h2>
-      <button
-        value="cancel"
-        formnovalidate
-        class="close-button"
-        aria-label="Fermer"
-        data-i18n-aria-label="channels.close"
-      >
-        ×
-      </button>
-    </div>
-    <div id="dialog-content"></div>
-  </form>
-</dialog>
+    <dialog id="dm-dialog">
+      <form method="dialog" id="dialog-form">
+        <div class="dialog-header">
+          <h2 id="dialog-title" data-i18n="dm.newDm">Nouveau message privé</h2>
+          <button
+            value="cancel"
+            formnovalidate
+            class="close-button"
+            aria-label="Fermer"
+            data-i18n-aria-label="channels.close"
+          >
+            ×
+          </button>
+        </div>
+        <div id="dialog-content"></div>
+      </form>
+    </dialog>
 
-<div id="toast" role="status" aria-live="polite"></div>
+    <div id="toast" role="status" aria-live="polite"></div>
 
-<script src="javascript/notif-prefs.js"></script>
-<script src="javascript/i18n-browser.js"></script>
-<script src="javascript/theme-browser.js"></script>
-<script src="javascript/chat-ui-shared.js"></script>
-<script type="module" src="javascript/message-prive.js"></script>
-</body>
+    <script src="javascript/notif-prefs.js"></script>
+    <script src="javascript/i18n-browser.js"></script>
+    <script src="javascript/theme-browser.js"></script>
+    <script src="javascript/chat-ui-shared.js"></script>
+    <script type="module" src="javascript/message-prive.js"></script>
+  </body>
 </html>
