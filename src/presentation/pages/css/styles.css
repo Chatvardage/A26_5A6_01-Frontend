@@ -13,6 +13,24 @@
   --border: rgba(255, 255, 255, 0.08);
 }
 
+/* Thème clair : même palette de marque (teal/mint), luminosité inversée —
+   voir la même logique et le même commentaire dans connexion.css. Posé sur
+   <html> via ThemeManager (theme-browser.js), pas une classe CSS séparée. */
+:root[data-theme='clair'] {
+  --bg-app: #1fb28d;
+  --bg-panel: #17987d;
+  --bg-panel-alt: #1a8a72;
+  --bg-bubble: #cfd8d5;
+  --accent-start: #3ddc97;
+  --accent-end: #8fe0c4;
+  --online: #22c55e;
+  --offline: #ef4444;
+  --reconnecting: #eab308;
+  --text-primary: #023344;
+  --text-muted: #3a5a54;
+  --border: rgba(0, 0, 0, 0.12);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -272,37 +290,263 @@ button {
   font-weight: 600;
 }
 
-/* Colonne d'infos (nom d'utilisateur simulé + ligne de statut/langue) :
-   avant, le sélecteur de langue était un simple <select> jeté à la suite
-   de #current-user-select, avec exactement le même style — au premier
-   coup d'œil on aurait dit un deuxième sélecteur d'utilisateur plutôt
-   qu'un réglage de langue. Regrouper le statut de présence et la langue
-   sur leur propre ligne, sous le nom d'utilisateur, sépare clairement
-   "qui je suis" (au-dessus) de "réglages secondaires" (en dessous). */
-.user-info {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  min-width: 0;
-  flex: 1;
-}
+/* ============================================================
+   PANNEAU UTILISATEUR
+   Même rendu dans index.html et message-prive.html
+   ============================================================ */
 
-.user-meta {
+#user-panel {
+  position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 62px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  font-size: 0.85rem;
+  overflow: visible;
 }
 
-#current-user-select {
-  border: 0;
+#user-panel .avatar {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
+  flex: 0 0 32px;
+  position: relative;
+}
+
+#user-panel .avatar::after {
+  content: none;
+}
+
+#user-panel .user-info {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 3px;
+  overflow: hidden;
+}
+
+#user-panel .user-meta {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+#user-panel #current-user-select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  height: 25px;
+  padding: 3px 25px 3px 7px;
+  border: none;
+  border-radius: 6px;
+  background-color: var(--bg-panel-alt);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' fill='none' stroke='%239fb8b3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 7px center;
+  background-size: 9px 6px;
+  outline: none;
+}
+
+:root[data-theme='clair'] #user-panel #current-user-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' fill='none' stroke='%233a5a54' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+#user-panel #current-user-select:hover,
+#user-panel #current-user-select:focus {
+  background-color: var(--bg-bubble);
+  color: var(--text-primary);
+}
+
+#user-panel .presence-label,
+#user-panel .presence-toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 22px;
+  padding: 2px 5px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+#user-panel .presence-label:hover,
+#user-panel .presence-toggle:hover {
   background: var(--bg-panel-alt);
   color: var(--text-primary);
-  font-weight: 600;
-  border-radius: 5px;
-  padding: 3px 5px;
 }
 
+#user-panel .presence-label.offline,
+#user-panel .presence-toggle.offline {
+  color: var(--offline);
+}
+
+#user-panel .language-select,
+#user-panel #theme-select {
+  flex: 0 0 auto;
+  height: 22px;
+  border: none;
+  border-radius: 5px;
+  padding: 2px 18px 2px 5px;
+  background-color: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1.2L5 5.2L9 1.2' fill='none' stroke='%239fb8b3' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 5px center;
+  background-size: 8px 5px;
+  outline: none;
+}
+
+:root[data-theme='clair'] #user-panel .language-select,
+:root[data-theme='clair'] #user-panel #theme-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1.2L5 5.2L9 1.2' fill='none' stroke='%233a5a54' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+#user-panel .language-select:hover,
+#user-panel .language-select:focus,
+#user-panel #theme-select:hover,
+#user-panel #theme-select:focus {
+  background-color: var(--bg-bubble);
+  color: var(--text-primary);
+  outline: none;
+}
+
+#user-panel .language-select {
+  width: 40px;
+}
+
+#user-panel #theme-select {
+  width: 62px;
+}
+
+#user-panel #current-user-select option,
+#user-panel .language-select option,
+#user-panel #theme-select option {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+}
+
+#user-panel .notif-settings-btn {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+#user-panel .notif-settings-btn:hover,
+#user-panel .notif-settings-btn[aria-expanded='true'] {
+  background: var(--bg-panel-alt);
+  color: var(--text-primary);
+}
+
+#user-panel .notif-settings-btn svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+#user-panel .notif-menu {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: calc(100% + 8px);
+  background: var(--bg-panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+}
+
+#user-panel .notif-menu-title {
+  margin: 4px 6px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+#user-panel .notif-menu-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 6px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+#user-panel .notif-menu-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+#user-panel .notif-menu-option input[type='radio'] {
+  margin-top: 3px;
+  accent-color: var(--accent-start);
+}
+
+#user-panel .notif-menu-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+#user-panel .notif-menu-option-title {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.84rem;
+}
+
+#user-panel .notif-menu-option-desc {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+/* Bouton Invitations de index.html. */
 .sidebar-action {
   margin: 8px;
   padding: 10px 12px;
@@ -323,11 +567,6 @@ button {
   color: #073d32;
   text-align: center;
   font-weight: 700;
-}
-
-#user-panel .presence-label {
-  color: var(--text-muted);
-  font-size: 0.75rem;
 }
 
 /* --- Zone principale (salon actif) ---------------------------------- */
@@ -833,10 +1072,11 @@ dialog::backdrop {
   font-size: 0.78rem;
 }
 
-/* --- Selects : utilisateur + langue ------------------------------- */
+/* --- Selects : utilisateur + langue + thème ------------------------------- */
 
 #current-user-select,
-.language-select {
+.language-select,
+#theme-select {
   border: none;
   background-color: var(--bg-panel-alt);
   color: var(--text-primary);
@@ -866,32 +1106,49 @@ dialog::backdrop {
     color 0.15s ease;
 }
 
+/* Le chevron ci-dessus est encodé en dur avec la couleur --text-muted du
+   thème sombre (%239fb8b3, soit #9fb8b3) : un data-URI ne peut pas lire une
+   variable CSS, donc on fournit une seconde image pour le thème clair
+   plutôt que de laisser un chevron clair invisible sur fond clair. Garder
+   cette couleur alignée sur --text-muted du bloc [data-theme='clair']
+   ci-dessus (styles.css) si celui-ci change un jour. */
+:root[data-theme='clair'] #current-user-select,
+:root[data-theme='clair'] .language-select,
+:root[data-theme='clair'] #theme-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' fill='none' stroke='%233a5a54' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
 /* Au survol */
 #current-user-select:hover,
-.language-select:hover {
+.language-select:hover,
+#theme-select:hover {
   background-color: var(--bg-bubble);
   color: var(--text-primary);
 }
 
 /* Quand le select est sélectionné/focus */
 #current-user-select:focus,
-.language-select:focus {
+.language-select:focus,
+#theme-select:focus {
   outline: none;
 }
 
 /* Options du menu */
 #current-user-select option,
-.language-select option {
+.language-select option,
+#theme-select option {
   background: var(--bg-panel);
   color: var(--text-primary);
 }
 
-/* Le sélecteur de langue est un réglage secondaire, pas un second "compte" —
-   volontairement plus discret que #current-user-select (texte plus petit,
-   fond neutre) et posé sur sa propre ligne avec le statut de présence (voir
-   .user-meta) plutôt que collé juste après, pour qu'on ne les confonde plus
-   au premier coup d'œil. */
-.language-select {
+/* Le sélecteur de langue et celui du thème sont des réglages secondaires,
+   pas un second "compte" — volontairement plus discrets que
+   #current-user-select (texte plus petit, fond neutre) et posés sur leur
+   propre ligne avec le statut de présence (voir .user-meta) plutôt que
+   collés juste après, pour qu'on ne les confonde plus au premier coup
+   d'œil. */
+.language-select,
+#theme-select {
   font-size: 0.72rem;
   color: var(--text-muted);
   background-color: transparent;
@@ -901,7 +1158,9 @@ dialog::backdrop {
 }
 
 .language-select:hover,
-.language-select:focus {
+.language-select:focus,
+#theme-select:hover,
+#theme-select:focus {
   color: var(--text-primary);
   background-color: var(--bg-bubble);
 }

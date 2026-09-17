@@ -10,7 +10,7 @@ import {
   validationPseudo,
   creerUtilisateur,
 } from '../../../domain/entities/Utilisateur';
-import mascotLogo from '../../../../maquette/logo.png';
+import mascotLogo from '../../../../assets/icon.png';
 import type { ChatGateway } from '../../../infrastructure/gateways/ChatGateway';
 import { t, LANGUES_SUPPORTEES } from '../../../i18n/i18n-web';
 
@@ -33,9 +33,19 @@ interface LoginPageProps {
   langue: string;
   /** Demande un changement de langue ; le parent est responsable de le confirmer via l'IPC. */
   changerLangue: (langue: string) => void;
+  /** Thème actuel ('sombre' ou 'clair'), même principe que `langue` ci-dessus. */
+  theme: string;
+  /** Demande un changement de thème ; le parent est responsable de le confirmer via l'IPC. */
+  changerTheme: (theme: string) => void;
   /** Appelé une fois la session établie ; par défaut, redirige vers le tableau de bord via electronAPI. */
   onSessionEtablie?: () => void;
 }
+
+/** Valeurs supportées pour `theme` — même esprit que LANGUES_SUPPORTEES
+ * (i18n-web.ts), mais pas besoin d'un module dédié pour deux valeurs fixes
+ * qui ne sont jamais traduites elles-mêmes (seuls leurs libellés le sont,
+ * via theme.dark/theme.light dans translations.json). */
+const THEMES_SUPPORTEES = ['sombre', 'clair'] as const;
 
 /**
  * Délai maximal accordé à `gateway.pseudoDisponible` avant de considérer la
@@ -105,6 +115,8 @@ export function LoginPage({
   gateway,
   langue,
   changerLangue,
+  theme,
+  changerTheme,
   onSessionEtablie,
 }: LoginPageProps) {
   const [pseudo, setPseudo] = useState('');
@@ -117,6 +129,13 @@ export function LoginPage({
 
   const inputRef = useRef<HTMLInputElement>(null);
   const jetonVerification = useRef(0);
+
+  // Applique le thème sur <html> dès qu'il change (prop pilotée par
+  // main.tsx) — tout le reste (couleurs) réagit via les blocs
+  // `:root[data-theme='clair']` de connexion.css, rien d'autre à faire ici.
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   const formatValide = useMemo(() => validationPseudo(pseudo.trim()), [pseudo]);
 
@@ -250,6 +269,24 @@ export function LoginPage({
             aria-pressed={code === langue}
           >
             {code.toUpperCase()}
+          </button>
+        ))}
+      </div>
+
+      <div
+        className="theme-switch"
+        role="group"
+        aria-label={t(langue, 'theme.label')}
+      >
+        {THEMES_SUPPORTEES.map((valeur) => (
+          <button
+            key={valeur}
+            type="button"
+            className={`theme-btn ${valeur === theme ? 'active' : ''}`}
+            onClick={() => changerTheme(valeur)}
+            aria-pressed={valeur === theme}
+          >
+            {t(langue, `theme.${valeur === 'sombre' ? 'dark' : 'light'}`)}
           </button>
         ))}
       </div>

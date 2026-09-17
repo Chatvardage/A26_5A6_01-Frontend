@@ -35,6 +35,23 @@ if (!ChatUiShared) {
   throw new Error('chat-ui-shared.js doit être chargé avant renderer.js');
 }
 
+// ThemeManager vient de theme-browser.js, même pattern que I18n ci-dessus
+// (script classique chargé avant celui-ci, voir index.html) — un seul
+// endroit qui applique data-theme sur <html> et retient le thème courant,
+// partagé avec message-prive.js.
+const ThemeManager =
+  window.ThemeManager ??
+  (() => {
+    console.error(
+      '[renderer] window.ThemeManager est introuvable : theme-browser.js doit être chargé avant renderer.js (voir index.html). Le thème reste bloqué sur sombre pour cette session.'
+    );
+    return {
+      appliquerTheme: () => {},
+      obtenirTheme: () => 'sombre',
+      initialiserDepuisElectronAPI: async () => 'sombre',
+    };
+  })();
+
 // NotifPrefs vient de notif-prefs.js, un script classique chargé avant celui-ci
 // (voir index.html) qui expose window.NotifPrefs comme global — cette référence
 // locale évite les erreurs ESLint no-undef (comme le fait déjà message-prive.js
@@ -99,6 +116,7 @@ const el = {
   compteur: document.querySelector('#invitation-count'),
   utilisateur: document.querySelector('#current-user-select'),
   langue: document.querySelector('#language-select'),
+  theme: document.querySelector('#theme-select'),
   dialogue: document.querySelector('#app-dialog'),
   titreDialogue: document.querySelector('#dialog-title'),
   contenuDialogue: document.querySelector('#dialog-content'),
@@ -1391,6 +1409,21 @@ if (el.langue) {
   });
 }
 
+if (el.theme) {
+  el.theme.addEventListener('change', async (event) => {
+    try {
+      const themeConfirme = await window.electronAPI.definirTheme(
+        event.target.value
+      );
+      ThemeManager.appliquerTheme(themeConfirme);
+    } catch {
+      // Repli silencieux : le thème affiché reste celui d'avant si le
+      // canal échoue.
+    }
+    el.theme.value = ThemeManager.obtenirTheme();
+  });
+}
+
 async function initialiserUtilisateurCourant() {
   const utilisateurs = await window.electronAPI.obtenirUtilisateurs();
   remplirSelectUtilisateur(utilisateurs);
@@ -1418,6 +1451,14 @@ async function initialiser() {
   // (trois canaux IPC indépendants, lancés en parallèle).
   const langue = await I18n.initialiserDepuisElectronAPI(window.electronAPI);
   if (el.langue) el.langue.value = langue;
+
+  // Même principe pour le thème (voir ThemeManager.initialiserDepuisElectronAPI
+  // dans theme-browser.js) : appliqué sur <html> tout de suite, avant le
+  // premier rendu visible du dashboard.
+  const theme = await ThemeManager.initialiserDepuisElectronAPI(
+    window.electronAPI
+  );
+  if (el.theme) el.theme.value = theme;
 
   try {
     await initialiserUtilisateurCourant();

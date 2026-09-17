@@ -709,6 +709,24 @@ exposerCanal('i18n:dictionnaires', () => translations);
 // fichier — évite une dérive silencieuse si LANGUE_PAR_DEFAUT change un jour.
 exposerCanal('i18n:langue-par-defaut', () => LANGUE_PAR_DEFAUT);
 
+// --- Thème (clair/sombre) -------------------------------------------------
+// Même principe que la langue ci-dessus : état unique côté main, partagé
+// entre la page de connexion et le dashboard/messages privés, réinitialisé
+// à chaque lancement de l'app (pas de persistance sur disque, pour rester
+// cohérent avec le choix déjà fait pour la langue).
+const THEME_PAR_DEFAUT = 'sombre';
+const THEMES_SUPPORTEES = ['sombre', 'clair'];
+let themeActuel = THEME_PAR_DEFAUT;
+
+exposerCanal('theme:obtenir', () => themeActuel);
+exposerCanal('theme:definir', ({ theme }) => {
+  if (THEMES_SUPPORTEES.includes(theme)) {
+    themeActuel = theme;
+  }
+  return themeActuel;
+});
+exposerCanal('theme:par-defaut', () => THEME_PAR_DEFAUT);
+
 // --- Salons ------------------------------------------------------------
 ipcMain.handle(
   'notification:set-active-conversation',

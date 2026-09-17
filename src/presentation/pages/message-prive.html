@@ -114,6 +114,14 @@
               <option value="fr">FR</option>
               <option value="en">EN</option>
             </select>
+            <select
+              id="theme-select"
+              aria-label="Thème"
+              data-i18n-aria-label="theme.label"
+            >
+              <option value="sombre" data-i18n="theme.dark">Sombre</option>
+              <option value="clair" data-i18n="theme.light">Clair</option>
+            </select>
           </div>
         </div>
         <button
@@ -216,14 +224,6 @@
           </div>
         </div>
         <div class="network-simulation">
-          <div
-            id="connection-status"
-            data-state="deconnecte"
-            aria-live="polite"
-          >
-            <span class="dot"></span>
-            <span id="connection-label">Déconnecté</span>
-          </div>
           <button
             id="simulate-network-cut"
             class="network-test-button"
@@ -240,6 +240,15 @@
           >
             Reconnexion
           </button>
+          <div
+            id="connection-status"
+            class="network-test-button"
+            data-state="deconnecte"
+            aria-live="polite"
+          >
+            <span class="dot"></span>
+            <span id="connection-label">Déconnecté</span>
+          </div>
         </div>
       </header>
 
@@ -309,6 +318,7 @@
 
     <script src="javascript/notif-prefs.js"></script>
     <script src="javascript/i18n-browser.js"></script>
+    <script src="javascript/theme-browser.js"></script>
     <script src="javascript/chat-ui-shared.js"></script>
     <script type="module" src="javascript/message-prive.js"></script>
   </body>

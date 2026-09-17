@@ -48,6 +48,14 @@ declare global {
        * supposer que la langue demandée a été acceptée telle quelle.
        */
       definirLangue: (langue: string) => Promise<string>;
+      /** Retourne le thème actuellement sélectionné ('sombre' ou 'clair'). */
+      obtenirTheme: () => Promise<string>;
+      /**
+       * Change le thème de l'app (partagé entre connexion et dashboard,
+       * même principe que definirLangue). Retourne le thème effectivement
+       * appliqué.
+       */
+      definirTheme: (theme: string) => Promise<string>;
     };
   }
 }

@@ -154,6 +154,11 @@
       "notDelivered": "Non livré",
       "retry": "Réessayer",
       "stillOffline": "Toujours hors ligne : le message n'a pas pu être envoyé."
+    },
+    "theme": {
+      "label": "Thème",
+      "dark": "Sombre",
+      "light": "Clair"
     }
   },
   "en": {
@@ -311,6 +316,11 @@
       "notDelivered": "Not delivered",
       "retry": "Retry",
       "stillOffline": "Still offline: the message could not be sent."
+    },
+    "theme": {
+      "label": "Theme",
+      "dark": "Dark",
+      "light": "Light"
     }
   }
 }
