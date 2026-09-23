@@ -8,15 +8,23 @@ export type Visibilite = 'public' | 'prive';
 
 /**
  * Représente un salon de discussion (channel) dans le système.
- * Un salon a un identifiant unique, un nom, une visibilité (public ou privé),
- * un hôte (propriétaire) et une liste de membres.
+ * Un salon a un identifiant unique, un nom, une visibilité (public ou privé)
+ * et une liste de membres.
+ *
+ * Il n'y a PAS de notion d'« hôte »/propriétaire avec des droits particuliers
+ * sur son propre salon : l'autorité de gestion (créer/renommer/changer la
+ * visibilité/supprimer/inviter/retirer un membre) vient uniquement du rôle
+ * global de l'utilisateur (`moderateur`/`admin`, voir `peutGererSalons` dans
+ * le domaine `Utilisateur`), la même pour tous les salons. `creeParId` est
+ * purement informationnel (affichage « créé par »), jamais utilisé pour une
+ * vérification de droit.
  */
 export interface Salon {
   readonly type: 'salon';
   readonly id: ConversationId;
   readonly nom: string;
   readonly visibilite: Visibilite;
-  readonly hoteId: string;
+  readonly creeParId?: string;
   readonly membreIds: readonly string[];
   readonly membresInvites: readonly string[];
 }
@@ -26,26 +34,28 @@ export interface Salon {
  *
  * @param id Identifiant unique du salon
  * @param nom Nom du salon
- * @param hoteId Identifiant de l'hôte (propriétaire) du salon
+ * @param creeParId Identifiant de l'utilisateur qui a créé le salon (informationnel, voir Salon.creeParId)
  * @param visibilite Visibilité du salon ('public' ou 'prive')
- * @param membreIds Liste des identifiants des membres du salon (optionnel, par défaut contient uniquement l'hôte)
+ * @param membreIds Liste des identifiants des membres du salon (optionnel, par défaut contient uniquement le créateur)
  *
  * @returns Un objet Salon représentant le salon créé
  */
 export function creerSalon(
   id: ConversationId,
   nom: string,
-  hoteId: string,
+  creeParId: string,
   visibilite: Visibilite = 'public',
-  membreIds: readonly string[] = [hoteId]
+  membreIds: readonly string[] = [creeParId]
 ): Salon {
   return {
     type: 'salon',
     id,
     nom,
     visibilite,
-    hoteId,
-    membreIds: membreIds.includes(hoteId) ? membreIds : [...membreIds, hoteId],
+    creeParId,
+    membreIds: membreIds.includes(creeParId)
+      ? membreIds
+      : [...membreIds, creeParId],
     membresInvites: [],
   };
 }
@@ -72,18 +82,6 @@ export function estMembre(salon: Salon, utilisateurId: string): boolean {
  */
 export function estInvite(salon: Salon, utilisateurId: string): boolean {
   return salon.membresInvites.includes(utilisateurId);
-}
-
-/**
- * Vérifie si un utilisateur est l'hôte (propriétaire) d'un salon donné.
- *
- * @param salon Le salon à vérifier
- * @param utilisateurId L'identifiant de l'utilisateur à vérifier
- *
- * @returns true si l'utilisateur est l'hôte du salon, false sinon
- */
-export function estHote(salon: Salon, utilisateurId: string): boolean {
-  return salon.hoteId === utilisateurId;
 }
 
 /**
@@ -129,21 +127,21 @@ export function rejoindreSalon(
 }
 
 /**
- * Permet à un utilisateur de quitter un salon donné.
+ * Permet à un utilisateur de quitter un salon donné (n'importe quel membre,
+ * y compris celui qui l'a créé — il n'y a plus de restriction « hôte » : la
+ * gestion du salon vient du rôle global, voir Salon.creeParId).
  * Si l'utilisateur n'est pas membre du salon, il ne peut pas quitter.
- * Si l'utilisateur est l'hôte du salon, il ne peut pas quitter le salon.
  *
  * @param salon Le salon que l'utilisateur souhaite quitter
  * @param utilisateurId L'identifiant de l'utilisateur qui souhaite quitter le salon
  *
- * @returns nouveau Salon si l'utilisateur peut quitter, `undefined` sinon (pas membre ou hôte du salon).
+ * @returns nouveau Salon si l'utilisateur peut quitter, `undefined` sinon (pas membre).
  */
 export function quitterSalon(
   salon: Salon,
   utilisateurId: string
 ): Salon | undefined {
   if (!estMembre(salon, utilisateurId)) return undefined;
-  if (estHote(salon, utilisateurId)) return undefined;
   return {
     ...salon,
     membreIds: salon.membreIds.filter((id) => id !== utilisateurId),
@@ -151,37 +149,32 @@ export function quitterSalon(
 }
 
 /**
- * Permet à l'hôte d'un salon de changer le nom du salon.
+ * Change le nom d'un salon. L'autorisation (réservée aux modérateurs/admins,
+ * voir `peutGererSalons` dans le domaine Utilisateur) est vérifiée en amont,
+ * côté UI et par le backend — cette fonction est une simple transformation
+ * de données, sans notion d'hôte.
  *
  * @param salon Le salon dont le nom doit être changé
  * @param nouveauNom Le nouveau nom du salon
- * @param utilisateurId L'identifiant de l'utilisateur qui souhaite changer le nom du salon
  *
- * @return le nouveau Salon avec le nom changé si l'utilisateur est l'hôte, `undefined` sinon.
+ * @return le nouveau Salon avec le nom changé.
  */
-export function changerNomSalon(
-  salon: Salon,
-  nouveauNom: string,
-  utilisateurId: string
-): Salon | undefined {
-  if (!estHote(salon, utilisateurId)) return undefined;
+export function changerNomSalon(salon: Salon, nouveauNom: string): Salon {
   return { ...salon, nom: nouveauNom };
 }
 
 /**
- * Permet à l'hôte d'un salon de changer la visibilité du salon.
+ * Change la visibilité d'un salon. Mêmes règles d'autorisation que
+ * `changerNomSalon` (vérifiées en amont, pas dans cette fonction).
  *
  * @param salon Le salon dont la visibilité doit être changée
  * @param nouvelleVisibilite La nouvelle visibilité du salon ('public' ou 'prive')
- * @param utilisateurId L'identifiant de l'utilisateur qui souhaite changer la visibilité du salon
  *
- * @return le nouveau Salon avec la visibilité changée si l'utilisateur est l'hôte, `undefined` sinon.
+ * @return le nouveau Salon avec la visibilité changée.
  */
 export function changerVisibiliteSalon(
   salon: Salon,
-  nouvelleVisibilite: Visibilite,
-  utilisateurId: string
-): Salon | undefined {
-  if (!estHote(salon, utilisateurId)) return undefined;
+  nouvelleVisibilite: Visibilite
+): Salon {
   return { ...salon, visibilite: nouvelleVisibilite };
 }

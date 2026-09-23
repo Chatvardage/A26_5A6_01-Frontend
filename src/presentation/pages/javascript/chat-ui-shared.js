@@ -76,7 +76,11 @@
   }) {
     elements.couperReseau?.addEventListener('click', async () => {
       try {
-        await api.simulerCoupureReseau(getUtilisateurId());
+        // Zéro argument : ce n'est plus une simulation ciblant un
+        // utilisateur simulé (voir le commentaire de classe dans
+        // RealGatewayRuntime.js) — ferme réellement LE socket de la session
+        // courante, déduite du jeton côté serveur.
+        await api.simulerCoupureReseau();
       } catch (erreur) {
         notifierErreur(erreur);
       }
@@ -85,7 +89,10 @@
     elements.reconnecterReseau?.addEventListener('click', async () => {
       if (getEtatReseau()?.statut !== 'deconnecte') return;
       try {
-        await api.simulerReconnexionReseau(900, getUtilisateurId());
+        // Zéro argument, même raison que ci-dessus — plus de délai
+        // artificiel non plus (l'ancien mock simulait la latence réseau,
+        // le vrai socket.io reconnecte à son propre rythme).
+        await api.simulerReconnexionReseau();
       } catch (erreur) {
         notifierErreur(erreur);
       }
@@ -98,11 +105,29 @@
       const actuelle = getPresences()[utilisateurId] ?? 'hors-ligne';
       const prochaine = actuelle === 'en-ligne' ? 'hors-ligne' : 'en-ligne';
       try {
-        await api.modifierPresence(utilisateurId, prochaine);
+        // Un seul argument désormais : le "soi" est implicite via le JWT
+        // côté serveur (voir RealGatewayRuntime.modifierPresence), on ne
+        // peut plus changer la présence de quelqu'un d'autre par ce biais
+        // (ça n'a d'ailleurs jamais été le cas réellement, seul le mock le
+        // permettait).
+        await api.modifierPresence(prochaine);
       } catch (erreur) {
         notifierErreur(erreur);
       }
     });
+  }
+
+  // Détermine si un utilisateur a le droit de gérer les salons (créer,
+  // renommer, changer la visibilité, supprimer, inviter, retirer un membre) —
+  // réservé aux modérateurs/admins (voir RoleUtilisateur et peutGererSalons
+  // dans src/domain/entities/Utilisateur.ts). Duplication volontaire de cette
+  // même petite fonction pure : ce fichier est chargé comme un <script>
+  // classique, sans système de module (voir le commentaire en tête de
+  // renderer.js/message-prive.js sur nodeIntegration désactivé), donc pas
+  // d'import possible depuis le domaine TypeScript — même raisonnement que
+  // creerDmId(), dupliqué pour la même raison dans RealGatewayRuntime.js.
+  function peutGererSalons(utilisateur) {
+    return utilisateur?.role === 'moderateur' || utilisateur?.role === 'admin';
   }
 
   const etatsActionsMessage = new Map();
@@ -447,5 +472,6 @@
     oublierEtatActionMessage,
     creerMessageEnAttente,
     creerActionsMessageNonLivre,
+    peutGererSalons,
   });
 })();

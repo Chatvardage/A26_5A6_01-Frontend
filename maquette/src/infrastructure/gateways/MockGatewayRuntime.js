@@ -541,6 +541,77 @@ class MockGatewayRuntime {
   }
 
   /**
+   * Version mock de RealGatewayRuntime.authentifier (voir AuthGateway.ts) :
+   * accepte un pseudo OU un courriel comme `identifiant` (comparaison
+   * insensible à la casse). Le mock n'ayant pas de vrai stockage de mots de
+   * passe, `motDePasse` n'est validé que sur sa simple présence — ce n'est
+   * PAS un contrôle de sécurité, seulement de quoi exercer le formulaire
+   * pendant que le backend réel n'existe pas encore.
+   *
+   * @param {{identifiant: string, motDePasse: string}} param0
+   * @returns {{utilisateur: {id: string, pseudo: string}, etatConnexion: object}}
+   */
+  authentifier({ identifiant, motDePasse }) {
+    if (!motDePasse) throw new Error('ERR_IDENTIFIANTS_INVALIDES');
+    const normalise = String(identifiant ?? '')
+      .trim()
+      .toLowerCase();
+    const utilisateur = this.utilisateurs.find(
+      (item) =>
+        item.pseudo.toLowerCase() === normalise ||
+        item.courriel?.toLowerCase() === normalise
+    );
+    if (!utilisateur) throw new Error('ERR_IDENTIFIANTS_INVALIDES');
+    this.utilisateurConnecteId = utilisateur.id;
+    this.definirPresenceInterne({
+      utilisateurId: utilisateur.id,
+      statut: 'en-ligne',
+    });
+    const etatConnexion = this.definirEtatConnexion('connecte');
+    return { utilisateur: { ...utilisateur }, etatConnexion };
+  }
+
+  /**
+   * Version mock de RealGatewayRuntime.inscrire (voir AuthGateway.ts) : crée
+   * un nouvel utilisateur à partir d'un courriel + mot de passe, avec le
+   * pseudo par défaut transmis par le renderer (voir genererPseudoParDefaut
+   * côté domaine) — ajusté ici si déjà pris, pour ne jamais faire échouer
+   * l'inscription à cause d'un simple conflit de pseudo par défaut.
+   *
+   * @param {{courriel: string, motDePasse: string, pseudo: string}} param0
+   * @returns {{utilisateur: {id: string, pseudo: string, courriel: string}, etatConnexion: object}}
+   */
+  inscrire({ courriel, motDePasse, pseudo }) {
+    if (!courriel || !motDePasse) throw new Error('ERR_IDENTIFIANTS_INVALIDES');
+    const courrielNormalise = String(courriel).trim().toLowerCase();
+    if (
+      this.utilisateurs.some(
+        (item) => item.courriel?.toLowerCase() === courrielNormalise
+      )
+    ) {
+      throw new Error('ERR_COURRIEL_DEJA_UTILISE');
+    }
+    let pseudoFinal = pseudo || 'utilisateur';
+    let suffixe = 1;
+    while (!this.pseudoDisponible(pseudoFinal)) {
+      pseudoFinal = `${pseudo || 'utilisateur'}${suffixe++}`;
+    }
+    const utilisateur = {
+      id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      pseudo: pseudoFinal,
+      courriel,
+    };
+    this.utilisateurs.push(utilisateur);
+    this.utilisateurConnecteId = utilisateur.id;
+    this.definirPresenceInterne({
+      utilisateurId: utilisateur.id,
+      statut: 'en-ligne',
+    });
+    const etatConnexion = this.definirEtatConnexion('connecte');
+    return { utilisateur: { ...utilisateur }, etatConnexion };
+  }
+
+  /**
    * Retourne l'identifiant de l'utilisateur connecté via l'écran de
    * connexion, ou null si personne ne s'est encore connecté par ce biais
    * (ex. dashboard ouvert directement en développement, sans passer par la

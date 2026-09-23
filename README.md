@@ -1,17 +1,24 @@
-# ChatVardage — Contrôle 1 (420-5A6-ST, A26)
+# ChatVardage (420-5A6-ST, A26)
 
-Application de clavardage desktop locale réalisée avec Electron. Cette itération n'utilise pas encore de serveur réel : `MockGatewayRuntime` simule les salons, les DM, la présence, le typing, les événements temps réel, la latence et les états réseau. L'architecture UI / IPC / gateway permet de remplacer le mock par un backend HTTP/WebSocket lors d'une itération future.
+Application de clavardage desktop réalisée avec Electron, connectée à
+l'infrastructure ChatVardage réelle (Gateway + microservices — voir
+`A26_5A6_01-Infra`) : authentification par mot de passe, salons et DM réels,
+présence et messages de salon en temps réel via Socket.IO. Voir
+`MOCKGATEWAY.md` pour le détail du contrat HTTP/Socket.IO consommé.
 
 ## 1. Objectifs
 
-- Authentification locale par pseudo unique.
-- Salons publics et privés avec invitations simulées.
-- Messages et conversations privées (DM).
+- Authentification par courriel/pseudo + mot de passe, pseudo modifiable
+  après l'inscription (unique, 3-20 caractères).
+- Salons publics et privés avec invitations, gestion (créer/renommer/changer
+  la visibilité/supprimer/retirer un membre) réservée aux modérateurs/admins.
+- Messages et conversations privées (DM), et messages de salon.
 - Présence en ligne/hors ligne et indicateur « en train d'écrire ».
 - Historique paginé (« charger les messages plus anciens »).
-- États réseau simulés : connecté, déconnecté et reconnexion.
+- États réseau : connecté, déconnecté et reconnexion (Socket.IO).
 - Notifications système lorsqu'un message arrive hors focus.
 - Modification et suppression de ses propres messages.
+- Page de profil (pseudo, courriel/mot de passe, thème/langue/notifications).
 - Application Electron sécurisée et multiplateforme.
 
 ## 2. Choix techniques et architecture
@@ -22,7 +29,9 @@ Application de clavardage desktop locale réalisée avec Electron. Cette itérat
 - **Chat :** HTML/CSS/JavaScript vanilla.
 - **Tests :** Vitest.
 - **Qualité :** ESLint + Prettier.
-- **Persistance :** données simulées en mémoire et stockage local pour les préférences/états d'interface.
+- **Persistance :** jeton de session sur disque (`app.getPath('userData')`),
+  backend réel comme source de vérité pour le reste ; stockage local pour
+  certaines préférences/états d'interface.
 
 Flux principal :
 
@@ -33,9 +42,9 @@ IPC Electron
    ↓
 main.js
    ↓
-MockGatewayRuntime
+RealGatewayRuntime
    ↓
-Domaine / données simulées
+Gateway ChatVardage (Serveur-API) — HTTP + Socket.IO
 ```
 
 Le renderer n'a jamais accès directement à Node.js ou à `ipcRenderer`.
@@ -45,6 +54,10 @@ Le renderer n'a jamais accès directement à Node.js ou à `ipcRenderer`.
 - Node.js 22 recommandé.
 - npm.
 - Windows, macOS ou Linux.
+- L'infrastructure ChatVardage démarrée (voir `A26_5A6_01-Infra`,
+  `docker compose up`) — Gateway sur `http://localhost:3000` par défaut. Sans
+  elle, l'app se lance normalement mais chaque appel réseau échoue avec
+  `ERR_RESEAU_INDISPONIBLE` (connexion/inscription impossibles).
 
 Installation :
 
@@ -59,6 +72,10 @@ Mode développement (Vite + Electron) :
 ```bash
 npm run dev
 ```
+
+Backend visé par défaut : `http://localhost:3000` (voir `MOCKGATEWAY.md`
+pour le contrat complet). Surchargeable via `CHATVARDAGE_API_URL`/
+`CHATVARDAGE_SOCKET_URL`.
 
 Lancement normal :
 
@@ -99,50 +116,67 @@ Artifacts attendus :
 
 ## 7. Scénarios de test pour la démonstration
 
-### Authentification et messages
+### Authentification, pseudo et messages
 
-1. Lancer l'application.
-2. Entrer un pseudo local valide et unique.
+1. Lancer l'application (stack ChatVardage démarrée, voir `A26_5A6_01-Infra`).
+2. S'inscrire avec un courriel + mot de passe, puis choisir/confirmer son
+   pseudo sur l'écran qui suit (unique, 3-20 caractères, modifiable plus tard
+   depuis le profil).
 3. Rejoindre un salon public.
 4. Envoyer un message et vérifier l'horodatage.
 5. Modifier puis supprimer un de ses propres messages.
 6. Ouvrir les messages privés et envoyer un DM.
+7. Fermer puis relancer l'application : vérifier que la session est reprise
+   automatiquement (jeton persisté) sans repasser par l'écran de connexion.
 
-### Salon privé et invitation
+### Salon privé, invitation et gestion (modérateur/admin)
 
-1. Créer un salon privé.
-2. Inviter un utilisateur.
-3. Changer d'utilisateur simulé.
-4. Ouvrir **Invitations** puis accepter ou refuser l'invitation.
-5. Vérifier que l'accès au salon privé correspond à la réponse.
+1. Avec un compte modérateur ou admin, créer un salon privé.
+2. Inviter un autre utilisateur.
+3. Avec le second compte (sur une autre instance de l'app), ouvrir
+   **Invitations** puis accepter ou refuser l'invitation.
+4. Vérifier que l'accès au salon privé correspond à la réponse.
+5. Depuis le compte modérateur/admin, renommer le salon, changer sa
+   visibilité, retirer un membre, puis le supprimer — vérifier qu'un compte
+   `utilisateur` simple ne voit aucune de ces actions (ni le bouton "Créer
+   un salon").
 
 ### Présence et typing
 
-1. Vérifier la présence dans la liste des membres et dans un DM.
-2. Changer la présence en ligne/hors ligne pendant l'exécution.
-3. Commencer à écrire dans un salon ou un DM.
-4. Vérifier que l'indicateur « en train d'écrire » apparaît puis disparaît.
+1. Vérifier sa propre présence (bouton de présence) et son reflet dans la
+   liste des membres/un DM.
+2. Commencer à écrire dans un salon ou un DM depuis un second compte.
+3. Vérifier que l'indicateur « en train d'écrire » apparaît puis disparaît.
 
 ### Réseau
 
 1. Cliquer **Coupure**.
-2. Vérifier l'état **Déconnecté** et la présence hors ligne de l'utilisateur courant.
+2. Vérifier l'état **Déconnecté**.
 3. Vérifier qu'un message ne peut pas être envoyé hors réseau.
 4. Cliquer **Reconnexion**.
-5. Vérifier la transition **Reconnexion… → Connecté** et le retour de la présence en ligne.
+5. Vérifier la transition **Reconnexion… → Connecté**.
 6. Répéter dans un salon et dans un DM.
 
 ### Historique / pagination
 
 1. Ouvrir une conversation contenant plusieurs messages.
 2. Remonter en haut de la liste ou cliquer **Charger les messages plus anciens**.
-3. Vérifier que les anciens messages sont ajoutés sans perdre la position de défilement.
+3. Vérifier que les anciens messages sont ajoutés sans perdre la position de scroll.
 
 ### Notifications
 
 1. Choisir le mode de notification souhaité.
 2. Mettre la fenêtre hors focus ou afficher une autre conversation.
-3. Recevoir un message simulé et vérifier la notification système / l'indicateur non lu.
+3. Recevoir un message d'un second compte et vérifier la notification
+   système / l'indicateur non lu.
+
+### Profil
+
+1. Ouvrir la page profil depuis le tableau de bord.
+2. Changer son pseudo, vérifier l'unicité (409 si déjà pris).
+3. Changer son thème/langue/mode de notification, vérifier la persistance
+   après reconnexion.
+4. Changer son courriel/mot de passe (mot de passe actuel requis).
 
 ## 8. Sécurité Electron vérifiée
 
@@ -165,10 +199,12 @@ Autres mesures :
 
 ## 9. Limites connues et pistes d'amélioration
 
-- Le mock local fait confiance à `utilisateurId` fourni par le renderer dans les appels IPC. Il n'existe pas encore de session serveur cryptographiquement liée à l'utilisateur; cette limite concerne notamment la modification/suppression de messages ainsi que la simulation de présence et de coupure/reconnexion réseau. Ce comportement est volontaire pour ce jalon local, car le sélecteur d'utilisateur sert à tester plusieurs identités simulées sans véritable backend d'authentification.
-
-- Le backend est simulé localement; il n'y a pas encore de vraie authentification distante.
-- Les identités et autorisations sont adaptées à une maquette locale et devront être validées côté serveur dans la prochaine itération.
-- Les événements temps réel utilisent le mock local; ils devront être remplacés par WebSocket/HTTP.
+- La présence des AUTRES utilisateurs n'est pas exposée par le backend (seule
+  la sienne l'est, via `/api/config-utilisateur/presence`) : elle s'affiche
+  "hors-ligne" par défaut tant qu'un service ne la diffuse pas.
+- Aucun répertoire/annuaire global d'utilisateurs n'existe côté backend pour
+  un compte non-admin ; la liste de candidats à l'invitation ne montre donc
+  que les utilisateurs déjà "connus" (membres de salons visibles,
+  participants de DM déjà ouverts, résolus via `GET /api/users/lookup`).
 - La signature/code signing des builds n'est pas configurée.
 - Les builds macOS/Windows/Linux sont générés par leurs runners respectifs dans GitHub Actions.

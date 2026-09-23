@@ -85,6 +85,13 @@ const NotifPrefs =
     };
   })();
 let utilisateurActuelId = sessionStorage.getItem('currentUserId') ?? null;
+// Utilisateur connecté complet ({id, pseudo, courriel, role} | null, voir
+// obtenirUtilisateurConnecte dans preload.js) — utilisateurActuelId ci-dessus
+// reste dérivé de cette valeur (voir initialiserUtilisateurCourant) pour ne
+// rien casser des usages existants qui n'ont besoin que de l'id, mais
+// utilisateurActuel est nécessaire pour les décisions basées sur le rôle
+// global (voir ChatUiShared.peutGererSalons et son usage plus bas).
+let utilisateurActuel = null;
 let salonActifId = null;
 let etat = { utilisateurs: [], salons: [], invitations: [] };
 let presences = {};
@@ -114,7 +121,11 @@ const el = {
   creerRail: document.querySelector('#open-create-channel-rail'),
   invitations: document.querySelector('#open-invitations'),
   compteur: document.querySelector('#invitation-count'),
-  utilisateur: document.querySelector('#current-user-select'),
+  utilisateurPseudo: document.querySelector('#current-user-pseudo'),
+  utilisateurRoleBadge: document.querySelector('#current-user-role-badge'),
+  logout: document.querySelector('#logout-btn'),
+  profil: document.querySelector('#open-profile'),
+  roomSettings: document.querySelector('#open-room-settings'),
   langue: document.querySelector('#language-select'),
   theme: document.querySelector('#theme-select'),
   dialogue: document.querySelector('#app-dialog'),
@@ -222,11 +233,11 @@ function ajouterMessageEnAttenteSalon(salonId, message) {
 }
 
 // Ne renvoie que les messages en attente de l'utilisateur COURANT
-// (utilisateurActuelId) : la Map est indexée par salon, pas par utilisateur,
-// donc sans ce filtre, changer d'utilisateur simulé (voir le listener sur
-// el.utilisateur plus bas) ferait apparaître les brouillons non livrés d'un
-// autre utilisateur dans ce même salon — et "Réessayer" les enverrait alors
-// avec l'auteurId de cet ancien utilisateur.
+// (utilisateurActuelId) : la Map est indexée par salon, pas par utilisateur —
+// filtre conservé par prudence même s'il n'y a plus qu'une seule identité
+// possible par session (voir la suppression du sélecteur de test
+// #current-user-select), au cas où plusieurs salons partageraient un jour la
+// même Map d'une façon qui réintroduirait cette ambiguïté.
 function obtenirMessagesEnAttenteSalon(salonId) {
   const liste = messagesEnAttenteSalon.get(salonId) ?? [];
   return liste.filter((message) => message.auteurId === utilisateurActuelId);
@@ -581,16 +592,6 @@ function notifier(message, erreur = false) {
   window.setTimeout(() => el.toast.classList.remove('visible'), 2600);
 }
 
-function remplirSelectUtilisateur(utilisateurs) {
-  const options = utilisateurs.map((item) =>
-    creerEl('option', {
-      texte: item.pseudo,
-      attrs: { value: item.id },
-    })
-  );
-  el.utilisateur.replaceChildren(...options);
-}
-
 /**
  * Ouvre la boîte de dialogue générique avec un titre et un contenu.
  * @param {string} titre
@@ -605,26 +606,26 @@ function ouvrirDialogue(titre, contenu) {
 }
 
 /**
- * Ajoute l'utilisateur courant à la liste déroulante de test s'il n'y
- * figure pas déjà (ex. un nouvel utilisateur créé via l'écran de
- * connexion, absent des <option> statiques du HTML), et synchronise la
- * sélection affichée.
+ * Affiche l'utilisateur connecté (pseudo en lecture seule + badge de rôle) —
+ * remplace l'ancien sélecteur de test #current-user-select (voir
+ * initialiserUtilisateurCourant) : il n'y a plus qu'UNE identité possible
+ * par session (le vrai compte JWT), rien à laisser choisir ici.
  */
-function synchroniserSelecteurUtilisateur() {
-  if (!el.utilisateur) return;
-  const dejaPresent = Array.from(el.utilisateur.options).some(
-    (option) => option.value === utilisateurActuelId
-  );
-  if (!dejaPresent) {
-    const info = utilisateur(utilisateurActuelId);
-    el.utilisateur.appendChild(
-      creerEl('option', {
-        texte: info?.pseudo ?? utilisateurActuelId,
-        attrs: { value: utilisateurActuelId },
-      })
-    );
+function afficherUtilisateurCourant() {
+  if (el.utilisateurPseudo) {
+    el.utilisateurPseudo.textContent = utilisateurActuel?.pseudo ?? '';
   }
-  el.utilisateur.value = utilisateurActuelId;
+  if (el.utilisateurRoleBadge) {
+    const role = utilisateurActuel?.role;
+    const cleRole =
+      role === 'admin'
+        ? 'channels.roleAdmin'
+        : role === 'moderateur'
+          ? 'channels.roleModerator'
+          : null;
+    el.utilisateurRoleBadge.hidden = !cleRole;
+    el.utilisateurRoleBadge.textContent = cleRole ? t(cleRole) : '';
+  }
 }
 
 async function actualiser(options = {}) {
@@ -1060,18 +1061,30 @@ el.messages.addEventListener('scroll', () => {
 
 function afficherActions() {
   const salon = salonActif();
-  el.inviter.hidden =
-    !salon ||
-    salon.hoteId !== utilisateurActuelId ||
-    salon.visibilite !== 'prive';
+  const peutGerer = ChatUiShared.peutGererSalons(utilisateurActuel);
+  el.inviter.hidden = !salon || !peutGerer || salon.visibilite !== 'prive';
   el.membres.disabled = !salon;
   el.compteur.textContent = String(etat.invitations.length);
   el.compteur.hidden = etat.invitations.length === 0;
+
+  // Il n'y a plus de notion d'« hôte » par salon (voir Salon.ts) : la
+  // création/gestion d'un salon est réservée aux modérateurs/admins, un
+  // droit GLOBAL (pas par salon) — les boutons "Créer un salon" sont donc
+  // masqués entièrement (pas seulement désactivés) pour tout le monde
+  // d'autre, plutôt que de laisser un bouton actif qui échouerait côté
+  // serveur.
+  if (el.creer) el.creer.hidden = !peutGerer;
+  if (el.creerRail) el.creerRail.hidden = !peutGerer;
+
+  // Bouton "Paramètres du salon" (renommer/visibilité/supprimer/retirer un
+  // membre) : même droit global, visible seulement si un salon est
+  // effectivement affiché (rien à paramétrer sinon).
+  if (el.roomSettings) el.roomSettings.hidden = !salon || !peutGerer;
 }
 
 function afficherTout(options = {}) {
   appliquerTraductionsStatiques();
-  synchroniserSelecteurUtilisateur();
+  afficherUtilisateurCourant();
   afficherMessages(options);
   afficherSalons();
   afficherActions();
@@ -1118,7 +1131,6 @@ el.creer.addEventListener('click', () => {
       const salon = await window.electronAPI.creerSalon({
         nom: champNom.value,
         prive: champPrive.checked,
-        utilisateurId: utilisateurActuelId,
       });
       salonActifId = salon.id;
       el.dialogue.close();
@@ -1166,10 +1178,13 @@ el.inviter.addEventListener('click', () => {
     });
     bouton.addEventListener('click', async () => {
       try {
+        // Pas de `hoteId` ici : il n'y a plus de notion d'hôte par salon
+        // (voir Salon.ts) — l'autorisation vient du rôle global de
+        // l'utilisateur courant, vérifié côté serveur via son jeton JWT, pas
+        // d'un identifiant transmis par le client.
         await window.electronAPI.inviterAuSalon({
           salonId: salon.id,
           utilisateurId: item.id,
-          hoteId: utilisateurActuelId,
         });
         el.dialogue.close();
         await actualiser();
@@ -1225,7 +1240,7 @@ el.invitations.addEventListener('click', () => {
             creerEl('small', {
               texte: t('channels.invitedBy', {
                 host:
-                  utilisateur(salon.hoteId)?.pseudo ??
+                  utilisateur(salon.creeParId)?.pseudo ??
                   t('channels.unknownUser'),
               }),
             }),
@@ -1263,6 +1278,8 @@ el.membres.addEventListener('click', () => {
   const salon = salonActif();
   if (!salon) return;
 
+  const peutGerer = ChatUiShared.peutGererSalons(utilisateurActuel);
+
   const liste = creerEl('div', { classe: 'member-list' });
   salon.membreIds
     .map((id) => utilisateur(id))
@@ -1286,15 +1303,161 @@ el.membres.addEventListener('click', () => {
           },
         }),
       ];
-      if (membre.id === salon.hoteId) {
+      // Badge de rôle (remplace l'ancien badge "Hôte" — il n'y a plus de
+      // notion d'hôte par salon, voir Salon.ts) : affiché seulement si le
+      // rôle de ce membre est effectivement connu (voir obtenirUtilisateurs
+      // dans RealGatewayRuntime.js — un "cache d'utilisateurs connus", pas un
+      // répertoire complet ; beaucoup de membres n'auront pas de rôle résolu
+      // ici, et on ne devine jamais un rôle plutôt que de ne rien afficher).
+      const cleRole =
+        membre.role === 'admin'
+          ? 'channels.roleAdmin'
+          : membre.role === 'moderateur'
+            ? 'channels.roleModerator'
+            : null;
+      if (cleRole) {
         enfants.push(
-          creerEl('span', { classe: 'owner-label', texte: t('channels.host') })
+          creerEl('span', { classe: 'owner-label', texte: t(cleRole) })
         );
+      }
+      // "Retirer" : réservé aux modérateurs/admins (droit global, voir
+      // peutGererSalons), jamais affiché pour soi-même (on quitte un salon
+      // via une autre action, pas en se "retirant" soi-même ici).
+      if (peutGerer && membre.id !== utilisateurActuelId) {
+        const boutonRetirer = creerEl('button', {
+          classe: 'member-remove',
+          texte: t('roomSettings.removeMember'),
+          attrs: { type: 'button' },
+        });
+        boutonRetirer.addEventListener('click', async () => {
+          try {
+            await window.electronAPI.retirerMembreSalon({
+              salonId: salon.id,
+              utilisateurId: membre.id,
+            });
+            el.dialogue.close();
+            await actualiser();
+            notifier(t('roomSettings.memberRemoved'));
+          } catch (erreur) {
+            notifier(messageErreur(erreur), true);
+          }
+        });
+        enfants.push(boutonRetirer);
       }
       liste.appendChild(creerEl('div', { classe: 'member-row', enfants }));
     });
 
   ouvrirDialogue(t('channels.membersOf', { name: salon.nom }), liste);
+});
+
+/**
+ * Panneau "Paramètres du salon" (renommer / changer la visibilité /
+ * supprimer) — réservé aux modérateurs/admins (voir peutGererSalons et son
+ * usage dans afficherActions(), qui masque déjà ce bouton pour tout le
+ * monde d'autre). Suit le même schéma fetch -> notifier() -> actualiser()
+ * -> el.dialogue.close() que les autres actions de ce fichier (créer un
+ * salon, inviter, etc.).
+ */
+el.roomSettings?.addEventListener('click', () => {
+  const salon = salonActif();
+  if (!salon) return;
+
+  const champNom = creerEl('input', {
+    attrs: { maxlength: '40', value: salon.nom },
+  });
+  const boutonRenommer = creerEl('button', {
+    classe: 'primary-button full-width',
+    texte: t('roomSettings.rename'),
+    attrs: { type: 'button' },
+  });
+  boutonRenommer.addEventListener('click', async () => {
+    const nom = champNom.value.trim();
+    if (!nom) return;
+    try {
+      await window.electronAPI.modifierSalon({ salonId: salon.id, nom });
+      el.dialogue.close();
+      await actualiser();
+      notifier(t('roomSettings.updated'));
+    } catch (erreur) {
+      notifier(messageErreur(erreur), true);
+    }
+  });
+
+  const boutonVisibilite = creerEl('button', {
+    classe: 'secondary-button full-width',
+    texte:
+      salon.visibilite === 'prive'
+        ? t('roomSettings.makePublic')
+        : t('roomSettings.makePrivate'),
+    attrs: { type: 'button' },
+  });
+  boutonVisibilite.addEventListener('click', async () => {
+    const visibilite = salon.visibilite === 'prive' ? 'public' : 'prive';
+    try {
+      await window.electronAPI.modifierSalon({ salonId: salon.id, visibilite });
+      el.dialogue.close();
+      await actualiser();
+      notifier(t('roomSettings.updated'));
+    } catch (erreur) {
+      notifier(messageErreur(erreur), true);
+    }
+  });
+
+  // Suppression : confirmation en deux temps (comme
+  // creerActionsMessage/afficherConfirmationSuppression dans
+  // chat-ui-shared.js), pas de confirm() natif — cohérent avec le reste de
+  // l'app, qui ne s'appuie jamais sur les boîtes de dialogue natives du
+  // navigateur.
+  const boutonSupprimer = creerEl('button', {
+    classe: 'secondary-button full-width danger',
+    texte: t('roomSettings.delete'),
+    attrs: { type: 'button' },
+  });
+  const confirmerSuppression = () => {
+    const question = creerEl('span', { texte: t('roomSettings.deleteConfirm') });
+    const boutonAnnuler = creerEl('button', {
+      classe: 'secondary-button',
+      texte: t('messages.cancel'),
+      attrs: { type: 'button' },
+    });
+    const boutonConfirmer = creerEl('button', {
+      classe: 'secondary-button danger',
+      texte: t('roomSettings.delete'),
+      attrs: { type: 'button' },
+    });
+    boutonAnnuler.addEventListener('click', () => {
+      ligneSuppression.replaceWith(boutonSupprimer);
+    });
+    boutonConfirmer.addEventListener('click', async () => {
+      try {
+        await window.electronAPI.supprimerSalon(salon.id);
+        if (salonActifId === salon.id) salonActifId = null;
+        el.dialogue.close();
+        await actualiser();
+        notifier(t('roomSettings.deleted'));
+      } catch (erreur) {
+        notifier(messageErreur(erreur), true);
+      }
+    });
+    const ligneSuppression = creerEl('div', {
+      classe: 'confirm-delete-row',
+      enfants: [question, boutonAnnuler, boutonConfirmer],
+    });
+    boutonSupprimer.replaceWith(ligneSuppression);
+  };
+  boutonSupprimer.addEventListener('click', confirmerSuppression);
+
+  ouvrirDialogue(t('roomSettings.title'), [
+    creerEl('label', {
+      enfants: [
+        document.createTextNode(t('channels.channelNameLabel')),
+        champNom,
+      ],
+    }),
+    boutonRenommer,
+    boutonVisibilite,
+    boutonSupprimer,
+  ]);
 });
 
 el.formulaire.addEventListener('submit', async (event) => {
@@ -1378,16 +1541,24 @@ el.formulaire.addEventListener('submit', async (event) => {
   }
 });
 
-el.utilisateur.addEventListener('change', async (event) => {
-  utilisateurActuelId = event.target.value;
-  sessionStorage.setItem('currentUserId', utilisateurActuelId);
-  // Le brouillon en cours appartenait à l'utilisateur précédent : il ne
-  // doit pas apparaître dans le champ de l'utilisateur simulé qu'on vient
-  // de sélectionner (voir le même réflexe dans message-prive.js).
-  el.message.value = '';
-  fermerMenuNotif();
-  afficherPresenceCourante();
-  await actualiser();
+el.profil?.addEventListener('click', () => {
+  window.electronAPI.navigate('profil.html');
+});
+
+// Vraie déconnexion (remplace l'ancien sélecteur de test #current-user-select,
+// voir initialiserUtilisateurCourant) : ferme la session côté gateway (jeton
+// en mémoire ET persisté sur disque, voir RealGatewayRuntime.deconnexion),
+// puis ramène l'app à l'écran de connexion (voir 'navigation:connexion' dans
+// main.js). Best-effort sur le premier appel : même si deconnexionSession()
+// échouait, on veut quand même renvoyer l'utilisateur à l'écran de
+// connexion plutôt que le laisser coincé sur un dashboard désormais invalide.
+el.logout?.addEventListener('click', async () => {
+  try {
+    await window.electronAPI.deconnexionSession();
+  } catch (erreur) {
+    console.error('[logout] échec de deconnexionSession :', erreur);
+  }
+  await window.electronAPI.allerALaConnexion();
 });
 
 if (el.langue) {
@@ -1424,24 +1595,20 @@ if (el.theme) {
   });
 }
 
+/**
+ * Résout l'utilisateur réellement connecté (session JWT, voir
+ * obtenirUtilisateurConnecte dans preload.js/RealGatewayRuntime.js) — il n'y
+ * a plus de sélection possible entre plusieurs identités simulées (voir
+ * afficherUtilisateurCourant et la suppression de #current-user-select) :
+ * une seule identité par session, celle authentifiée sur l'écran de
+ * connexion. `sessionStorage.currentUserId` reste écrit ici uniquement comme
+ * mécanisme de transmission entre index.html et message-prive.html (voir son
+ * usage initial plus haut dans ce fichier), jamais comme source de vérité
+ * modifiable par l'utilisateur.
+ */
 async function initialiserUtilisateurCourant() {
-  const utilisateurs = await window.electronAPI.obtenirUtilisateurs();
-  remplirSelectUtilisateur(utilisateurs);
-
-  if (!utilisateurActuelId) {
-    // Pas de sélection déjà mémorisée pour cette session (ex. arrivée sur le
-    // dashboard juste après la page de connexion) : on récupère l'utilisateur
-    // qui vient de s'y connecter plutôt que de tomber sur le premier
-    // utilisateur de la liste par défaut (voir l'incident "connecté en tant
-    // qu'alice par défaut" et session:utilisateur-connecte dans main.js).
-    utilisateurActuelId = await window.electronAPI.obtenirUtilisateurConnecte();
-  }
-
-  utilisateurActuelId =
-    utilisateurs.find((item) => item.id === utilisateurActuelId)?.id ??
-    utilisateurs[0]?.id ??
-    '';
-  el.utilisateur.value = utilisateurActuelId;
+  utilisateurActuel = await window.electronAPI.obtenirUtilisateurConnecte();
+  utilisateurActuelId = utilisateurActuel?.id ?? '';
   sessionStorage.setItem('currentUserId', utilisateurActuelId);
 }
 
@@ -1576,20 +1743,32 @@ if (typeof serviceNotifications?.onNavigateToConversation === 'function') {
   });
 }
 
-// --- Messages de démo simulés en continu par main.js ------------------------
-// Voir demarrerSimulationMessages() dans main.js : un message privé
-// (ariane → sam) toutes les 5s et un message dans #général toutes les 10s,
-// en continu, pour pouvoir observer les notifications sans action manuelle.
-// C'est ce fichier (pas main.js) qui décide, selon le mode NotifPrefs de
-// l'utilisateur actuellement affiché ici, s'il faut déclencher une
-// notification système — main.js ne connaît pas les préférences par
-// utilisateur (elles vivent dans localStorage, côté renderer).
-// Corps du handler partagé avec message-prive.js via
-// NotifPrefs.traiterMessageSimule (voir notif-prefs.js) : seule la partie
-// "quoi rafraîchir à l'écran" diffère réellement d'une page à l'autre.
-if (typeof serviceNotifications?.onMockMessage === 'function') {
-  serviceNotifications.onMockMessage((message) =>
-    NotifPrefs.traiterMessageSimule(message, {
+// --- Nouveaux messages en temps réel (salon ou DM) --------------------------
+// Remplace l'ancien branchement sur onMockMessage (démo de messages simulés
+// par main.js — 'notifications:message-simule' — qui n'existe plus, voir
+// RealGatewayRuntime.js : le mock n'avait besoin de simuler des messages
+// entrants QUE parce qu'une seule identité pouvait être "active" à la fois ;
+// avec de vrais comptes/JWT, le WebSocket du Serveur-API pousse maintenant un
+// vrai événement à chaque nouveau message, salon ou DM confondus — voir
+// 'messages:nouveau' dans main.js/preload.js). Si la conversation concernée
+// est celle actuellement affichée, un actualiser() complet suffit (plus
+// simple et plus sûr qu'un ajout incrémental au DOM) ; sinon, on relaie vers
+// le même chemin de notification (rond + notification système selon
+// NotifPrefs) déjà utilisé par cette page. Corps du handler partagé avec
+// message-prive.js via NotifPrefs.traiterMessageSimule (voir
+// notif-prefs.js) : seule la partie "quoi rafraîchir à l'écran" diffère
+// réellement d'une page à l'autre.
+if (typeof window.electronAPI?.onNouveauMessage === 'function') {
+  window.electronAPI.onNouveauMessage((payload) => {
+    if (!payload?.message) return;
+    const estSalon = payload.conversationType === 'salon';
+    const messageNormalise = {
+      type: estSalon ? 'salon' : 'prive',
+      auteurId: payload.message.auteurId,
+      contenu: payload.message.contenu,
+      conversationId: estSalon ? payload.salonId : payload.message.conversationId,
+    };
+    NotifPrefs.traiterMessageSimule(messageNormalise, {
       utilisateurId: utilisateurActuelId,
       surSalon: () => actualiser(),
       surPrive: async () => {
@@ -1597,8 +1776,8 @@ if (typeof serviceNotifications?.onMockMessage === 'function') {
         mettreAJourBadgeApplication();
       },
       notifierMessageSysteme,
-    })
-  );
+    });
+  });
 }
 
 // --- Menu de préférences de notification ----------------------------------

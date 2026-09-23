@@ -18,18 +18,6 @@ contextBridge.exposeInMainWorld('notifications', {
     ipcRenderer.invoke('notification:set-active-conversation', conversationId),
   messageReceived: (message) =>
     ipcRenderer.invoke('notification:message-received', message),
-  // Écoute les messages simulés en continu par main.js (démo des
-  // notifications, voir demarrerSimulationMessages) : contrairement aux deux
-  // méthodes ci-dessus, ce canal part du main process vers le renderer
-  // (ipcRenderer.on, pas invoke), puisque main.js pousse ces messages de son
-  // propre chef plutôt qu'en réponse à un appel du renderer. Retourne une
-  // fonction pour se désabonner, au cas où elle serait utile un jour.
-  onMockMessage: (callback) => {
-    const ecouteur = (_event, message) => callback(message);
-    ipcRenderer.on('notifications:message-simule', ecouteur);
-    return () =>
-      ipcRenderer.removeListener('notifications:message-simule', ecouteur);
-  },
   // Badge de messages non lus sur l'icône de l'app (dock macOS/Linux,
   // superposition sur la barre des tâches Windows). `iconDataUrl` est un
   // PNG en dataURL dessiné côté renderer (voir genererIconeBadge dans
@@ -65,20 +53,41 @@ contextBridge.exposeInMainWorld('notifications', {
 });
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  pseudoDisponible: (pseudo) =>
-    ipcRenderer.invoke('session:pseudo-disponible', { pseudo }),
-  connexionSession: (utilisateur) =>
-    ipcRenderer.invoke('session:connexion', utilisateur),
+  // Authentification par pseudo OU courriel + mot de passe — voir
+  // AuthGateway.ts / LoginPage.tsx.
+  authentifierSession: (identifiant, motDePasse) =>
+    ipcRenderer.invoke('session:authentifier', { identifiant, motDePasse }),
+  // Écran d'inscription (courriel + mot de passe, pseudo par défaut généré
+  // côté renderer) — voir AuthGateway.ts / InscriptionPage.tsx.
+  inscriptionSession: (courriel, motDePasse, pseudo) =>
+    ipcRenderer.invoke('session:inscription', { courriel, motDePasse, pseudo }),
+  // Reprend une session déjà ouverte lors d'un lancement précédent (jeton
+  // persisté), appelé au démarrage de la page de connexion.
+  restaurerSession: () => ipcRenderer.invoke('session:restaurer'),
+  deconnexionSession: () => ipcRenderer.invoke('session:deconnexion'),
   obtenirUtilisateurConnecte: () =>
     ipcRenderer.invoke('session:utilisateur-connecte'),
+
+  // Page profil.
+  profilObtenir: () => ipcRenderer.invoke('profil:obtenir'),
+  profilModifierPseudo: (pseudo) =>
+    ipcRenderer.invoke('profil:modifier-pseudo', { pseudo }),
+  profilModifierCompte: (donnees) =>
+    ipcRenderer.invoke('profil:modifier-compte', donnees),
+  profilSupprimerCompte: (motDePasseActuel) =>
+    ipcRenderer.invoke('profil:supprimer-compte', { motDePasseActuel }),
+
+  // Configuration utilisateur (alias, thème, langue, notifications) —
+  // User-Config-Service.
+  configObtenir: () => ipcRenderer.invoke('config:obtenir'),
+  configModifier: (donnees) => ipcRenderer.invoke('config:modifier', donnees),
+
   obtenirEtatReseau: () => ipcRenderer.invoke('reseau:etat'),
-  simulerCoupureReseau: (utilisateurId) =>
-    ipcRenderer.invoke('reseau:coupure', { utilisateurId }),
-  simulerReconnexionReseau: (delaiMs = 900, utilisateurId) =>
-    ipcRenderer.invoke('reseau:reconnexion', { delaiMs, utilisateurId }),
+  simulerCoupureReseau: () => ipcRenderer.invoke('reseau:coupure'),
+  simulerReconnexionReseau: () => ipcRenderer.invoke('reseau:reconnexion'),
   obtenirPresences: () => ipcRenderer.invoke('presence:obtenir'),
-  modifierPresence: (utilisateurId, statut) =>
-    ipcRenderer.invoke('presence:modifier', { utilisateurId, statut }),
+  modifierPresence: (statut) =>
+    ipcRenderer.invoke('presence:modifier', { statut }),
   onEtatReseauChange: (rappel) => {
     const ecouteur = (_event, etat) => rappel(etat);
     ipcRenderer.on('reseau:etat-change', ecouteur);
@@ -101,7 +110,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () =>
       ipcRenderer.removeListener('messages:supprime-change', ecouteur);
   },
+  // Nouveau message reçu en temps réel (salon ou DM) — voir main.js,
+  // chatGateway.on('message-recu', ...). Payload :
+  // `{ conversationType: 'dm', message }` ou
+  // `{ conversationType: 'salon', salonId, message }`.
+  onNouveauMessage: (rappel) => {
+    const ecouteur = (_event, payload) => rappel(payload);
+    ipcRenderer.on('messages:nouveau', ecouteur);
+    return () => ipcRenderer.removeListener('messages:nouveau', ecouteur);
+  },
   allerAuTableauDeBord: () => ipcRenderer.invoke('navigation:tableau-de-bord'),
+  // Symétrique, dans l'autre sens : ramène l'app à l'écran de connexion
+  // (voir 'navigation:connexion' dans main.js) — utilisé par le bouton "Se
+  // déconnecter" du dashboard/messages privés/profil, après l'appel à
+  // deconnexionSession() ci-dessus.
+  allerALaConnexion: () => ipcRenderer.invoke('navigation:connexion'),
 
   obtenirLangue: () => ipcRenderer.invoke('langue:obtenir'),
   definirLangue: (langue) => ipcRenderer.invoke('langue:definir', { langue }),
@@ -120,6 +143,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   obtenirMessagesSalonAvant: (donnees) =>
     ipcRenderer.invoke('salons:messages-avant', donnees),
   creerSalon: (donnees) => ipcRenderer.invoke('salons:creer', donnees),
+  // Gestion d'un salon (réservée aux modérateurs/admins, voir
+  // peutGererSalons côté domaine Utilisateur) : renommer/changer visibilité,
+  // supprimer, quitter, retirer un membre.
+  modifierSalon: (donnees) => ipcRenderer.invoke('salons:modifier', donnees),
+  supprimerSalon: (salonId) =>
+    ipcRenderer.invoke('salons:supprimer', { salonId }),
+  quitterSalon: (salonId) => ipcRenderer.invoke('salons:quitter', { salonId }),
+  retirerMembreSalon: (donnees) =>
+    ipcRenderer.invoke('salons:retirer-membre', donnees),
   inviterAuSalon: (donnees) => ipcRenderer.invoke('salons:inviter', donnees),
   accepterInvitation: (donnees) =>
     ipcRenderer.invoke('salons:accepter-invitation', donnees),

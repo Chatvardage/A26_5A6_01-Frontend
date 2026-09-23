@@ -1,31 +1,15 @@
-import {
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-  useEffect,
-  type FormEvent,
-} from 'react';
-import {
-  validationPseudo,
-  creerUtilisateur,
-} from '../../../domain/entities/Utilisateur';
+import { useCallback, useRef, useState, useEffect, type FormEvent } from 'react';
 import mascotLogo from '../../../../assets/icon.png';
-import type { ChatGateway } from '../../../infrastructure/gateways/ChatGateway';
+import type { AuthGateway } from '../../../infrastructure/gateways/AuthGateway';
 import { t, LANGUES_SUPPORTEES } from '../../../i18n/i18n-web';
 
 /**
- * Sous-ensemble de ChatGateway réellement nécessaire à cet écran (principe
- * de ségrégation d'interface). Permet de dépendre du contrat plutôt que
- * d'une implémentation concrète (voir la règle documentée dans
- * ChatGateway.ts), sans exiger que MockGateway implémente déjà l'intégralité
- * de ChatGateway — ce qui n'est pas encore le cas pour les salons/messages,
- * hors scope de cet écran.
+ * Sous-ensemble de AuthGateway réellement nécessaire à cet écran (principe
+ * de ségrégation d'interface, même règle que documentée dans ChatGateway.ts
+ * pour GatewaySession — conservé ici sous le même nom pour ne pas casser les
+ * imports existants côté main.tsx, seul son contenu change).
  */
-export type GatewaySession = Pick<
-  ChatGateway,
-  'pseudoDisponible' | 'connexion'
->;
+export type GatewaySession = Pick<AuthGateway, 'authentifier'>;
 
 interface LoginPageProps {
   gateway: GatewaySession;
@@ -39,6 +23,8 @@ interface LoginPageProps {
   changerTheme: (theme: string) => void;
   /** Appelé une fois la session établie ; par défaut, redirige vers le tableau de bord via electronAPI. */
   onSessionEtablie?: () => void;
+  /** Bascule vers l'écran d'inscription (voir main.tsx / InscriptionPage.tsx). */
+  allerAInscription: () => void;
 }
 
 /** Valeurs supportées pour `theme` — même esprit que LANGUES_SUPPORTEES
@@ -47,33 +33,11 @@ interface LoginPageProps {
  * via theme.dark/theme.light dans translations.json). */
 const THEMES_SUPPORTEES = ['sombre', 'clair'] as const;
 
-/**
- * Délai maximal accordé à `gateway.pseudoDisponible` avant de considérer la
- * vérification comme en échec. Sans cette borne, un appel qui ne se résout
- * jamais (IPC bloqué, implémentation réseau future qui ne répond pas) laisse
- * le champ indéfiniment sur "Vérification…", puisque ni `disponibilite` ni
- * `erreurSoumission` ne sont alors mis à jour.
- */
-const DELAI_VERIFICATION_MS = 5000;
-
-type EtatChamp = 'idle' | 'checking' | 'error' | 'ok';
-
-interface Disponibilite {
-  pseudo: string;
-  disponible: boolean;
-}
-
 interface ErreurSoumission {
-  pseudo: string;
   /** Clé de traduction (ex. "auth.invalidFormat") ou code brut venant du
-   * backend (ex. "ERR_PSEUDO_PRIS|alice") — jamais un texte déjà traduit,
-   * pour que le message affiché se retraduise tout seul si la langue
-   * change après coup (voir traduireErreurSoumission ci-dessous). Le
-   * paramètre éventuel (ex. "alice" ci-dessus) reste encodé DANS `cle`
-   * plutôt que dans un champ séparé — traduireErreurSoumission le
-   * resépare lui-même via split('|'), donc un champ `params` distinct
-   * ici ne ferait que dupliquer une information déjà présente et jamais
-   * lue. */
+   * backend (ex. "ERR_IDENTIFIANTS_INVALIDES") — jamais un texte déjà
+   * traduit, pour que le message affiché se retraduise tout seul si la
+   * langue change après coup (voir traduireErreurSoumission ci-dessous). */
   cle: string;
 }
 
@@ -81,10 +45,9 @@ interface ErreurSoumission {
  * Traduit erreurSoumission.cle dans la langue COURANTE (recalculé à chaque
  * rendu, jamais mis en cache) : (1) une clé de validation locale connue
  * (ex. "auth.invalidFormat"), ou (2) un code d'erreur backend au format
- * "errors.CODE" avec un paramètre optionnel (voir nettoyerPrefixeIpc dans
- * main.tsx, qui ne traduit plus rien lui-même). Repli sur un message
- * générique traduit si le code est inconnu, plutôt qu'afficher une clé
- * technique brute à l'utilisateur.
+ * "errors.CODE" (voir nettoyerPrefixeIpc dans main.tsx, qui ne traduit plus
+ * rien lui-même). Repli sur un message générique traduit si le code est
+ * inconnu, plutôt qu'afficher une clé technique brute à l'utilisateur.
  */
 function traduireErreurSoumission(
   langue: string,
@@ -93,22 +56,9 @@ function traduireErreurSoumission(
   if (erreur.cle.startsWith('auth.')) {
     return t(langue, erreur.cle);
   }
-  const [code, ...params] = erreur.cle.split('|');
-  const cleTraduction = `errors.${code}`;
+  const cleTraduction = `errors.${erreur.cle}`;
   const brutTraduit = t(langue, cleTraduction);
-  if (brutTraduit === cleTraduction) {
-    return t(langue, 'errors.generic');
-  }
-  if (!params.length) return brutTraduit;
-  // Convention "CODE|valeur" : un seul paramètre positionnel, dont le nom
-  // (ex. "pseudo", "host"...) n'est pas connu d'ici — on le lit dans le
-  // texte déjà traduit plutôt que de supposer qu'il s'appelle toujours
-  // "pseudo", ce qui laisserait un futur {host} non substitué. On repasse
-  // ensuite par t() (pas de .replace() manuel) pour la substitution.
-  const nomParametre = brutTraduit.match(/\{(\w+)\}/)?.[1];
-  return nomParametre
-    ? t(langue, cleTraduction, { [nomParametre]: params[0] })
-    : brutTraduit;
+  return brutTraduit === cleTraduction ? t(langue, 'errors.generic') : brutTraduit;
 }
 
 export function LoginPage({
@@ -118,17 +68,15 @@ export function LoginPage({
   theme,
   changerTheme,
   onSessionEtablie,
+  allerAInscription,
 }: LoginPageProps) {
-  const [pseudo, setPseudo] = useState('');
-  const [disponibilite, setDisponibilite] = useState<Disponibilite | null>(
-    null
-  );
+  const [identifiant, setIdentifiant] = useState('');
+  const [motDePasse, setMotDePasse] = useState('');
   const [erreurSoumission, setErreurSoumission] =
     useState<ErreurSoumission | null>(null);
   const [enCours, setEnCours] = useState(false);
 
-  const inputRef = useRef<HTMLInputElement>(null);
-  const jetonVerification = useRef(0);
+  const identifiantRef = useRef<HTMLInputElement>(null);
 
   // Applique le thème sur <html> dès qu'il change (prop pilotée par
   // main.tsx) — tout le reste (couleurs) réagit via les blocs
@@ -137,106 +85,24 @@ export function LoginPage({
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
-  const formatValide = useMemo(() => validationPseudo(pseudo.trim()), [pseudo]);
-
-  // Vérification d'unicité "au fil de la frappe" (anti-rafale + jeton pour
-  // ignorer une réponse obsolète). Le seul setState dans cet effet se
-  // produit dans le callback async (synchronisation avec le gateway),
-  // jamais de façon synchrone dans le corps de l'effet.
-  useEffect(() => {
-    if (!formatValide) return;
-
-    const jeton = ++jetonVerification.current;
-    const pseudoVerifie = pseudo.trim();
-    let delaiDepasse: ReturnType<typeof setTimeout> | undefined;
-
-    const debounce = setTimeout(() => {
-      // Borne l'attente : sans ce minuteur, un appel qui ne se résout jamais
-      // (voir DELAI_VERIFICATION_MS) laissait le champ bloqué indéfiniment
-      // sur "Vérification…", car ni `disponibilite` ni `erreurSoumission`
-      // n'étaient alors jamais mis à jour (voir le calcul de `etat` plus bas).
-      delaiDepasse = setTimeout(() => {
-        if (jeton !== jetonVerification.current) return; // réponse obsolète
-        setErreurSoumission({
-          pseudo: pseudoVerifie,
-          cle: 'auth.checkTimeout',
-        });
-      }, DELAI_VERIFICATION_MS);
-
-      gateway
-        .pseudoDisponible(pseudoVerifie)
-        .then((disponible) => {
-          if (jeton !== jetonVerification.current) return; // réponse obsolète
-          clearTimeout(delaiDepasse);
-          setDisponibilite({ pseudo: pseudoVerifie, disponible });
-          // Une vérification aboutie pour ce pseudo invalide toute erreur
-          // précédente associée au MÊME pseudo (ex. un timeout ou un rejet
-          // antérieur) : sans ça, `etat` restait bloqué sur 'error' même
-          // après un succès, puisque `erreurSoumission` est prioritaire
-          // dans son calcul plus bas.
-          setErreurSoumission((actuelle) =>
-            actuelle && actuelle.pseudo === pseudoVerifie ? null : actuelle
-          );
-        })
-        .catch(() => {
-          // Sans ce catch, un appel IPC qui rejette laissait le champ
-          // bloqué sur "Vérification de la disponibilité…" indéfiniment.
-          if (jeton !== jetonVerification.current) return; // réponse obsolète
-          clearTimeout(delaiDepasse);
-          setErreurSoumission({
-            pseudo: pseudoVerifie,
-            cle: 'auth.checkFailed',
-          });
-        });
-    }, 300);
-
-    return () => {
-      clearTimeout(debounce);
-      clearTimeout(delaiDepasse);
-    };
-  }, [pseudo, formatValide, gateway]);
-
-  // --- État affiché, dérivé au rendu (pas de setState synchrone requis) ---
-  let etat: EtatChamp = 'idle';
-  let message = '';
-  const pseudoActuel = pseudo.trim();
-
-  if (erreurSoumission && erreurSoumission.pseudo === pseudoActuel) {
-    etat = 'error';
-    message = traduireErreurSoumission(langue, erreurSoumission);
-  } else if (pseudoActuel.length === 0) {
-    etat = 'idle';
-  } else if (!formatValide) {
-    etat = 'error';
-    message = t(langue, 'auth.invalidFormat');
-  } else if (disponibilite && disponibilite.pseudo === pseudoActuel) {
-    etat = disponibilite.disponible ? 'ok' : 'error';
-    message = disponibilite.disponible
-      ? t(langue, 'auth.available')
-      : t(langue, 'auth.taken');
-  } else {
-    etat = 'checking';
-    message = t(langue, 'auth.checking');
-  }
-
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
 
-      const valeur = pseudo.trim();
-      if (!validationPseudo(valeur)) {
-        setErreurSoumission({
-          pseudo: valeur,
-          cle: 'auth.invalidFormat',
-        });
-        inputRef.current?.focus();
+      const identifiantSaisi = identifiant.trim();
+      if (!identifiantSaisi || !motDePasse) {
+        setErreurSoumission({ cle: 'auth.invalidFormat' });
+        identifiantRef.current?.focus();
         return;
       }
 
       setEnCours(true);
+      setErreurSoumission(null);
       try {
-        const utilisateur = creerUtilisateur(crypto.randomUUID(), valeur);
-        await gateway.connexion(utilisateur);
+        await gateway.authentifier({
+          identifiant: identifiantSaisi,
+          motDePasse,
+        });
 
         if (onSessionEtablie) {
           onSessionEtablie();
@@ -245,12 +111,12 @@ export function LoginPage({
         }
       } catch (err) {
         const cle = err instanceof Error ? err.message : '';
-        setErreurSoumission({ pseudo: valeur, cle });
+        setErreurSoumission({ cle });
         setEnCours(false);
-        inputRef.current?.focus();
+        identifiantRef.current?.focus();
       }
     },
-    [pseudo, gateway, onSessionEtablie]
+    [identifiant, motDePasse, gateway, onSessionEtablie]
   );
 
   return (
@@ -300,38 +166,56 @@ export function LoginPage({
           aria-hidden="true"
         />
 
-        <label htmlFor="pseudo-input">{t(langue, 'auth.fieldLabel')}</label>
-        <div className="login-card-header">
-          <span>{t(langue, 'auth.headerUsername')}</span>
-          <span>{t(langue, 'auth.headerLocal')}</span>
-        </div>
-
+        <label htmlFor="identifiant-input">{t(langue, 'auth.fieldLabel')}</label>
         <input
-          id="pseudo-input"
-          name="pseudo"
+          id="identifiant-input"
+          name="identifiant"
           type="text"
-          autoComplete="off"
+          autoComplete="username"
           placeholder={t(langue, 'auth.usernamePlaceholder')}
-          maxLength={20}
-          value={pseudo}
-          onChange={(event) => setPseudo(event.target.value)}
-          ref={inputRef}
+          maxLength={254}
+          value={identifiant}
+          onChange={(event) => setIdentifiant(event.target.value)}
+          ref={identifiantRef}
         />
 
-        <p
-          className="field-message"
-          role="status"
-          aria-live="polite"
-          data-kind={etat}
-        >
-          {message}
-        </p>
+        <label htmlFor="mot-de-passe-input">
+          {t(langue, 'auth.passwordLabel')}
+        </label>
+        <input
+          id="mot-de-passe-input"
+          name="motDePasse"
+          type="password"
+          autoComplete="current-password"
+          placeholder={t(langue, 'auth.passwordPlaceholder')}
+          value={motDePasse}
+          onChange={(event) => setMotDePasse(event.target.value)}
+        />
+
+        {erreurSoumission && (
+          <p
+            className="field-message"
+            role="status"
+            aria-live="polite"
+            data-kind="error"
+          >
+            {traduireErreurSoumission(langue, erreurSoumission)}
+          </p>
+        )}
 
         <button type="submit" disabled={enCours}>
           {enCours ? t(langue, 'auth.connecting') : t(langue, 'auth.join')}
         </button>
 
         <p className="login-hint">{t(langue, 'auth.hint')}</p>
+
+        <button
+          type="button"
+          className="login-switch"
+          onClick={allerAInscription}
+        >
+          {t(langue, 'auth.noAccount')} {t(langue, 'auth.createAccount')}
+        </button>
       </form>
     </div>
   );

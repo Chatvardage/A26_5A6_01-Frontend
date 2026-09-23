@@ -1,6 +1,7 @@
 export {};
 
 import type { EtatConnexion } from '../../../domain/entities/EtatConnexion';
+import type { Utilisateur } from '../../../domain/entities/Utilisateur';
 
 /**
  * Type de `window.electronAPI`, exposé par `preload.js` via contextBridge.
@@ -11,19 +12,38 @@ import type { EtatConnexion } from '../../../domain/entities/EtatConnexion';
 declare global {
   interface Window {
     electronAPI: {
-      /** Vérifie si un pseudo est disponible (voir MockGatewayRuntime.pseudoDisponible côté main). */
-      pseudoDisponible: (pseudo: string) => Promise<boolean>;
       /**
-       * Crée/enregistre la session pour cet utilisateur dans le
-       * MockGatewayRuntime PARTAGÉ côté main — c'est ce qui permet au
-       * dashboard de connaître ensuite ce même utilisateur (voir
-       * `obtenirUtilisateurConnecte`), plutôt qu'une instance de gateway
-       * isolée dans le renderer de la page de connexion.
+       * Authentifie un utilisateur déjà inscrit par pseudo OU courriel +
+       * mot de passe (voir AuthGateway.ts). Voir LoginPage.tsx.
        */
-      connexionSession: (utilisateur: {
-        id: string;
-        pseudo: string;
-      }) => Promise<EtatConnexion>;
+      authentifierSession: (
+        identifiant: string,
+        motDePasse: string
+      ) => Promise<{ utilisateur: Utilisateur; etatConnexion: EtatConnexion }>;
+      /**
+       * Inscrit un nouvel utilisateur (courriel + mot de passe ; le pseudo
+       * par défaut est généré côté renderer, voir genererPseudoParDefaut
+       * dans le domaine Utilisateur, et transmis ici — modifiable ensuite
+       * sur l'écran "Choisis ton pseudo" ou la page profil). Voir
+       * InscriptionPage.tsx.
+       */
+      inscriptionSession: (
+        courriel: string,
+        motDePasse: string,
+        pseudo: string
+      ) => Promise<{ utilisateur: Utilisateur; etatConnexion: EtatConnexion }>;
+      /**
+       * Reprend une session déjà ouverte lors d'un lancement précédent
+       * (jeton persisté sur disque), appelée au démarrage de la page de
+       * connexion pour sauter directement au tableau de bord si possible.
+       * Retourne `null` si aucune session n'a pu être reprise.
+       */
+      restaurerSession: () => Promise<{
+        utilisateur: Utilisateur;
+        etatConnexion: EtatConnexion;
+      } | null>;
+      /** Déconnexion explicite (voir page profil). */
+      deconnexionSession: () => Promise<void>;
       /**
        * Demande au processus main de charger le tableau de bord (dashboard)
        * une fois la session locale établie. Le retour de navigation lui-même
@@ -37,7 +57,22 @@ declare global {
        * utilisateur en dur. Retourne `null` si personne ne s'est connecté
        * par ce biais (ex. dashboard ouvert directement en développement).
        */
-      obtenirUtilisateurConnecte: () => Promise<string | null>;
+      obtenirUtilisateurConnecte: () => Promise<Utilisateur | null>;
+      /** Profil complet de l'utilisateur courant (GET /auth/me). */
+      profilObtenir: () => Promise<Utilisateur>;
+      /** Change le pseudo (3-20 caractères, unicité vérifiée serveur). */
+      profilModifierPseudo: (pseudo: string) => Promise<Utilisateur>;
+      /**
+       * Change le courriel et/ou le mot de passe — `motDePasseActuel` est
+       * toujours requis par le serveur pour ce type de changement.
+       */
+      profilModifierCompte: (donnees: {
+        courriel?: string;
+        motDePasse?: string;
+        motDePasseActuel: string;
+      }) => Promise<Utilisateur>;
+      /** Supprime définitivement le compte courant et ferme la session. */
+      profilSupprimerCompte: (motDePasseActuel: string) => Promise<void>;
       /** Retourne la langue actuellement sélectionnée ('fr' ou 'en'). */
       obtenirLangue: () => Promise<string>;
       /**

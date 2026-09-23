@@ -11,8 +11,11 @@ const {
 const path = require('path');
 const { fileURLToPath } = require('url');
 const {
-  MockGatewayRuntime,
-} = require('./src/infrastructure/gateways/MockGatewayRuntime.js');
+  RealGatewayRuntime,
+} = require('./src/infrastructure/gateways/RealGatewayRuntime.js');
+const {
+  obtenirConfiguration,
+} = require('./src/infrastructure/config/ConfigurationApi.js');
 const {
   t,
   LANGUE_PAR_DEFAUT,
@@ -20,7 +23,14 @@ const {
 } = require('./src/i18n/i18n.js');
 const translations = require('./src/i18n/translations.json');
 
-const chatGateway = new MockGatewayRuntime();
+// Instance UNIQUE du gateway réel (Serveur-API, voir A26_5A6_01-Infra),
+// partagée par la page de connexion et le dashboard — voir le commentaire
+// plus bas sur les canaux 'session:*' pour pourquoi une seule instance.
+const configurationApi = obtenirConfiguration();
+const chatGateway = new RealGatewayRuntime(configurationApi);
+console.log(
+  `[ChatVardage] Gateway actif : ${configurationApi.baseUrlHttp}`
+);
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -606,14 +616,32 @@ ipcMain.handle('navigation:tableau-de-bord', (event) => {
   if (mainWindow) {
     mainWindow.loadFile(APP_INDEX_PATH);
   }
-  // Démarre la démo de notifications seulement maintenant : c'est le
-  // premier moment où chatGateway.obtenirUtilisateurConnecte() reflète
-  // réellement la personne qui vient de se connecter (voir
-  // demarrerSimulationMessages plus bas, qui en dépend pour cibler le DM de
-  // démo). L'appeler plus tôt (ex. dans app.whenReady(), avant que
-  // quiconque ait rempli l'écran de connexion) le ferait toujours annuler
-  // silencieusement faute d'utilisateur connecté.
-  demarrerSimulationMessages();
+});
+
+// 'navigation:connexion' : symétrique de 'navigation:tableau-de-bord'
+// ci-dessus, dans l'autre sens — appelé par le dashboard (voir renderer.js/
+// message-prive.js, bouton "Se déconnecter") une fois la session fermée côté
+// gateway (chatGateway.deconnexion(), voir 'session:deconnexion' plus bas),
+// pour ramener la fenêtre à l'écran de connexion. Reprend exactement la même
+// logique dev/prod que le tout premier chargement dans createWindow() : en
+// dev, la page de connexion est servie par le serveur Vite (Fast Refresh),
+// jamais par un fichier sous APP_PAGES_ROOT ; en prod, c'est le bundle buildé
+// (APP_LOGIN_PATH), qui vit délibérément hors de cet arbre (voir isAppUrl()
+// plus haut pour pourquoi ce chemin précis est reconnu comme interne à
+// l'app).
+ipcMain.handle('navigation:connexion', (event) => {
+  const url = event.senderFrame?.url ?? '';
+  if (!isAppUrl(url)) {
+    return;
+  }
+  if (!mainWindow) {
+    return;
+  }
+  if (isDev) {
+    mainWindow.loadURL(`http://localhost:${DEV_SERVER_PORT}/`);
+  } else {
+    mainWindow.loadFile(APP_LOGIN_PATH);
+  }
 });
 
 function verifierProvenance(event) {
@@ -635,29 +663,55 @@ function exposerCanal(nom, action) {
 // l'utilisateur créé dès la navigation vers le dashboard — voir l'incident
 // "connecté en tant qu'alice par défaut"). C'est pour ça que ces canaux
 // vivent ici, dans le même fichier que les canaux 'salons:*'.
-exposerCanal('session:pseudo-disponible', ({ pseudo }) =>
-  chatGateway.pseudoDisponible(pseudo)
+//
+// Authentification par pseudo OU courriel + mot de passe (voir
+// AuthGateway.ts / RealGatewayRuntime.authentifier pour le contrat complet).
+exposerCanal('session:authentifier', ({ identifiant, motDePasse }) =>
+  chatGateway.authentifier({ identifiant, motDePasse })
 );
-exposerCanal('session:connexion', (utilisateur) =>
-  chatGateway.connexion(utilisateur)
+// Écran d'inscription (courriel + mot de passe, pseudo par défaut généré
+// côté renderer — voir genererPseudoParDefaut — et transmis ici ; le pseudo
+// choisi ici n'est qu'un point de départ, modifiable ensuite sur l'écran
+// "Choisis ton pseudo" ou la page profil).
+exposerCanal('session:inscription', ({ courriel, motDePasse, pseudo }) =>
+  chatGateway.inscrire({ courriel, motDePasse, pseudo })
 );
+// Reprend une session déjà ouverte lors d'un lancement précédent (jeton
+// persisté sur disque), appelé par la page de connexion au démarrage pour
+// sauter directement au tableau de bord si possible.
+exposerCanal('session:restaurer', () => chatGateway.restaurerSession());
+// Déconnexion explicite (voir page profil) : ferme le socket, efface le
+// jeton en mémoire et sur disque.
+exposerCanal('session:deconnexion', () => chatGateway.deconnexion());
 // Utilisé par le dashboard au démarrage pour savoir qui vient de se
 // connecter, au lieu de coder un utilisateur en dur (voir renderer.js).
 exposerCanal('session:utilisateur-connecte', () =>
   chatGateway.obtenirUtilisateurConnecte()
 );
 
-// --- Simulation réseau / présence -----------------------------------------
+// --- Profil (page "Modifier le profil") --------------------------------------
+exposerCanal('profil:obtenir', () => chatGateway.profilObtenir());
+exposerCanal('profil:modifier-pseudo', ({ pseudo }) =>
+  chatGateway.profilModifierPseudo(pseudo)
+);
+exposerCanal('profil:modifier-compte', (donnees) =>
+  chatGateway.profilModifierCompte(donnees)
+);
+exposerCanal('profil:supprimer-compte', ({ motDePasseActuel }) =>
+  chatGateway.profilSupprimerCompte(motDePasseActuel)
+);
+
+// --- Configuration utilisateur (alias, thème, langue, notifications) --------
+exposerCanal('config:obtenir', () => chatGateway.configObtenir());
+exposerCanal('config:modifier', (donnees) => chatGateway.configModifier(donnees));
+
+// --- Réseau / présence -----------------------------------------------------
 exposerCanal('reseau:etat', () => chatGateway.obtenirEtatConnexion());
-exposerCanal('reseau:coupure', ({ utilisateurId }) =>
-  chatGateway.simulerCoupure(utilisateurId)
-);
-exposerCanal('reseau:reconnexion', ({ delaiMs, utilisateurId }) =>
-  chatGateway.simulerReconnexion(delaiMs, utilisateurId)
-);
+exposerCanal('reseau:coupure', () => chatGateway.simulerCoupure());
+exposerCanal('reseau:reconnexion', () => chatGateway.simulerReconnexion());
 exposerCanal('presence:obtenir', () => chatGateway.obtenirPresences());
-exposerCanal('presence:modifier', (donnees) =>
-  chatGateway.modifierPresence(donnees)
+exposerCanal('presence:modifier', ({ statut }) =>
+  chatGateway.modifierPresence({ statut })
 );
 
 // Le runtime émet les transitions avant même que l'appel IPC de reconnexion
@@ -680,6 +734,16 @@ chatGateway.on('message-modifie', (message) => {
 chatGateway.on('message-supprime', (message) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('messages:supprime-change', message);
+  }
+});
+// Nouveau message reçu en temps réel (salon ou DM), poussé par le WebSocket
+// Serveur-API — n'existait pas avec le mock (une seule identité simulée à la
+// fois, jamais de "vrai" second interlocuteur temps réel). Voir renderer.js/
+// message-prive.js pour le traitement (ajout à la conversation affichée,
+// notification système si hors focus).
+chatGateway.on('message-recu', (payload) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('messages:nouveau', payload);
   }
 });
 
@@ -806,143 +870,35 @@ ipcMain.handle('notifications:set-badge-count', (event, donnees) => {
   return true;
 });
 
-// --- Démo : un message simulé par DM et par salon, une seule fois --------
-// But : pouvoir observer une notification (système, ou discret/points) sans
-// action manuelle, quelle que soit la page actuellement affichée (index.html
-// ou message-prive.html), sans avoir à envoyer de vrai message. C'est pour ça
-// que ça vit ici, dans le process main, et non dans renderer.js comme
-// l'ancien `programmerMessageTest()` (retiré) : les deux pages partagent la
-// même fenêtre (`win.loadFile` remplace le document à chaque navigation),
-// donc un minuteur posé côté renderer s'arrête dès qu'on change de page.
-// Anciennement en boucle continue (setInterval, un message toutes les
-// 5s/10s) pour faciliter les tests répétés des notifications ; repassé à un
-// envoi unique (setTimeout) une fois les tests terminés — plus de messages
-// de démo générés en continu pendant l'utilisation normale de l'app.
-// Réservé au développement (voir isDev dans demarrerSimulationMessages
-// ci-dessous) : ces messages injectent de fausses données dans l'état réel
-// du ChatGateway (chatGateway.envoyerMessagePrive/envoyerMessage), ce qui n'a
-// aucun sens pour une utilisatrice réelle d'un build empaqueté — seulement
-// pour tester les notifications pendant le développement.
-// Chaque message est poussé aux deux pages via l'événement
-// 'notifications:message-simule' (voir preload.js / renderer.js /
-// message-prive.js) ; c'est le renderer qui décide ensuite, selon le mode
-// NotifPrefs de l'utilisateur actuellement affiché, s'il faut déclencher une
-// vraie notification système.
-//
-// Même règle de calcul d'ID que creerDmId() dans MockGatewayRuntime.js (les
-// deux ID triés puis joints par ':') : dupliquée ici pour la même raison que
-// dans MockGatewayRuntime.js (pas d'import direct d'un module TS/CJS croisé).
-function creerDmId(utilisateurAId, utilisateurBId) {
-  return [utilisateurAId, utilisateurBId].sort().join(':');
-}
-
-const DEMO_SALON_ID = 's1'; // général
-// Les deux messages de démo sont désormais envoyés "de la part d'ariane"
-// (u2), à destination de la personne qui vient de se connecter via l'écran
-// de connexion (voir demarrerSimulationMessages ci-dessous) — et non plus
-// entre deux comptes de démo fixes (sam/eva) qui n'ont plus de lien avec la
-// session réellement ouverte. Comme le nouvel utilisateur est créé avec un
-// UUID frais à la connexion (voir LoginPage.tsx), il ne peut jamais être
-// 'u2' lui-même (le pseudo "ariane" est déjà pris par ce compte de seed —
-// voir pseudoDisponible), donc pas de risque de "notification à soi-même"
-// ici, contrairement à l'ancienne version testée en tant que sam/ariane sur
-// le dashboard ouvert directement.
-const DEMO_EXPEDITEUR_ID = 'u2'; // ariane
-
-let demoDmTimeoutId = null;
-let demoSalonTimeoutId = null;
-
 function envoyerVersRenderer(canal, donnees) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(canal, donnees);
   }
 }
 
-function simulerMessagePrive(destinataireId) {
-  try {
-    // S'assure que la conversation existe avant d'y écrire (le seed initial
-    // de MockGatewayRuntime ne connaît pas encore ce nouvel utilisateur) ;
-    // idempotent si elle existe déjà.
-    chatGateway.demarrerConversationPrivee({
-      utilisateurId: DEMO_EXPEDITEUR_ID,
-      autreUtilisateurId: destinataireId,
-    });
-    const message = chatGateway.envoyerMessagePrive({
-      conversationId: creerDmId(DEMO_EXPEDITEUR_ID, destinataireId),
-      utilisateurId: DEMO_EXPEDITEUR_ID,
-      contenu: 'Message de démo (ariane → vous).',
-    });
-    envoyerVersRenderer('notifications:message-simule', {
-      type: 'prive',
-      ...message,
-    });
-  } catch (erreur) {
-    console.error('[simulerMessagePrive] ERREUR:', erreur);
-  }
-}
-
-function simulerMessageSalon() {
-  try {
-    const message = chatGateway.envoyerMessage({
-      salonId: DEMO_SALON_ID,
-      utilisateurId: DEMO_EXPEDITEUR_ID,
-      contenu: 'Message de démo dans #général (ariane).',
-    });
-    envoyerVersRenderer('notifications:message-simule', {
-      type: 'salon',
-      conversationId: DEMO_SALON_ID,
-      ...message,
-    });
-  } catch (erreur) {
-    console.error('[simulerMessageSalon] ERREUR:', erreur);
-  }
-}
-
-function demarrerSimulationMessages() {
-  arreterSimulationMessages();
-  // Jamais en production : voir le commentaire au-dessus de DEMO_EXPEDITEUR_ID.
-  // Sans ce garde-fou, chaque lancement de l'app empaquetée injecterait ces
-  // deux messages fabriqués dans les conversations de tout le monde.
-  if (!isDev) return;
-
-  // Le destinataire du DM de démo est l'utilisateur qui vient de se
-  // connecter via l'écran de connexion. Si personne ne s'est connecté par ce
-  // biais (ex. dashboard ouvert directement en dev, sans passer par le
-  // login), ou si c'est ariane elle-même (ne devrait pas arriver, voir plus
-  // haut, mais on se protège quand même), on n'envoie rien plutôt que de
-  // planter ou de se notifier soi-même.
-  const nouvelUtilisateurId = chatGateway.obtenirUtilisateurConnecte();
-  if (!nouvelUtilisateurId || nouvelUtilisateurId === DEMO_EXPEDITEUR_ID) {
-    return;
-  }
-
-  // Un seul envoi par canal (setTimeout, pas setInterval) : plus de boucle
-  // continue une fois les tests de notifications terminés.
-  demoDmTimeoutId = setTimeout(
-    () => simulerMessagePrive(nouvelUtilisateurId),
-    5000
-  );
-  demoSalonTimeoutId = setTimeout(simulerMessageSalon, 10000);
-}
-
-function arreterSimulationMessages() {
-  if (demoDmTimeoutId) clearTimeout(demoDmTimeoutId);
-  if (demoSalonTimeoutId) clearTimeout(demoSalonTimeoutId);
-  demoDmTimeoutId = null;
-  demoSalonTimeoutId = null;
-}
-
-exposerCanal('salons:etat', ({ utilisateurId }) =>
-  chatGateway.obtenirEtat(utilisateurId)
-);
+exposerCanal('salons:etat', () => chatGateway.obtenirEtat());
 // Pagination "charger plus ancien" de l'historique d'un salon : salons:etat
-// ci-dessus ne renvoie déjà plus que la page de messages la plus récente
-// (voir construireSalonDTO dans MockGatewayRuntime.js).
+// ci-dessus ne renvoie déjà plus que la page de messages la plus récente.
 exposerCanal('salons:messages-avant', (donnees) =>
   chatGateway.obtenirMessagesSalonAvant(donnees)
 );
 exposerCanal('utilisateurs:lister', () => chatGateway.obtenirUtilisateurs());
 exposerCanal('salons:creer', (donnees) => chatGateway.creerSalon(donnees));
+// Gestion d'un salon (renommer/changer visibilité, supprimer, quitter,
+// retirer un membre) — réservée aux modérateurs/admins côté serveur (voir
+// Room-Service) ; l'UI masque déjà ces actions pour les autres utilisateurs
+// (voir peutGererSalons), mais l'autorisation réelle vient du JWT, pas du
+// renderer.
+exposerCanal('salons:modifier', (donnees) => chatGateway.modifierSalon(donnees));
+exposerCanal('salons:supprimer', ({ salonId }) =>
+  chatGateway.supprimerSalon(salonId)
+);
+exposerCanal('salons:quitter', ({ salonId }) =>
+  chatGateway.quitterSalonDistant(salonId)
+);
+exposerCanal('salons:retirer-membre', (donnees) =>
+  chatGateway.retirerMembreSalon(donnees)
+);
 exposerCanal('salons:inviter', (donnees) => chatGateway.inviter(donnees));
 exposerCanal('salons:accepter-invitation', (donnees) =>
   chatGateway.accepterInvitation(donnees)
@@ -959,16 +915,8 @@ exposerCanal('messages:modifier', (donnees) =>
 exposerCanal('messages:supprimer', (donnees) =>
   chatGateway.supprimerMessage(donnees)
 );
-// Comme tous les canaux ci-dessus, ceux-ci font confiance à l'`utilisateurId`
-// fourni par le renderer plutôt que de le lier à une session authentifiée :
-// il n'y a pas de backend ni de notion de session réelle dans cette maquette
-// (l'utilisateur "courant" est un simple sélecteur côté UI, voir renderer.js
-// / message-prive.js). C'est cohérent avec le reste de l'app, mais à garder
-// en tête si un vrai backend/auth arrive un jour : ces canaux permettent
-// aujourd'hui à n'importe quel code du renderer de lire/démarrer les DM de
-// n'importe quel utilisateur.
-exposerCanal('obtenir-conversations-privees', ({ utilisateurId }) =>
-  chatGateway.obtenirConversationsPrivees(utilisateurId)
+exposerCanal('obtenir-conversations-privees', () =>
+  chatGateway.obtenirConversationsPrivees()
 );
 // Pagination "charger plus ancien" de l'historique d'une conversation
 // privée : obtenir-conversations-privees ci-dessus ne renvoie déjà plus que
@@ -1048,7 +996,6 @@ if (!gotSingleInstanceLock) {
   });
 
   app.on('window-all-closed', () => {
-    arreterSimulationMessages();
     // Sur macOS, une app reste active sans fenêtre ouverte (convention de
     // plateforme) ; ailleurs, fermer la dernière fenêtre ferme l'app.
     if (process.platform !== 'darwin') {

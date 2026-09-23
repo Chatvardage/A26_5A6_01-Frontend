@@ -70,11 +70,10 @@
       <div id="user-panel">
         <div class="avatar"></div>
         <div class="user-info">
-          <select
-            id="current-user-select"
-            aria-label="Utilisateur simulé"
-            data-i18n-aria-label="nav.simulatedUser"
-          ></select>
+          <div class="current-user-row">
+            <span id="current-user-pseudo" class="current-user-pseudo"></span>
+            <span id="current-user-role-badge" class="role-badge" hidden></span>
+          </div>
           <div class="user-meta">
             <button
               class="presence-label presence-toggle"
@@ -102,6 +101,66 @@
             </select>
           </div>
         </div>
+        <button
+          id="open-profile"
+          class="notif-settings-btn"
+          type="button"
+          title="Profil"
+          aria-label="Profil"
+          data-i18n-title="nav.profile"
+          data-i18n-aria-label="nav.profile"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <circle cx="8" cy="5.5" r="2.6" fill="currentColor" />
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              d="M2.6 14c.5-3 2.9-5 5.4-5s4.9 2 5.4 5"
+            />
+          </svg>
+        </button>
+        <button
+          id="logout-btn"
+          class="notif-settings-btn"
+          type="button"
+          title="Se déconnecter"
+          aria-label="Se déconnecter"
+          data-i18n-title="nav.logout"
+          data-i18n-aria-label="nav.logout"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M6.3 2.5H3.4a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H6.3"
+            />
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M9.8 5.2 12.9 8l-3.1 2.8M12.6 8H5.9"
+            />
+          </svg>
+        </button>
         <button
           id="open-notif-settings"
           class="notif-settings-btn"
@@ -199,6 +258,18 @@
             data-i18n="channels.private"
             >Privé</span
           >
+          <button
+            id="open-room-settings"
+            class="icon-action"
+            type="button"
+            hidden
+            title="Paramètres du salon"
+            aria-label="Paramètres du salon"
+            data-i18n-title="roomSettings.title"
+            data-i18n-aria-label="roomSettings.title"
+          >
+            ⚙
+          </button>
         </div>
         <div class="topbar-actions">
           <button

@@ -43,18 +43,6 @@ export interface ChatGateway {
   // --- Connexion ----------------------------------------------------------
 
   /**
-   * Vérifie si un pseudo est disponible (non utilisé par un utilisateur déjà
-   * enregistré), avant de tenter de créer une session avec `connexion`.
-   * Comparaison insensible à la casse (« Alice » et « alice » sont le même
-   * pseudo). Permet une validation "au fil de la frappe" côté UI sans avoir
-   * à tenter une connexion complète.
-   *
-   * @param pseudo Le pseudo à vérifier.
-   * @returns `true` si le pseudo est disponible, `false` s'il est déjà pris.
-   */
-  pseudoDisponible(pseudo: string): Promise<boolean>;
-
-  /**
    * Établit la connexion au service de chat pour l'utilisateur donné (crée la session locale).
    * Une implémentation réseau ferait ici la poignée de main avec le serveur ; le mock simule un
    * délai et peut simuler un échec/une reconnexion.

@@ -332,6 +332,34 @@ body {
 }
 
 /* =========================================================
+   LIEN CONNEXION <-> INSCRIPTION
+   ========================================================= */
+
+.login-switch {
+  background: none;
+  border: none;
+  padding: 4px 0 0 0;
+  margin: 0;
+
+  font-size: clamp(12px, 0.85vw, 14px);
+  font-weight: 700;
+  color: var(--accent, currentColor);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.login-switch:hover,
+.login-switch:focus-visible {
+  opacity: 0.85;
+}
+
+.login-card-title {
+  font-size: clamp(18px, 1.6vw, 24px);
+  text-align: center;
+  margin: 0;
+}
+
+/* =========================================================
    =========================================================
    SÉLECTEURS LANGUE + THÈME
    =========================================================

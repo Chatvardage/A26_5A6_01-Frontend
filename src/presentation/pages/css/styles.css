@@ -186,6 +186,17 @@ button {
   color: var(--text-primary);
 }
 
+/* .server-icon fixe `display: flex` ci-dessus, ce qui (la cascade donnant
+   toujours la priorité à une règle d'auteur sur la feuille de style par
+   défaut du navigateur, à spécificité égale ou non) l'emporterait sinon sur
+   la règle par défaut `[hidden] { display: none }` — l'attribut `hidden`
+   serait alors posé sans effet visuel. Concerne #open-create-channel-rail
+   (voir afficherActions() dans renderer.js, qui le masque entièrement pour
+   un rôle `utilisateur`). */
+.server-icon[hidden] {
+  display: none;
+}
+
 /* --- Colonne des salons -------------------------------------------- */
 #channel-sidebar {
   width: 232px;
@@ -290,6 +301,38 @@ button {
   font-weight: 600;
 }
 
+/* Affichage en lecture seule de l'utilisateur connecté (remplace l'ancien
+   sélecteur #current-user-select — voir index.html/message-prive.html) : un
+   vrai compte JWT n'a plus de raison d'être "changé" depuis cette barre. */
+.current-user-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.current-user-pseudo {
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.role-badge {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-start);
+  color: #073d32;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
 /* ============================================================
    PANNEAU UTILISATEUR
    Même rendu dans index.html et message-prive.html
@@ -344,39 +387,6 @@ button {
   gap: 4px;
   white-space: nowrap;
   overflow: hidden;
-}
-
-#user-panel #current-user-select {
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  height: 25px;
-  padding: 3px 25px 3px 7px;
-  border: none;
-  border-radius: 6px;
-  background-color: var(--bg-panel-alt);
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' fill='none' stroke='%239fb8b3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 7px center;
-  background-size: 9px 6px;
-  outline: none;
-}
-
-:root[data-theme='clair'] #user-panel #current-user-select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' fill='none' stroke='%233a5a54' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-}
-
-#user-panel #current-user-select:hover,
-#user-panel #current-user-select:focus {
-  background-color: var(--bg-bubble);
-  color: var(--text-primary);
 }
 
 #user-panel .presence-label,
@@ -454,7 +464,6 @@ button {
   width: 62px;
 }
 
-#user-panel #current-user-select option,
 #user-panel .language-select option,
 #user-panel #theme-select option {
   background: var(--bg-panel);
@@ -591,6 +600,14 @@ button {
 #topbar .channel-name {
   font-weight: 600;
   font-size: 1rem;
+  display: flex;
+  align-items: center;
+}
+
+#open-room-settings {
+  margin-left: 6px;
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .topbar-actions {
@@ -628,6 +645,35 @@ button {
 
 .secondary-button,
 .reject-invite {
+  background: var(--bg-bubble);
+}
+
+.secondary-button.danger {
+  color: #ff8a8a;
+}
+
+/* Ligne de confirmation "Supprimer ce salon ?" (voir el.roomSettings dans
+   renderer.js) — même esprit que .message-actions.confirming-delete, mais
+   pour un panneau de dialogue plutôt qu'une ligne de message. */
+.confirm-delete-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Bouton "Retirer" d'un membre (voir el.membres dans renderer.js). */
+.member-remove {
+  margin-left: auto;
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: transparent;
+  color: #ff8a8a;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.member-remove:hover {
   background: var(--bg-bubble);
 }
 
@@ -1072,9 +1118,8 @@ dialog::backdrop {
   font-size: 0.78rem;
 }
 
-/* --- Selects : utilisateur + langue + thème ------------------------------- */
+/* --- Selects : langue + thème ------------------------------------------- */
 
-#current-user-select,
 .language-select,
 #theme-select {
   border: none;
@@ -1112,14 +1157,12 @@ dialog::backdrop {
    plutôt que de laisser un chevron clair invisible sur fond clair. Garder
    cette couleur alignée sur --text-muted du bloc [data-theme='clair']
    ci-dessus (styles.css) si celui-ci change un jour. */
-:root[data-theme='clair'] #current-user-select,
 :root[data-theme='clair'] .language-select,
 :root[data-theme='clair'] #theme-select {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' fill='none' stroke='%233a5a54' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 /* Au survol */
-#current-user-select:hover,
 .language-select:hover,
 #theme-select:hover {
   background-color: var(--bg-bubble);
@@ -1127,26 +1170,23 @@ dialog::backdrop {
 }
 
 /* Quand le select est sélectionné/focus */
-#current-user-select:focus,
 .language-select:focus,
 #theme-select:focus {
   outline: none;
 }
 
 /* Options du menu */
-#current-user-select option,
 .language-select option,
 #theme-select option {
   background: var(--bg-panel);
   color: var(--text-primary);
 }
 
-/* Le sélecteur de langue et celui du thème sont des réglages secondaires,
-   pas un second "compte" — volontairement plus discrets que
-   #current-user-select (texte plus petit, fond neutre) et posés sur leur
+/* Le sélecteur de langue et celui du thème sont des réglages secondaires —
+   volontairement discrets (texte plus petit, fond neutre) et posés sur leur
    propre ligne avec le statut de présence (voir .user-meta) plutôt que
-   collés juste après, pour qu'on ne les confonde plus au premier coup
-   d'œil. */
+   collés juste après le pseudo, pour qu'on ne les confonde pas au premier
+   coup d'œil. */
 .language-select,
 #theme-select {
   font-size: 0.72rem;

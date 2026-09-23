@@ -3,7 +3,6 @@ import {
   changerNomSalon,
   changerVisibiliteSalon,
   creerSalon,
-  estHote,
   estInvite,
   estMembre,
   inviterMembre,
@@ -12,20 +11,21 @@ import {
 } from './Salon';
 
 describe('creerSalon', () => {
-  it("est public par défaut et ne contient que l'hôte comme membre", () => {
+  it("est public par défaut et ne contient que le créateur comme membre", () => {
     const salon = creerSalon('c1', 'général', 'u1');
     expect(salon.type).toBe('salon');
     expect(salon.visibilite).toBe('public');
+    expect(salon.creeParId).toBe('u1');
     expect(salon.membreIds).toEqual(['u1']);
     expect(salon.membresInvites).toEqual([]);
   });
 
-  it("ajoute l'hôte à membreIds s'il n'y est pas déjà", () => {
+  it("ajoute le créateur à membreIds s'il n'y est pas déjà", () => {
     const salon = creerSalon('c1', 'général', 'u1', 'public', ['u2']);
     expect(salon.membreIds).toEqual(['u2', 'u1']);
   });
 
-  it("ne duplique pas l'hôte s'il est déjà dans membreIds", () => {
+  it('ne duplique pas le créateur s\'il est déjà dans membreIds', () => {
     const salon = creerSalon('c1', 'général', 'u1', 'public', ['u1', 'u2']);
     expect(salon.membreIds).toEqual(['u1', 'u2']);
   });
@@ -36,7 +36,7 @@ describe('creerSalon', () => {
   });
 });
 
-describe('estMembre / estInvite / estHote', () => {
+describe('estMembre / estInvite', () => {
   const salon = inviterMembre(creerSalon('c1', 'général', 'u1'), 'u2');
 
   it('estMembre distingue les membres des non-membres', () => {
@@ -47,11 +47,6 @@ describe('estMembre / estInvite / estHote', () => {
   it('estInvite distingue les invités des non-invités', () => {
     expect(estInvite(salon, 'u2')).toBe(true);
     expect(estInvite(salon, 'u1')).toBe(false);
-  });
-
-  it("estHote distingue l'hôte des autres", () => {
-    expect(estHote(salon, 'u1')).toBe(true);
-    expect(estHote(salon, 'u2')).toBe(false);
   });
 });
 
@@ -114,36 +109,26 @@ describe('quitterSalon', () => {
     expect(quitterSalon(salon, 'u2')).toBeUndefined();
   });
 
-  it("refuse si l'utilisateur est l'hôte", () => {
+  it("permet au créateur du salon de quitter (plus de restriction hôte)", () => {
     const salon = creerSalon('c1', 'général', 'u1');
-    expect(quitterSalon(salon, 'u1')).toBeUndefined();
+    expect(quitterSalon(salon, 'u1')?.membreIds).toEqual([]);
   });
 });
 
 describe('changerNomSalon', () => {
-  it("l'hôte peut changer le nom", () => {
+  it('change le nom du salon (autorisation vérifiée en amont, pas ici)', () => {
     const salon = creerSalon('c1', 'ancien nom', 'u1');
-    const resultat = changerNomSalon(salon, 'nouveau nom', 'u1');
-    expect(resultat?.nom).toBe('nouveau nom');
+    const resultat = changerNomSalon(salon, 'nouveau nom');
+    expect(resultat.nom).toBe('nouveau nom');
     expect(salon.nom).toBe('ancien nom'); // original inchangé
-  });
-
-  it('un non-hôte ne peut pas changer le nom', () => {
-    const salon = rejoindreSalon(creerSalon('c1', 'nom', 'u1'), 'u2')!;
-    expect(changerNomSalon(salon, 'pirate', 'u2')).toBeUndefined();
   });
 });
 
 describe('changerVisibiliteSalon', () => {
-  it("l'hôte peut changer la visibilité", () => {
+  it('change la visibilité du salon (autorisation vérifiée en amont, pas ici)', () => {
     const salon = creerSalon('c1', 'général', 'u1', 'public');
-    const resultat = changerVisibiliteSalon(salon, 'prive', 'u1');
-    expect(resultat?.visibilite).toBe('prive');
+    const resultat = changerVisibiliteSalon(salon, 'prive');
+    expect(resultat.visibilite).toBe('prive');
     expect(salon.visibilite).toBe('public'); // original inchangé
-  });
-
-  it('un non-hôte ne peut pas changer la visibilité', () => {
-    const salon = rejoindreSalon(creerSalon('c1', 'général', 'u1'), 'u2')!;
-    expect(changerVisibiliteSalon(salon, 'prive', 'u2')).toBeUndefined();
   });
 });

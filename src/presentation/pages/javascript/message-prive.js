@@ -109,7 +109,16 @@ window.addEventListener('DOMContentLoaded', async () => {
   const topbarAvatar = document.querySelector('.topbar-avatar');
   const typingIndicator = document.getElementById('typing-indicator');
   const filterButtons = document.querySelectorAll('.filter-button');
-  const currentUserSelect = document.getElementById('current-user-select');
+  // Remplace l'ancien sélecteur de test #current-user-select (voir le même
+  // changement et le même raisonnement dans renderer.js) : affichage en
+  // lecture seule de l'utilisateur réellement connecté, plus un vrai bouton
+  // de déconnexion et un accès à la page profil.
+  const currentUserPseudoEl = document.getElementById('current-user-pseudo');
+  const currentUserRoleBadgeEl = document.getElementById(
+    'current-user-role-badge'
+  );
+  const profilBtn = document.getElementById('open-profile');
+  const logoutBtn = document.getElementById('logout-btn');
   const langueSelect = document.getElementById('language-select');
   const themeSelect = document.getElementById('theme-select');
   const openNewDmBtn = document.getElementById('open-new-dm');
@@ -338,9 +347,52 @@ window.addEventListener('DOMContentLoaded', async () => {
     activeConversationId: null,
     currentFilter: 'all',
     currentUserId: null,
+    // Utilisateur connecté complet ({id, pseudo, courriel, role} | null, voir
+    // obtenirUtilisateurConnecte dans preload.js) — state.currentUserId
+    // reste dérivé de cette valeur pour ne rien casser des usages existants
+    // qui n'ont besoin que de l'id.
+    utilisateurActuel: null,
     utilisateurs: [],
     etatsSaisie: {},
   };
+
+  /**
+   * Affiche l'utilisateur connecté (pseudo en lecture seule + badge de
+   * rôle) — voir afficherUtilisateurCourant dans renderer.js pour
+   * l'équivalent salon (même logique, dupliquée pour la même raison que le
+   * reste de ce fichier, voir son en-tête).
+   */
+  function afficherUtilisateurCourant() {
+    if (currentUserPseudoEl) {
+      currentUserPseudoEl.textContent = state.utilisateurActuel?.pseudo ?? '';
+    }
+    if (currentUserRoleBadgeEl) {
+      const role = state.utilisateurActuel?.role;
+      const cleRole =
+        role === 'admin'
+          ? 'channels.roleAdmin'
+          : role === 'moderateur'
+            ? 'channels.roleModerator'
+            : null;
+      currentUserRoleBadgeEl.hidden = !cleRole;
+      currentUserRoleBadgeEl.textContent = cleRole ? t(cleRole) : '';
+    }
+  }
+
+  profilBtn?.addEventListener('click', () => {
+    window.electronAPI.navigate('profil.html');
+  });
+
+  // Vraie déconnexion — voir le même bouton et le même raisonnement dans
+  // renderer.js.
+  logoutBtn?.addEventListener('click', async () => {
+    try {
+      await window.electronAPI.deconnexionSession();
+    } catch (erreur) {
+      console.error('[logout] échec de deconnexionSession :', erreur);
+    }
+    await window.electronAPI.allerALaConnexion();
+  });
   // Consomme une éventuelle cible laissée par renderer.js avant une
   // navigation vers cette page suite au clic sur une notification de
   // conversation privée (voir onNavigateToConversation ci-dessus et
@@ -671,53 +723,22 @@ window.addEventListener('DOMContentLoaded', async () => {
     actualiserIndicateurSaisie();
   }
 
+  /**
+   * Résout l'utilisateur réellement connecté (session JWT) — voir
+   * initialiserUtilisateurCourant dans renderer.js pour l'équivalent salon et
+   * le même raisonnement (une seule identité possible par session désormais,
+   * plus de sélecteur de test). `state.utilisateurs` reste peuplé via
+   * obtenirUtilisateurs() : ce n'est plus le répertoire global qu'il était
+   * avec le mock, mais un cache d'utilisateurs "connus" (voir son
+   * commentaire dans RealGatewayRuntime.js) — encore utile ici pour la liste
+   * de candidats "Nouveau message privé" (voir renderNewDmChoices).
+   */
   async function initialiserUtilisateurCourant() {
-    const utilisateurs = await window.electronAPI.obtenirUtilisateurs();
-    state.utilisateurs = utilisateurs;
-    if (currentUserSelect) {
-      currentUserSelect.innerHTML = '';
-      utilisateurs.forEach((user) => {
-        const option = document.createElement('option');
-        option.value = user.id;
-        option.textContent = user.pseudo;
-        currentUserSelect.appendChild(option);
-      });
-      currentUserSelect.addEventListener('change', async (event) => {
-        sessionStorage.setItem('currentUserId', event.target.value);
-        state.currentUserId = event.target.value;
-        afficherPresenceCourante();
-        if (messageInput) messageInput.value = '';
-        fermerMenuNotif();
-        await refreshConversations();
-        await actualiserBadgeSalons();
-        await actualiserIndicateurSaisie();
-      });
-    }
-    const selectedUserId = sessionStorage.getItem('currentUserId');
-    let utilisateurResolu = utilisateurs.find(
-      (u) => u.id === selectedUserId
-    )?.id;
-
-    if (!utilisateurResolu) {
-      // sessionStorage ne survit pas forcément à la navigation entre deux
-      // pages file:// distinctes (index.html -> message-prive.html) — même
-      // incident que "connecté en tant qu'alice par défaut" déjà rencontré
-      // sur index.html (voir renderer.js, initialiserUtilisateurCourant, et
-      // session:utilisateur-connecte dans main.js), qui applique déjà ce
-      // même repli. Sans lui, cette page retombe systématiquement sur le
-      // premier utilisateur de la liste plutôt que la personne réellement
-      // connectée.
-      utilisateurResolu = await window.electronAPI.obtenirUtilisateurConnecte();
-    }
-
-    state.currentUserId =
-      utilisateurs.find((u) => u.id === utilisateurResolu)?.id ??
-      utilisateurs[0]?.id ??
-      'u1';
+    state.utilisateurs = await window.electronAPI.obtenirUtilisateurs();
+    state.utilisateurActuel = await window.electronAPI.obtenirUtilisateurConnecte();
+    state.currentUserId = state.utilisateurActuel?.id ?? '';
     sessionStorage.setItem('currentUserId', state.currentUserId);
-    if (currentUserSelect) {
-      currentUserSelect.value = state.currentUserId;
-    }
+    afficherUtilisateurCourant();
   }
 
   function renderConversationList() {
@@ -1498,19 +1519,28 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (event.key === 'Escape') fermerMenuNotif();
   });
 
-  // --- Messages de démo simulés (une fois) par main.js ----------------------
-  // Voir demarrerSimulationMessages() dans main.js et le même bloc dans
-  // renderer.js : un message privé (ariane → sam) après 5s et un message
-  // dans #général après 10s, une seule fois, quelle que soit la page
-  // actuellement affichée. C'est ce fichier (pas main.js) qui décide, selon
-  // le mode NotifPrefs de l'utilisateur actuellement affiché ici, s'il faut
-  // déclencher une notification système. Le corps commun (log de
-  // diagnostic, résolution du mode, décision de notifier) vit dans
-  // NotifPrefs.traiterMessageSimule (notif-prefs.js), partagé avec
+  // --- Nouveaux messages en temps réel (salon ou DM) --------------------------
+  // Remplace l'ancien branchement sur onMockMessage (démo simulée par
+  // main.js, qui n'existe plus — voir le même changement et le même
+  // raisonnement dans renderer.js) : le WebSocket réel du Serveur-API pousse
+  // maintenant un vrai événement à chaque nouveau message, salon ou DM
+  // confondus (voir 'messages:nouveau' dans main.js/preload.js). Le corps
+  // commun (log de diagnostic, résolution du mode, décision de notifier) vit
+  // dans NotifPrefs.traiterMessageSimule (notif-prefs.js), partagé avec
   // renderer.js.
-  if (typeof serviceNotifications?.onMockMessage === 'function') {
-    serviceNotifications.onMockMessage((message) =>
-      NotifPrefs.traiterMessageSimule(message, {
+  if (typeof window.electronAPI?.onNouveauMessage === 'function') {
+    window.electronAPI.onNouveauMessage((payload) => {
+      if (!payload?.message) return;
+      const estSalon = payload.conversationType === 'salon';
+      const messageNormalise = {
+        type: estSalon ? 'salon' : 'prive',
+        auteurId: payload.message.auteurId,
+        contenu: payload.message.contenu,
+        conversationId: estSalon
+          ? payload.salonId
+          : payload.message.conversationId,
+      };
+      NotifPrefs.traiterMessageSimule(messageNormalise, {
         utilisateurId: state.currentUserId,
         surSalon: async () => {
           // Un seul appel obtenirEtatSalons(), partagé entre les deux mises
@@ -1520,10 +1550,14 @@ window.addEventListener('DOMContentLoaded', async () => {
           await actualiserBadgeSalons(salons);
           mettreAJourBadgeApplication(salons);
         },
+        // Si c'est la conversation actuellement affichée, refreshConversations()
+        // la réaffiche avec le nouveau message ; sinon seuls la liste et le
+        // badge sont mis à jour (voir son corps) — correctness over
+        // elegance, comme demandé : pas d'ajout incrémental au DOM ici.
         surPrive: () => refreshConversations(),
         notifierMessageSysteme,
-      })
-    );
+      });
+    });
   }
 
   ChatUiShared.brancherControlesReseauPresence({

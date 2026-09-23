@@ -1,0 +1,135 @@
+/* Page profil (profil.html) : réutilise les variables de thème et le rail de
+   navigation de styles.css (--bg-app/--bg-panel/--text-primary/etc., déjà
+   posées sur <html> par ThemeManager — voir theme-browser.js), mais avec sa
+   propre mise en page (une carte centrée avec défilement) plutôt que la
+   disposition 3 colonnes du tableau de bord/messages privés — ce fichier ne
+   redéfinit donc que ce qui diffère. */
+
+body {
+  /* styles.css pose `overflow: hidden` sur <body> pour la disposition 3
+     colonnes du dashboard (défilement interne à #message-list uniquement) ;
+     cette page n'a qu'une seule colonne qui peut dépasser la hauteur de
+     l'écran (plusieurs sections de formulaire), donc on laisse le défilement
+     normal se faire. */
+  overflow: auto;
+}
+
+#profile-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+  padding: 40px 20px 60px;
+  overflow-y: auto;
+}
+
+#profile-card {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.profile-header h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.profile-header-actions .language-select {
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel-alt);
+  color: var(--text-primary);
+  font-family: inherit;
+  padding: 2px 8px;
+}
+
+.profile-section {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profile-section h2 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+
+.profile-section--danger {
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.profile-section label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.profile-section input,
+.profile-section select {
+  width: 100%;
+  height: 38px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel-alt);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.profile-section input:focus,
+.profile-section select:focus {
+  outline: none;
+  border-color: var(--accent-start);
+}
+
+.field-message {
+  margin: 0;
+  min-height: 16px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.field-message[data-kind='error'] {
+  color: var(--offline);
+}
+
+.field-message[data-kind='ok'] {
+  color: var(--online);
+}
+
+.field-hint {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.profile-section button {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+/* .confirm-delete-row et .secondary-button.danger sont déjà définies dans
+   styles.css (chargé par cette page, voir profil.html) — réutilisées telles
+   quelles ici, voir el.deleteActions dans profil.js. */
+
+.profile-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}

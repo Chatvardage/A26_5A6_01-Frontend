@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+  Pas de balise CSP ici : la politique est appliquée par le processus
+  main via un en-tête HTTP (voir main.js, onHeadersReceived), pas par
+  une balise <meta> statique. Raison : la CSP doit différer entre dev
+  (le plugin React de Vite injecte un script inline pour le Fast
+  Refresh — voir le commentaire dans main.js) et prod (aucun script
+  inline dans le bundle buildé, donc CSP stricte). Un seul fichier
+  HTML statique ne peut pas exprimer ces deux politiques à la fois ;
+  combiner une balise <meta> ET un en-tête donnerait l'intersection
+  des deux, ce qui annulerait l'assouplissement fait pour le dev.
+-->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChatVardage — Connexion</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="main.tsx"></script>
+  </body>
+</html>
