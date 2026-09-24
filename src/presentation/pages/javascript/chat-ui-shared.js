@@ -703,7 +703,7 @@
   /**
    * Génère un identifiant local pour un message pas encore livré au serveur
    * (préfixé "local-" pour ne jamais entrer en collision avec les
-   * identifiants "msg-..." générés côté MockGateway une fois l'envoi
+   * identifiants attribués par Message-Service une fois l'envoi
    * réellement accepté).
    */
   function genererIdMessageLocal() {

@@ -92,15 +92,14 @@
    * Traduit une erreur venant du processus main (via IPC) en texte lisible
    * dans la langue courante. Deux couches à défaire : (1) le préfixe
    * qu'Electron ajoute automatiquement à toute erreur IPC, et (2) le CODE
-   * stable que MockGatewayRuntime lève (ex. "ERR_ACCES_REFUSE_SALON", ou
+   * stable que RealGatewayRuntime lève (ex. "ERR_ACCES_REFUSE_SALON", ou
    * "ERR_PSEUDO_PRIS|alice" avec un paramètre) plutôt qu'un texte déjà en
    * français — la couche métier ne doit pas connaître la langue choisie par
    * l'utilisateur, donc la traduction se fait ici, à la frontière IPC/UI.
    *
    * Code non reconnu : on garde le texte brut plutôt qu'un message
    * générique. Différence assumée avec LoginPage.tsx (qui, lui, retombe sur
-   * "errors.generic") : le dashboard et les messages privés sont l'outil de
-   * test/démo (utilisateurs simulés, voir #current-user-select) où voir le
+   * "errors.generic") : sur le dashboard et les messages privés, voir le
    * détail exact d'une erreur inattendue — y compris une erreur JS qui n'a
    * jamais été un CODE reconnu — aide à diagnostiquer plus vite qu'un
    * message vague, alors que l'écran de connexion est la première chose vue

@@ -588,9 +588,8 @@ img {
   font-weight: 600;
 }
 
-/* Affichage en lecture seule de l'utilisateur connecté (remplace l'ancien
-   sélecteur #current-user-select — voir index.html/message-prive.html) : un
-   vrai compte JWT n'a plus de raison d'être "changé" depuis cette barre. */
+/* Affichage en lecture seule de l'utilisateur connecté (voir
+   index.html/message-prive.html). */
 .current-user-row {
   display: flex;
   align-items: center;

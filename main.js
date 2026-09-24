@@ -1027,8 +1027,7 @@ chatGateway.on('message-supprime', (message) => {
   }
 });
 // Nouveau message reçu en temps réel (salon ou DM), poussé par le WebSocket
-// Serveur-API — n'existait pas avec le mock (une seule identité simulée à la
-// fois, jamais de "vrai" second interlocuteur temps réel). Voir renderer.js/
+// Serveur-API. Voir javascript/salons/temps-reel.js et
 // message-prive.js pour le traitement (ajout à la conversation affichée,
 // notification système si hors focus).
 chatGateway.on('message-recu', (payload) => {
@@ -1408,8 +1407,8 @@ exposerCanal('obtenir-conversations-privees', () =>
 );
 // Pagination "charger plus ancien" de l'historique d'une conversation
 // privée : obtenir-conversations-privees ci-dessus ne renvoie déjà plus que
-// la page de messages la plus récente (voir construireConversationPriveeDTO
-// dans MockGatewayRuntime.js).
+// la page de messages la plus récente (voir obtenirConversationsPrivees
+// dans RealGatewayRuntime.js).
 exposerCanal('obtenir-messages-prive-avant', (donnees) =>
   chatGateway.obtenirMessagesPriveesAvant(donnees)
 );
@@ -1473,10 +1472,6 @@ if (!gotSingleInstanceLock) {
     configurerCsp();
     mainWindow = createWindow();
     surveillerReseauSysteme();
-    // Pas d'appel à demarrerSimulationMessages() ici : à ce stade, la
-    // fenêtre affiche l'écran de connexion et personne n'est encore
-    // connecté. Voir le handler 'navigation:tableau-de-bord' plus haut, qui
-    // la déclenche au bon moment (juste après une connexion réussie).
 
     app.on('activate', () => {
       // Comportement standard macOS : l'app reste active dans le dock après

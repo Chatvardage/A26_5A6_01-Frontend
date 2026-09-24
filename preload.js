@@ -312,7 +312,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   obtenirResumesConversationsPrivees: () =>
     ipcRenderer.invoke('resumes-conversations-privees'),
   // Pagination "charger plus ancien" de l'historique d'une conversation
-  // privée (voir obtenirMessagesPriveesAvant dans MockGatewayRuntime.js) :
+  // privée (voir obtenirMessagesPriveesAvant dans RealGatewayRuntime.js) :
   // obtenir-conversations-privees ci-dessus ne renvoie déjà plus que la page
   // de messages la plus récente de chaque conversation.
   obtenirMessagesPriveesAvant: (donnees) =>

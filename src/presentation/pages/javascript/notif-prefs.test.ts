@@ -31,14 +31,14 @@ describe('NotifPrefs : aperçu dans les notifications système', () => {
     const notifier = vi.fn();
     vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    await NotifPrefs.traiterMessageSimule(message, {
+    await NotifPrefs.traiterMessageRecu(message, {
       utilisateurId: 'u1',
       notifierMessageSysteme: notifier,
     });
     expect(notifier).toHaveBeenLastCalledWith(message);
 
     NotifPrefs.definirApercu('u1', false);
-    await NotifPrefs.traiterMessageSimule(message, {
+    await NotifPrefs.traiterMessageRecu(message, {
       utilisateurId: 'u1',
       notifierMessageSysteme: notifier,
     });

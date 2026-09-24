@@ -23,7 +23,7 @@ btn?.addEventListener('click', () => {
 // conversation "active" côté main.js n'était jamais mise à jour, et le
 // garde-fou anti-notification-sur-conversation-déjà-ouverte ne s'activait
 // donc jamais. Câblé maintenant directement aux points réels où le salon
-// affiché change (afficherMessages()) et où on envoie/simule un message.
+// affiché change (afficherMessages()) et où on envoie un message.
 const serviceNotifications = window.notifications;
 
 // Pas de service de notifications système (ex. WSL, voir notifierParRepli
@@ -100,18 +100,14 @@ if (typeof serviceNotifications?.onNavigateToConversation === 'function') {
 }
 
 // --- Nouveaux messages en temps réel (salon ou DM) --------------------------
-// Remplace l'ancien branchement sur onMockMessage (démo de messages simulés
-// par main.js — 'notifications:message-simule' — qui n'existe plus, voir
-// RealGatewayRuntime.js : le mock n'avait besoin de simuler des messages
-// entrants QUE parce qu'une seule identité pouvait être "active" à la fois ;
-// avec de vrais comptes/JWT, le WebSocket du Serveur-API pousse maintenant un
-// vrai événement à chaque nouveau message, salon ou DM confondus — voir
-// 'messages:nouveau' dans main.js/preload.js). Si la conversation concernée
+// Le WebSocket du Serveur-API pousse un événement à chaque nouveau message,
+// salon ou DM confondus (voir 'messages:nouveau' dans main.js/preload.js). Si
+// la conversation concernée
 // est celle actuellement affichée, un actualiser() complet suffit (plus
 // simple et plus sûr qu'un ajout incrémental au DOM) ; sinon, on relaie vers
 // le même chemin de notification (rond + notification système selon
 // NotifPrefs) déjà utilisé par cette page. Corps du handler partagé avec
-// message-prive.js via NotifPrefs.traiterMessageSimule (voir
+// message-prive.js via NotifPrefs.traiterMessageRecu (voir
 // notif-prefs.js) : seule la partie "quoi rafraîchir à l'écran" diffère
 // réellement d'une page à l'autre.
 /**
@@ -225,7 +221,7 @@ if (typeof window.electronAPI?.onNouveauMessage === 'function') {
       serveursNonLus.add(payload.serveurId);
       memoriserServeursNonLus();
     }
-    NotifPrefs.traiterMessageSimule(messageNormalise, {
+    NotifPrefs.traiterMessageRecu(messageNormalise, {
       utilisateurId: utilisateurActuelId,
       surSalon: () => integrerMessageSalonRecu(payload),
       surPrive: async () => {

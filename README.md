@@ -4,7 +4,7 @@ Application de clavardage desktop réalisée avec Electron, connectée à
 l'infrastructure ChatVardage réelle (Gateway + microservices — voir
 `A26_5A6_01-Infra`) : authentification par mot de passe, salons et DM réels,
 présence et messages de salon en temps réel via Socket.IO. Voir
-`MOCKGATEWAY.md` pour le détail du contrat HTTP/Socket.IO consommé.
+`BACKEND.md` pour le détail du contrat HTTP/Socket.IO consommé.
 
 ## 1. Objectifs
 
@@ -130,7 +130,7 @@ Mode développement (Vite + Electron) :
 npm run dev
 ```
 
-Backend visé par défaut : `http://localhost:3000` (voir `MOCKGATEWAY.md`
+Backend visé par défaut : `http://localhost:3000` (voir `BACKEND.md`
 pour le contrat complet). Surchargeable via `CHATVARDAGE_API_URL`/
 `CHATVARDAGE_SOCKET_URL`.
 

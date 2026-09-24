@@ -5,9 +5,7 @@ import { t, LANGUES_SUPPORTEES } from '../../../i18n/i18n-web';
 
 /**
  * Sous-ensemble de AuthGateway réellement nécessaire à cet écran (principe
- * de ségrégation d'interface, même règle que documentée dans ChatGateway.ts
- * pour GatewaySession — conservé ici sous le même nom pour ne pas casser les
- * imports existants côté main.tsx, seul son contenu change).
+ * de ségrégation d'interface, voir AuthGateway.ts).
  */
 export type GatewaySession = Pick<AuthGateway, 'authentifier'>;
 

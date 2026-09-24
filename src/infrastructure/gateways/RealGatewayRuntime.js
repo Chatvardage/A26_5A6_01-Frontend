@@ -135,14 +135,7 @@ function sauvegarderJetonPersiste(jeton) {
  * A26_5A6_01-Infra) par HTTP (REST) et Socket.IO (temps réel : nouveaux
  * messages, messages modifiés/supprimés, indicateur de saisie).
  *
- * Conserve délibérément la même forme d'API que l'ancien MockGatewayRuntime
- * (mêmes noms de méthodes, mêmes formes de retour pour les DTO salon/DM) afin
- * de minimiser les changements côté renderer.js/message-prive.js — voir
- * chaque méthode ci-dessous pour le détail de ce qui a changé ou non.
- *
- * Simplification majeure par rapport au mock : il n'y a plus de sélecteur
- * "utilisateur courant" côté UI (le mock permettait de simuler plusieurs
- * identités sans mot de passe — impossible avec un vrai compte/JWT). Les
+ * Une seule identité par session : l'utilisateur authentifié. Les
  * paramètres `utilisateurId`/`hoteId` encore acceptés par certaines méthodes
  * ci-dessous, pour compatibilité avec les appels existants du renderer, sont
  * IGNORÉS : l'acteur réel est toujours l'utilisateur authentifié
@@ -258,7 +251,7 @@ class RealGatewayRuntime {
     this.creerSocket = options.creerSocket ?? io;
   }
 
-  // --- Abonnement aux événements temps réel (même API que l'ancien MockGatewayRuntime) ---
+  // --- Abonnement aux événements temps réel ---
 
   on(type, ecouteur) {
     const liste = this.ecouteurs.get(type) ?? [];
@@ -368,7 +361,7 @@ class RealGatewayRuntime {
   /**
    * Retourne les utilisateurs "connus" localement (soi-même, participants de
    * DM déjà ouverts, résultats de résolution de pseudo — voir
-   * resoudrePseudos). Contrairement au mock, ce n'est PAS un répertoire
+   * resoudrePseudos). Ce n'est PAS un répertoire
    * global : aucun endpoint de ce type n'existe côté backend pour un
    * utilisateur non-admin.
    */

@@ -8,8 +8,7 @@ import { LANGUE_PAR_DEFAUT } from '../../../i18n/i18n-web';
 import { genererPseudoParDefaut } from '../../../domain/entities/Utilisateur';
 
 // Composition root : c'est le SEUL endroit qui construit l'implémentation
-// des contrats GatewaySession/GatewayInscription (voir la règle documentée
-// dans ChatGateway.ts).
+// des contrats GatewaySession/GatewayInscription (voir AuthGateway.ts).
 //
 // Important : ce n'est PAS une instance locale d'un gateway (qui vivrait et
 // mourrait avec cette page React) — c'est un adaptateur qui délègue au
@@ -176,8 +175,7 @@ function App() {
           // Le pseudo par défaut est dérivé côté renderer (voir
           // genererPseudoParDefaut dans le domaine Utilisateur) et transmis
           // au gateway pour information ; c'est le backend qui garde la
-          // main sur l'unicité finale (voir RealGatewayRuntime.inscrire /
-          // MockGatewayRuntime.inscrire).
+          // main sur l'unicité finale (voir RealGatewayRuntime.inscrire).
           return await window.electronAPI.inscriptionSession(
             courriel,
             motDePasse,

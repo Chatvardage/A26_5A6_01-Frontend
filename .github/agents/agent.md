@@ -13,7 +13,7 @@ backend vit dans un **dépôt Git séparé** : API HTTP + WebSocket, base de
 données, Redis, panneau d'administration — tout ça hors de ce dépôt, avec
 son propre README et son propre docker-compose.yml. Un agent qui travaille
 ici n'a pas à implémenter cette API ; ce dépôt ne fait qu'y **consommer**
-via `ChatGateway`, une fois cette évolution faite (voir plus bas).
+via `RealGatewayRuntime.js` (voir plus bas).
 
 > `Architecture.md` à la racine décrit la structure **réelle** du code
 > (processus main, preload, pages, flux de session/préférences/fenêtre).
@@ -23,14 +23,11 @@ via `ChatGateway`, une fois cette évolution faite (voir plus bas).
 ### Backend réel (Contrôle 2) — état actuel
 
 L'app parle uniquement au vrai backend, via `RealGatewayRuntime.js` (voir
-`MOCKGATEWAY.md`). Le mock du Contrôle 1 (`MockGateway.ts`,
-`MockGatewayRuntime.js`) et son ancienne copie dans `maquette/src/` ont été
-retirés ; ils restent récupérables dans l'historique Git. ⚠️ Une version
-précédente de ce document indiquait que l'énoncé exige un mock utilisable
-pour les tests et le développement hors ligne : si c'est le cas, c'est à
-réintroduire (une implémentation de `ChatGateway` en mémoire, à côté de
-`RealGatewayRuntime.js`, pas à sa place). `maquette/` ne contient plus que
-les maquettes de design (PDF).
+`BACKEND.md`). **Aucun mock** : pas de gateway simulé, pas de mode hors
+ligne, pas de données de démonstration en mémoire ou en localStorage — ne
+pas en réintroduire (décision d'équipe). Les doublures des tests unitaires
+(`vi.fn()`, `electron` simulé) ne sont pas concernées. `maquette/` ne
+contient que les maquettes de design (PDF).
 
 ## Ce que c'est (aujourd'hui)
 
@@ -96,16 +93,14 @@ scripts/start.js            Orchestre Vite + Electron (dev) ou juste
                             manuel "deux terminaux + $env:NODE_ENV".
 
 src/infrastructure/gateways/
-  ChatGateway.ts             Interface TypeScript du contrat de gateway
-                              (utilisée par l'écran de connexion React).
+  AuthGateway.ts             Interface TypeScript du contrat de gateway
+                              utilisé par l'écran de connexion React.
   RealGatewayRuntime.js        La VRAIE implémentation utilisée par
                               main.js : HTTP + Socket.IO vers le Gateway
                               (Serveur-API). Classe JS simple, aucune
                               dépendance TS. Lève des CODES d'erreur
                               stables (ex. "ERR_PSEUDO_PRIS|alice"), JAMAIS
                               de texte traduit — voir i18n plus bas.
-                              (Le mock du Contrôle 1 a été retiré, voir
-                              « Backend réel » plus haut.)
 
 src/i18n/
   translations.json           SEULE source de vérité pour tous les textes
@@ -207,8 +202,7 @@ zones doit vérifier activement qu'il n'en réintroduit pas une.
 6. **Fichiers de config qui reviennent en arrière** : `package.json`
    (version de `vitest`/`@vitest/coverage-v8` — doit matcher la version de
    `vite` installée, sinon deux copies de `vite` s'installent et `tsc`
-   plante), `.eslintrc.js` (`ignorePatterns` doit exclure `dist/`), et
-   `ChatGateway.ts` (a déjà perdu `pseudoDisponible` plusieurs fois). Si
+   plante) et `.eslintrc.js` (`ignorePatterns` doit exclure `dist/`). Si
    `npx tsc --noEmit` échoue avec une erreur de type Vite/Vitest
    incohérente, vérifier `npm ls vite` en premier.
 

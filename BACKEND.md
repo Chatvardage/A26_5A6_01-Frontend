@@ -1,23 +1,14 @@
 # Branchement au backend ChatVardage
 
-> Historique : ce fichier documentait autrefois en détail `MockGateway.ts`,
-> un simulateur en mémoire utilisé pendant les premières itérations, avant
-> qu'un vrai backend n'existe. **Ce mock a été retiré** (`MockGateway.ts`,
-> `MockGatewayRuntime.js` et leurs tests n'existent plus dans ce dépôt) une
-> fois l'infrastructure réelle ChatVardage (Gateway + microservices, voir
-> `A26_5A6_01-Infra`) disponible. Ce document décrit maintenant uniquement le
-> branchement réel.
+Ce document décrit le branchement de l'app à l'infrastructure ChatVardage
+(Gateway + microservices, voir `A26_5A6_01-Infra`). L'app n'a pas de mode
+simulé : elle parle uniquement au vrai backend.
 
 ## 🌐 Branchement au backend réel (HTTP + Socket.IO)
 
-**Le mock a été retiré** (`MockGateway.ts`/`MockGatewayRuntime.js` et leurs
-tests n'existent plus, ainsi que le switch `CHATVARDAGE_BACKEND=mock`). L'app
-parle uniquement au vrai backend via `RealGatewayRuntime`
+L'app parle au backend via `RealGatewayRuntime`
 (`src/infrastructure/gateways/RealGatewayRuntime.js`, côté processus main,
-chemin réellement exécuté par Electron). C'est la seule implémentation du
-contrat : l'ancienne implémentation de référence `HttpWebSocketGateway.ts`,
-jamais branchée et désynchronisée du vrai Gateway, a été retirée
-(récupérable dans l'historique Git).
+chemin réellement exécuté par Electron). C'est la seule implémentation.
 
 ### Comment ça marche
 

@@ -3,7 +3,7 @@
 Application desktop Electron. Ce dépôt ne contient que le client : le
 backend (Gateway + microservices) vit dans les autres dépôts `A26_5A6_01-*`
 (voir `A26_5A6_01-Infra`). Le contrat HTTP/Socket.IO consommé est décrit
-dans `MOCKGATEWAY.md`.
+dans `BACKEND.md`.
 
 ## Vue d'ensemble
 
@@ -60,20 +60,18 @@ src/
   domain/entities/           Modèle métier, sans dépendance à l'UI ni au
                              réseau (TypeScript, testé) : Utilisateur,
                              Serveur (rôles et permissions d'affichage),
-                             Salon, Message, ConversationPrivee, Presence,
-                             EtatConnexion, EtatSaisie
+                             EtatConnexion
 
   infrastructure/
     config/ConfigurationApi.js   URL du Gateway (CHATVARDAGE_API_URL,
                                  CHATVARDAGE_SOCKET_URL)
     gateways/
-      ChatGateway.ts, AuthGateway.ts   Contrats consommés par l'UI
+      AuthGateway.ts                   Contrat consommé par l'écran de
+                                       connexion React
       RealGatewayRuntime.js            Implémentation utilisée par main.js :
                                        appels HTTP, Socket.IO, reconnexion,
                                        jeton persisté. Lève des CODES
                                        d'erreur (ERR_*), jamais du texte
-    persistence/                 Accès typé au localStorage (préférences
-                                 d'interface locales à une page)
 
   i18n/
     translations.json        Seule source des textes (fr + en), y compris

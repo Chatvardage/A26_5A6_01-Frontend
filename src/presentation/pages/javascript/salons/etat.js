@@ -91,7 +91,7 @@ const NotifPrefs =
       compterConversationsNonLues: () => 0,
       genererIconeBadge: () => null,
       appliquerBadge: () => {},
-      traiterMessageSimule: async () => {},
+      traiterMessageRecu: async () => {},
     };
   })();
 let utilisateurActuelId = sessionStorage.getItem('currentUserId') ?? null;

@@ -113,9 +113,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   const topbarAvatar = document.querySelector('.topbar-avatar');
   const typingIndicator = document.getElementById('typing-indicator');
   const filterButtons = document.querySelectorAll('.filter-button');
-  // Remplace l'ancien sélecteur de test #current-user-select (voir le même
-  // changement et le même raisonnement dans renderer.js) : affichage en
-  // lecture seule de l'utilisateur réellement connecté, plus un vrai bouton
+  // Affichage en lecture seule de l'utilisateur réellement connecté, plus un vrai bouton
   // de déconnexion et un accès à la page profil.
   const currentUserPseudoEl = document.getElementById('current-user-pseudo');
   const currentUserRoleBadgeEl = document.getElementById(
@@ -224,7 +222,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         compterConversationsNonLues: () => 0,
         genererIconeBadge: () => null,
         appliquerBadge: () => {},
-        traiterMessageSimule: async () => {},
+        traiterMessageRecu: async () => {},
       };
     })();
   const serviceNotifications = window.notifications;
@@ -388,7 +386,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   // --- Historique et pagination des messages (conversations privées) ------
   // `obtenirConversationsPrivees` (voir refreshConversations()) ne renvoie
   // déjà plus que la page de messages la plus récente de chaque conversation
-  // (voir construireConversationPriveeDTO côté MockGatewayRuntime.js) : cet
+  // (voir obtenirConversationsPrivees côté RealGatewayRuntime.js) : cet
   // état garde en mémoire, PAR-DESSUS cette page récente, les pages plus
   // anciennes chargées à la demande (voir chargerMessagesPlusAnciensDm) pour
   // la conversation actuellement affichée. Réinitialisé au changement de
@@ -427,8 +425,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // Ne renvoie que les messages en attente de l'utilisateur COURANT (voir
   // obtenirMessagesEnAttenteSalon dans renderer.js pour l'équivalent salon et
-  // le pourquoi) : sans ce filtre, changer d'utilisateur simulé ferait
-  // apparaître les brouillons non livrés d'un autre utilisateur dans cette
+  // le pourquoi) : sans ce filtre, se reconnecter avec un autre compte ferait
+  // apparaître les brouillons non livrés du compte précédent dans cette
   // même conversation, avec un "Réessayer" qui les enverrait sous son
   // ancien auteurId.
   function obtenirMessagesEnAttenteDm(conversationId) {
@@ -769,8 +767,8 @@ window.addEventListener('DOMContentLoaded', async () => {
    * initialiserUtilisateurCourant dans renderer.js pour l'équivalent salon et
    * le même raisonnement (une seule identité possible par session désormais,
    * plus de sélecteur de test). `state.utilisateurs` reste peuplé via
-   * obtenirUtilisateurs() : ce n'est plus le répertoire global qu'il était
-   * avec le mock, mais un cache d'utilisateurs "connus" (voir son
+   * obtenirUtilisateurs() : ce n'est pas un répertoire global,
+   * mais un cache d'utilisateurs "connus" (voir son
    * commentaire dans RealGatewayRuntime.js) — encore utile ici pour la liste
    * de candidats "Nouveau message privé" (voir renderNewDmChoices).
    */
@@ -946,8 +944,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     if (!conversation || !messageList) {
       // `activeConversationId` pointe vers une conversation qui n'existe
-      // plus pour l'utilisateur courant (ex. changement d'utilisateur
-      // simulé vers quelqu'un qui n'a pas ce DM) : on ne laisse pas
+      // plus pour l'utilisateur courant (ex. conversation retirée) : on ne laisse pas
       // l'ancienne conversation affichée sous le nouvel utilisateur, et on
       // arrête de la considérer comme "active" pour les notifications.
       state.activeConversationId = null;
@@ -982,8 +979,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Changement de conversation active : on repart d'un historique manuel
     // vide (voir chargerMessagesPlusAnciensDm et reinitialiserHistoriqueDm).
     // `finHistorique` part de la page récente tout juste reçue
-    // (conversation.finHistorique, voir construireConversationPriveeDTO côté
-    // MockGatewayRuntime.js) — même logique que etatHistoriqueSalon dans
+    // (conversation.finHistorique, voir obtenirConversationsPrivees côté
+    // RealGatewayRuntime.js) — même logique que etatHistoriqueSalon dans
     // renderer.js (voir son commentaire équivalent).
     if (etatHistoriqueDm.conversationId !== conversation.id) {
       etatHistoriqueDm = {
@@ -1179,7 +1176,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   /**
    * Charge la page de messages plus anciens qui précède ceux déjà affichés
    * pour la conversation active (pagination "charger plus ancien" — voir
-   * obtenirMessagesPriveesAvant côté MockGatewayRuntime.js), et les fusionne
+   * obtenirMessagesPriveesAvant côté RealGatewayRuntime.js), et les fusionne
    * dans etatHistoriqueDm avant de redemander un rendu qui préserve la
    * position de défilement. Voir chargerMessagesPlusAnciensSalon dans
    * renderer.js pour l'équivalent salon (même garde-fous : pas d'effet si un
@@ -1700,13 +1697,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   });
 
   // --- Nouveaux messages en temps réel (salon ou DM) --------------------------
-  // Remplace l'ancien branchement sur onMockMessage (démo simulée par
-  // main.js, qui n'existe plus — voir le même changement et le même
-  // raisonnement dans renderer.js) : le WebSocket réel du Serveur-API pousse
-  // maintenant un vrai événement à chaque nouveau message, salon ou DM
+  // Le WebSocket du Serveur-API pousse un événement à chaque nouveau message, salon ou DM
   // confondus (voir 'messages:nouveau' dans main.js/preload.js). Le corps
   // commun (log de diagnostic, résolution du mode, décision de notifier) vit
-  // dans NotifPrefs.traiterMessageSimule (notif-prefs.js), partagé avec
+  // dans NotifPrefs.traiterMessageRecu (notif-prefs.js), partagé avec
   // renderer.js.
   if (typeof window.electronAPI?.onNouveauMessage === 'function') {
     window.electronAPI.onNouveauMessage((payload) => {
@@ -1735,7 +1729,7 @@ window.addEventListener('DOMContentLoaded', async () => {
           JSON.stringify([...pastilles])
         );
       }
-      NotifPrefs.traiterMessageSimule(messageNormalise, {
+      NotifPrefs.traiterMessageRecu(messageNormalise, {
         utilisateurId: state.currentUserId,
         surSalon: async () => {
           // Aucun appel réseau : le cache des salons suffit aux pastilles

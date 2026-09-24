@@ -5,12 +5,10 @@
  * message-prive.html (message-prive.js). Chargé comme script classique
  * (pas un module) AVANT ces deux fichiers, pour exposer `window.NotifPrefs`
  * comme un global simple utilisable depuis un script classique comme depuis
- * un module — évite de dupliquer cette logique dans les deux fichiers (voir
- * le bug historique de schéma d'ID de conversation dupliqué entre
- * MockGateway.ts et MockGatewayRuntime.js : une même règle codée à deux
- * endroits finit par diverger).
+ * un module — évite de dupliquer cette logique dans les deux fichiers (une
+ * même règle codée à deux endroits finit par diverger).
  *
- * Trois modes, mutuellement exclusifs, réglables par utilisateur simulé :
+ * Trois modes, mutuellement exclusifs, réglables par utilisateur :
  *  - 'systeme' : notification native du système (+ son, voir main.js), PLUS
  *    le petit rond (comme 'discret' ci-dessous) ;
  *  - 'discret' : aucune notification système, seulement le petit rond sur
@@ -25,9 +23,7 @@
  * Le mode et l'état "lu/non lu" sont stockés dans localStorage (partagé
  * entre les deux pages puisqu'elles sont chargées depuis la même origine
  * file://, comme `sessionStorage.currentUserId` l'est déjà ailleurs dans
- * l'app) plutôt que dans le MockGateway : ce sont des préférences purement
- * côté UI, propres à chaque utilisateur simulé sur cette machine, pas des
- * données de conversation à synchroniser avec le "serveur".
+ * l'app), par utilisateur connecté sur cette machine.
  */
 (function (global) {
   const MODE_SYSTEME = 'systeme';
@@ -238,15 +234,15 @@
     );
   }
 
-  // --- Traitement d'un message de démo simulé (main.js) -----------------
-  // Corps partagé du handler `onMockMessage` de renderer.js et
+  // --- Traitement d'un message reçu en temps réel ----------------------
+  // Corps partagé du handler `onNouveauMessage` de salons/temps-reel.js et
   // message-prive.js : log de diagnostic, résolution du mode NotifPrefs de
   // l'utilisateur actuellement affiché, et décision de déclencher ou non une
   // notification système. Seule la partie "quoi rafraîchir à l'écran" diffère
   // réellement entre les deux pages (une page affiche les salons, l'autre les
   // conversations privées) — elle reste donc du ressort de l'appelant, via
   // les callbacks `surSalon`/`surPrive`.
-  async function traiterMessageSimule(message, options) {
+  async function traiterMessageRecu(message, options) {
     const { utilisateurId, surSalon, surPrive, notifierMessageSysteme } =
       options ?? {};
     try {
@@ -256,7 +252,7 @@
       // semble ne rien déclencher. Ne casse rien en production, où personne
       // ne regarde la console de toute façon.
       console.log(
-        `[notifications:message-simule] reçu (type=${message.type}, auteur=${message.auteurId}, utilisateur courant=${utilisateurId}, mode=${mode})`
+        `[notifications:message-recu] reçu (type=${message.type}, auteur=${message.auteurId}, utilisateur courant=${utilisateurId}, mode=${mode})`
       );
       if (message.type === 'salon') {
         await surSalon?.();
@@ -265,11 +261,11 @@
       }
       if (message.auteurId === utilisateurId) {
         console.log(
-          '[notifications:message-simule] ignoré : auteur = utilisateur courant (jamais de notif pour son propre message).'
+          '[notifications:message-recu] ignoré : auteur = utilisateur courant (jamais de notif pour son propre message).'
         );
       } else if (mode !== MODE_SYSTEME) {
         console.log(
-          `[notifications:message-simule] pas de notification système : mode actuel = "${mode}" (seul le mode "systeme" en déclenche).`
+          `[notifications:message-recu] pas de notification système : mode actuel = "${mode}" (seul le mode "systeme" en déclenche).`
         );
       } else {
         // Contenu masqué si l'utilisateur l'a demandé (écran verrouillé) :
@@ -281,7 +277,7 @@
         );
       }
     } catch (erreur) {
-      console.error('[notifications:message-simule] ERREUR:', erreur);
+      console.error('[notifications:message-recu] ERREUR:', erreur);
     }
   }
 
@@ -302,6 +298,6 @@
     compterConversationsNonLues,
     genererIconeBadge,
     appliquerBadge,
-    traiterMessageSimule,
+    traiterMessageRecu,
   };
 })(window);

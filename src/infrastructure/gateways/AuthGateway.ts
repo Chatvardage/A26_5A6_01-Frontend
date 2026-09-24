@@ -2,14 +2,9 @@
 import type { Utilisateur } from '../../domain/entities/Utilisateur.ts';
 
 /**
- * AuthGateway — contrat d'authentification, séparé de `ChatGateway`
- * (voir ChatGateway.ts) plutôt que d'y être ajouté directement : `ChatGateway`
- * expose déjà `connexion(utilisateur: Utilisateur)`, qui suppose un
- * utilisateur DÉJÀ identifié (ancien flux "pseudo seul, sans mot de passe").
- * Réutiliser ce même nom pour un login par identifiant + mot de passe
- * casserait sa signature pour toute implémentation existante de
- * `ChatGateway`. `AuthGateway` peut donc être implémenté EN PLUS de
- * `ChatGateway` par une même classe sans conflit de nom. Implémentation
+ * AuthGateway — contrat d'authentification consommé par l'écran de connexion.
+ * Chaque écran n'en dépend que du sous-ensemble utile (ségrégation
+ * d'interface : `Pick<AuthGateway, ...>`, voir LoginPage.tsx). Implémentation
  * réelle : RealGatewayRuntime.js (processus main), exposée à la page de
  * connexion via window.electronAPI (voir main.tsx).
  */

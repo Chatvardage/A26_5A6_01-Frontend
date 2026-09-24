@@ -10,8 +10,8 @@
 
 // --- Historique et pagination des messages (salons) -----------------------
 // `salons:etat` (voir actualiser()) ne renvoie déjà plus que la page de
-// messages la plus récente d'un salon (voir construireSalonDTO côté
-// MockGatewayRuntime.js) : cet état garde en mémoire, PAR-DESSUS cette page
+// messages la plus récente d'un salon (voir obtenirEtat côté
+// RealGatewayRuntime.js) : cet état garde en mémoire, PAR-DESSUS cette page
 // récente, les pages plus anciennes chargées à la demande (voir
 // chargerMessagesPlusAnciensSalon) pour le salon actuellement affiché.
 // Volontairement réinitialisé au changement de salon actif (voir
@@ -56,9 +56,8 @@ function ajouterMessageEnAttenteSalon(salonId, message) {
 
 // Ne renvoie que les messages en attente de l'utilisateur COURANT
 // (utilisateurActuelId) : la Map est indexée par salon, pas par utilisateur —
-// filtre conservé par prudence même s'il n'y a plus qu'une seule identité
-// possible par session (voir la suppression du sélecteur de test
-// #current-user-select), au cas où plusieurs salons partageraient un jour la
+// filtre conservé par prudence même s'il n'y a qu'une seule identité
+// par session, au cas où plusieurs salons partageraient un jour la
 // même Map d'une façon qui réintroduirait cette ambiguïté.
 function obtenirMessagesEnAttenteSalon(salonId) {
   const liste = messagesEnAttenteSalon.get(salonId) ?? [];

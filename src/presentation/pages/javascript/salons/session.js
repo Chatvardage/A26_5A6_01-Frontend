@@ -21,8 +21,8 @@ el.formulaire.addEventListener('submit', async (event) => {
   // messagesEnAttenteSalon) : le message est affiché tout de suite, marqué
   // "non livré", sans jamais être transmis au gateway. Se mettre soi-même
   // "hors-ligne" via la page profil
-  // n'a donc aucun effet ici, seule une vraie coupure réseau simulée
-  // (coupure réelle, qui change etatReseau) en a.
+  // n'a donc aucun effet ici, seule une vraie coupure réseau (qui
+  // change etatReseau) en a.
   if (etatReseau.statut !== 'connecte') {
     ajouterMessageEnAttenteSalon(
       salonId,
@@ -96,8 +96,7 @@ el.profil?.addEventListener('click', () => {
   window.electronAPI.navigate('profil.html');
 });
 
-// Vraie déconnexion (remplace l'ancien sélecteur de test #current-user-select,
-// voir initialiserUtilisateurCourant) : ferme la session côté gateway (jeton
+// Déconnexion : ferme la session côté gateway (jeton
 // en mémoire ET persisté sur disque, voir RealGatewayRuntime.deconnexion),
 // puis ramène l'app à l'écran de connexion (voir 'navigation:connexion' dans
 // main.js). Best-effort sur le premier appel : même si deconnexionSession()
@@ -116,10 +115,8 @@ el.logout?.addEventListener('click', async () => {
 
 /**
  * Résout l'utilisateur réellement connecté (session JWT, voir
- * obtenirUtilisateurConnecte dans preload.js/RealGatewayRuntime.js) — il n'y
- * a plus de sélection possible entre plusieurs identités simulées (voir
- * afficherUtilisateurCourant et la suppression de #current-user-select) :
- * une seule identité par session, celle authentifiée sur l'écran de
+ * obtenirUtilisateurConnecte dans preload.js/RealGatewayRuntime.js) — une
+ * seule identité par session, celle authentifiée sur l'écran de
  * connexion. `sessionStorage.currentUserId` reste écrit ici uniquement comme
  * mécanisme de transmission entre index.html et message-prive.html (voir son
  * usage initial plus haut dans ce fichier), jamais comme source de vérité

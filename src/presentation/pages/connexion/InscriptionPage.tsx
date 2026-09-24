@@ -13,7 +13,7 @@ import { t, LANGUES_SUPPORTEES } from '../../../i18n/i18n-web';
 
 /**
  * Sous-ensemble de AuthGateway réellement nécessaire à cet écran (voir la
- * même règle documentée dans LoginPage.tsx / ChatGateway.ts).
+ * même règle dans LoginPage.tsx).
  */
 export type GatewayInscription = Pick<AuthGateway, 'inscrire'>;
 

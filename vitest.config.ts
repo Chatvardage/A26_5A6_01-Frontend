@@ -20,8 +20,6 @@ export default defineConfig({
       exclude: [
         'src/**/*.test.ts',
         'src/**/*.d.ts',
-        'src/domain/entities/Conversation.ts',
-        'src/infrastructure/gateways/ChatGateway.ts',
       ],
       thresholds: {
         statements: 100,

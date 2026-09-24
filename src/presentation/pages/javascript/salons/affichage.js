@@ -173,10 +173,9 @@ function ouvrirDialogue(titre, contenu) {
 }
 
 /**
- * Affiche l'utilisateur connecté (pseudo en lecture seule + badge de rôle) —
- * remplace l'ancien sélecteur de test #current-user-select (voir
- * initialiserUtilisateurCourant) : il n'y a plus qu'UNE identité possible
- * par session (le vrai compte JWT), rien à laisser choisir ici.
+ * Affiche l'utilisateur connecté (pseudo en lecture seule + badge de rôle) :
+ * une seule identité par session (le compte JWT, voir
+ * initialiserUtilisateurCourant).
  */
 function afficherUtilisateurCourant() {
   if (el.utilisateurPseudo) {
@@ -410,7 +409,7 @@ function afficherMessages(options = {}) {
   // Changement de salon actif : on repart d'un historique manuel vide (voir
   // la déclaration de etatHistoriqueSalon plus haut). `finHistorique` part de
   // la page récente tout juste reçue (salon.finHistorique, voir
-  // construireSalonDTO côté MockGatewayRuntime.js).
+  // RealGatewayRuntime.js).
   if (etatHistoriqueSalon.salonId !== salon.id) {
     etatHistoriqueSalon = {
       salonId: salon.id,
@@ -612,7 +611,7 @@ function afficherMessages(options = {}) {
 /**
  * Charge la page de messages plus anciens qui précède ceux déjà affichés
  * pour le salon actif (pagination "charger plus ancien" — voir
- * obtenirMessagesSalonAvant côté MockGatewayRuntime.js), et les fusionne
+ * obtenirMessagesSalonAvant côté RealGatewayRuntime.js), et les fusionne
  * dans etatHistoriqueSalon avant de redemander un rendu qui préserve la
  * position de défilement (voir afficherMessages({ conserverPositionScroll })).
  * Sans effet si un chargement est déjà en cours, si l'historique du salon
