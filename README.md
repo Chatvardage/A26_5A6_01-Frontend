@@ -171,7 +171,7 @@ npm run build:mac
 npm run build:linux
 ```
 
-Un build macOS doit être produit sur macOS. Le workflow `.github/workflows/builds.yml` exécute automatiquement les builds sur les bons runners Windows, macOS et Linux lors d'un tag `v*` ou manuellement avec **Run workflow**.
+Un build macOS doit être produit sur macOS. Le workflow `.github/workflows/builds.yml` exécute automatiquement les builds sur les bons runners Windows, macOS et Linux lors d'un tag `v*` ou manuellement avec **Run workflow**. Le lint et les tests (couverture à 100 %) tournent en plus à chaque PR et à chaque push sur `main` ou `develop`, sans lancer les builds.
 
 Artifacts attendus :
 
