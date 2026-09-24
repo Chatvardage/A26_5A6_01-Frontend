@@ -50,11 +50,6 @@ type Vue = 'connexion' | 'inscription' | 'choix-pseudo';
 function App() {
   const [vue, setVue] = useState<Vue>('connexion');
   const [langue, setLangue] = useState<string>(LANGUE_PAR_DEFAUT);
-  // 'sombre' en dur ici (pas de constante partagée façon LANGUE_PAR_DEFAUT) :
-  // seules deux valeurs fixes existent pour le thème, jamais traduites
-  // elles-mêmes (voir THEMES_SUPPORTEES dans LoginPage.tsx). Doit rester
-  // identique à THEME_PAR_DEFAUT côté main.js.
-  const [theme, setTheme] = useState<string>('sombre');
   // Pseudo généré par défaut à l'inscription (voir gatewayInscription
   // ci-dessous), transmis à PseudoChoicePage pour préremplissage — vide tant
   // qu'aucune inscription n'a eu lieu cette session (la vue 'choix-pseudo'
@@ -66,6 +61,9 @@ function App() {
   // tableau de bord si une session valide existe déjà.
   const [verificationSessionEnCours, setVerificationSessionEnCours] =
     useState(true);
+  // Clé de traduction d'un message à afficher en arrivant sur cet écran
+  // (ex. session expirée pendant l'utilisation), ou null.
+  const [messageRetour, setMessageRetour] = useState<string | null>(null);
 
   // Tente de reprendre une session déjà ouverte lors d'un lancement
   // précédent (voir 'session:restaurer' dans main.js / restaurerSession dans
@@ -78,6 +76,19 @@ function App() {
       .restaurerSession()
       .then((session) => {
         if (annule) return;
+        if (!session) {
+          // Retour automatique (jeton expiré…) : on explique pourquoi.
+          void window.electronAPI
+            .obtenirMotifRetourConnexion()
+            .then((motif) => {
+              if (!annule && motif === 'session-expiree') {
+                setMessageRetour('auth.sessionExpired');
+              }
+            })
+            .catch(() => {
+              // Sans motif : écran de connexion normal.
+            });
+        }
         if (session) {
           // La navigation remplace tout le document sous peu : pas besoin de
           // repasser verificationSessionEnCours à false avant, ça éviterait
@@ -125,11 +136,12 @@ function App() {
       });
   }, []);
 
+  // Pas de sélecteur de thème sur ces écrans : on applique simplement le
+  // dernier thème connu (voir 'theme:obtenir' dans main.js).
   useEffect(() => {
     window.electronAPI
       .obtenirTheme()
       .then((themeResolu) => {
-        setTheme(themeResolu);
         document.documentElement.dataset.theme = themeResolu;
       })
       .catch(() => {
@@ -137,17 +149,6 @@ function App() {
       });
   }, []);
 
-  const changerTheme = useCallback((nouveauTheme: string) => {
-    window.electronAPI
-      .definirTheme(nouveauTheme)
-      .then((themeConfirme) => {
-        setTheme(themeConfirme);
-        document.documentElement.dataset.theme = themeConfirme;
-      })
-      .catch(() => {
-        // Si l'IPC échoue, on ne change rien.
-      });
-  }, []);
 
   // Aucune dépendance sur `langue` ici : l'adaptateur ne traduit plus rien
   // lui-même (voir nettoyerPrefixeIpc ci-dessus), donc il n'a pas besoin
@@ -204,8 +205,6 @@ function App() {
         pseudoInitial={pseudoInitial}
         langue={langue}
         changerLangue={changerLangue}
-        theme={theme}
-        changerTheme={changerTheme}
         onTermine={() => {
           void window.electronAPI.allerAuTableauDeBord();
         }}
@@ -219,8 +218,6 @@ function App() {
         gateway={gatewayInscription}
         langue={langue}
         changerLangue={changerLangue}
-        theme={theme}
-        changerTheme={changerTheme}
         onSessionEtablie={(resultat) => {
           setPseudoInitial(resultat.utilisateur.pseudo);
           setVue('choix-pseudo');
@@ -235,8 +232,7 @@ function App() {
       gateway={gatewaySession}
       langue={langue}
       changerLangue={changerLangue}
-      theme={theme}
-      changerTheme={changerTheme}
+      messageRetour={messageRetour}
       allerAInscription={() => setVue('inscription')}
     />
   );

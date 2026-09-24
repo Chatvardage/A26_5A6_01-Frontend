@@ -21,8 +21,6 @@ interface InscriptionPageProps {
   gateway: GatewayInscription;
   langue: string;
   changerLangue: (langue: string) => void;
-  theme: string;
-  changerTheme: (theme: string) => void;
   /**
    * Appelé une fois le compte créé et la session ouverte, avec le résultat
    * complet de l'inscription (voir main.tsx) : le parent en tire le pseudo
@@ -62,8 +60,6 @@ export function InscriptionPage({
   gateway,
   langue,
   changerLangue,
-  theme,
-  changerTheme,
   onSessionEtablie,
   allerAConnexion,
 }: InscriptionPageProps) {
@@ -74,7 +70,6 @@ export function InscriptionPage({
   const [enCours, setEnCours] = useState(false);
   const courrielRef = useRef<HTMLInputElement>(null);
 
-  const THEMES_SUPPORTEES = ['sombre', 'clair'] as const;
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -140,23 +135,6 @@ export function InscriptionPage({
         ))}
       </div>
 
-      <div
-        className="theme-switch"
-        role="group"
-        aria-label={t(langue, 'theme.label')}
-      >
-        {THEMES_SUPPORTEES.map((valeur) => (
-          <button
-            key={valeur}
-            type="button"
-            className={`theme-btn ${valeur === theme ? 'active' : ''}`}
-            onClick={() => changerTheme(valeur)}
-            aria-pressed={valeur === theme}
-          >
-            {t(langue, `theme.${valeur === 'sombre' ? 'dark' : 'light'}`)}
-          </button>
-        ))}
-      </div>
 
       <div className="login-brand">ChatVardage</div>
       <form className="login-card" onSubmit={handleSubmit} noValidate>

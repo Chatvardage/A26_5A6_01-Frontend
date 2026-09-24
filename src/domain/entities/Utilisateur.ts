@@ -1,15 +1,11 @@
 ﻿/**
  * Rôle global d'un utilisateur, attribué par le service d'authentification
- * (jamais choisi ni modifiable côté client) : détermine ce qu'il peut faire
- * sur les salons (voir `peutGererSalons` plus bas) — il n'y a plus de notion
- * d'« hôte » par salon, l'autorité vient uniquement de ce rôle global.
+ * (jamais choisi ni modifiable côté client).
  *
- * - `utilisateur` : peut voir/rejoindre les salons publics, répondre à ses
- *   invitations, envoyer des messages, quitter un salon.
- * - `moderateur` : peut en plus créer/renommer/changer la visibilité/
- *   supprimer un salon, inviter et retirer un membre.
- * - `admin` : tous les droits (identiques à `moderateur` sur les salons),
- *   plus l'accès au Dashboard admin (hors scope du Frontend clavardage).
+ * La modération des serveurs et salons ne dépend PAS de ce rôle global mais
+ * du rôle de l'utilisateur dans chaque serveur (voir `Serveur.ts`). Seul
+ * `admin` a des droits partout (et l'accès au Dashboard). `moderateur` global
+ * est un reste de l'ancien modèle : il n'accorde plus aucun droit.
  */
 export type RoleUtilisateur = 'admin' | 'moderateur' | 'utilisateur';
 
@@ -56,22 +52,6 @@ export function creerUtilisateur(
 }
 
 /**
- * Détermine si un utilisateur a le droit de gérer les salons (créer,
- * renommer, changer la visibilité, supprimer, inviter, retirer un membre) —
- * réservé aux modérateurs et aux administrateurs (voir `RoleUtilisateur`).
- * Un utilisateur sans rôle connu (ex. profil partiellement résolu) est
- * traité comme n'ayant pas ce droit, par prudence.
- *
- * @param utilisateur L'utilisateur dont on veut vérifier le droit.
- * @returns true si l'utilisateur peut gérer les salons, false sinon.
- */
-export function peutGererSalons(
-  utilisateur: Pick<Utilisateur, 'role'> | null | undefined
-): boolean {
-  return utilisateur?.role === 'moderateur' || utilisateur?.role === 'admin';
-}
-
-/**
  * Fonction de validation du courriel utilisé à l'inscription et à la
  * connexion (voir LoginPage/InscriptionPage). Volontairement simple (pas de
  * RFC 5322 complet) : le format exact importe peu ici, c'est le backend qui
@@ -87,9 +67,8 @@ export function validationCourriel(courriel: string): boolean {
 
 /**
  * Fonction de validation du mot de passe à l'inscription. Règle minimale
- * (8 caractères ou plus) : à durcir plus tard en fonction des exigences du
- * backend réel (voir HttpWebSocketGateway.ts / RealGatewayRuntime.js), qui
- * n'existe pas encore (URL fictive, base de données pas terminée).
+ * (8 caractères ou plus), alignée sur Authentification (voir
+ * RealGatewayRuntime.js pour l'appel réel) ; le serveur reste la référence.
  *
  * @param motDePasse Le mot de passe à valider.
  * @returns true si le mot de passe respecte la règle minimale, false sinon.
@@ -111,7 +90,9 @@ export function validationMotDePasse(motDePasse: string): boolean {
  * @returns Un pseudo par défaut respectant `validationPseudo`.
  */
 export function genererPseudoParDefaut(courriel: string): string {
-  const partieLocale = courriel.split('@')[0] ?? '';
+  // split() renvoie toujours au moins un élément (la chaîne entière s'il n'y
+  // a pas de « @ »).
+  const partieLocale = courriel.split('@')[0];
   const nettoye = partieLocale.replace(/[^a-zA-Z0-9_-]/g, '');
   const complete = nettoye.padEnd(3, '0');
   return complete.slice(0, 20);

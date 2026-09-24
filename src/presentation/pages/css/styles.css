@@ -11,28 +11,160 @@
   --text-primary: #eef5f2;
   --text-muted: #9fb8b3;
   --border: rgba(255, 255, 255, 0.08);
+  /* Boutons d'action principale et destructive. */
+  --primary: #168f70;
+  --on-primary: #ffffff;
+  --danger: #e25555;
+  --danger-text: #ff8a8a;
+  /* Survols / fonds légers, superposés à --bg-panel. */
+  --hover-subtle: rgba(255, 255, 255, 0.04);
+  --hover: rgba(255, 255, 255, 0.06);
+  --hover-strong: rgba(255, 255, 255, 0.1);
+  /* Pastille « non lu » : blanche sur les fonds sombres. */
+  --notif-dot: #ffffff;
+  /* Colonne de gauche (salons ET messages privés) : même largeur sur les
+     deux pages. Au moins 264 px pour le panneau utilisateur (nom + badge +
+     trois boutons, voir #user-panel .current-user-row). */
+  --sidebar-width: 280px;
 }
 
-/* Thème clair : même palette de marque (teal/mint), luminosité inversée —
-   voir la même logique et le même commentaire dans connexion.css. Posé sur
+/* Thème clair : même identité turquoise, mais en teintes douces (fonds
+   menthe pâle, texte sarcelle foncé) plutôt qu'en aplats saturés —
+   voir la même palette dans message-prive.css et connexion.css. Posé sur
    <html> via ThemeManager (theme-browser.js), pas une classe CSS séparée. */
 :root[data-theme='clair'] {
-  --bg-app: #1fb28d;
-  --bg-panel: #17987d;
-  --bg-panel-alt: #1a8a72;
-  --bg-bubble: #cfd8d5;
-  --accent-start: #3ddc97;
-  --accent-end: #8fe0c4;
-  --online: #22c55e;
-  --offline: #ef4444;
-  --reconnecting: #eab308;
-  --text-primary: #023344;
-  --text-muted: #3a5a54;
-  --border: rgba(0, 0, 0, 0.12);
+  --bg-app: #cdeee3;
+  --bg-panel: #e3f6ef;
+  --bg-panel-alt: #f5fcf9;
+  --bg-bubble: #b5e3d4;
+  --accent-start: #15a383;
+  --accent-end: #7fd9bd;
+  --online: #16a34a;
+  --offline: #dc2626;
+  --reconnecting: #ca8a04;
+  --text-primary: #0b3b36;
+  --text-muted: #4b706a;
+  --border: rgba(11, 59, 54, 0.14);
+  --primary: #0f8a6c;
+  --on-primary: #ffffff;
+  --danger: #c93636;
+  --danger-text: #b42323;
+  --hover-subtle: rgba(11, 59, 54, 0.04);
+  --hover: rgba(11, 59, 54, 0.07);
+  --hover-strong: rgba(11, 59, 54, 0.1);
+  /* Pastille « non lu » : une pastille blanche disparaissait sur les fonds
+     menthe clairs ; même couleur que le texte, pour le même contraste. */
+  --notif-dot: #0b3b36;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* --- Barre de titre personnalisée ---------------------------------------------
+   Bande glissable injectée par preload.js (fenêtre sans cadre, voir
+   createWindow dans main.js), avec les boutons réduire/agrandir/fermer. */
+:root {
+  --titlebar-height: 32px;
+  --titlebar-bg: #082e2a;
+  --titlebar-text: #9fb8b3;
+  --titlebar-text-strong: #eef5f2;
+}
+
+:root[data-theme='clair'] {
+  --titlebar-bg: #bfe6d8;
+  --titlebar-text: #2f5a53;
+  --titlebar-text-strong: #0b3b36;
+}
+
+.app-titlebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  height: var(--titlebar-height);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: var(--titlebar-bg);
+  color: var(--titlebar-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+.app-titlebar::before {
+  content: '';
+  width: 16px;
+  height: 16px;
+  background: url('../../../../assets/icon.png') center / contain no-repeat;
+}
+
+.app-titlebar-title {
+  flex: 1;
+}
+
+.app-titlebar-controls {
+  display: flex;
+  align-self: stretch;
+  margin-right: -12px;
+  -webkit-app-region: no-drag;
+}
+
+.app-titlebar-btn {
+  width: 44px;
+  border: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--titlebar-text);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.app-titlebar-btn svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+}
+
+.app-titlebar-btn:hover {
+  background: rgba(127, 127, 127, 0.18);
+  color: var(--titlebar-text-strong);
+}
+
+.app-titlebar-btn--fermer:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+
+.app-titlebar-btn:focus-visible {
+  outline: 2px solid var(--titlebar-text);
+  outline-offset: -2px;
+}
+
+/* macOS : place pour les feux tricolores, à gauche. */
+:root.platform-darwin .app-titlebar {
+  padding-left: 80px;
+}
+
+/* Place de la barre réservée DÈS le premier affichage (bordure aux
+   couleurs de la barre), sans attendre la classe has-app-titlebar posée par
+   preload.js au DOMContentLoaded : sinon toute la page était d'abord peinte
+   32 px trop haut puis « sautait » vers le bas à chaque changement de page.
+   La bande injectée (position fixe) vient se poser exactement dessus. */
+body {
+  box-sizing: border-box;
+  border-top: var(--titlebar-height) solid var(--titlebar-bg);
 }
 
 /* --- Barres de défilement -------------------------------------------------
@@ -99,6 +231,39 @@ button {
   font-family: inherit;
 }
 
+/* Contenu des colonnes masqué pendant le chargement d'une page, puis affiché
+   en fondu (voir 'page-en-chargement' dans theme-browser.js). Seuls les
+   ENFANTS sont masqués : fonds et bordures des colonnes restent visibles,
+   le cadre de l'app ne clignote donc pas entre deux pages. */
+:is(#channel-sidebar, #dm-sidebar, #main, #profile-main) > * {
+  transition: opacity 0.18s ease-out;
+}
+
+:root.page-en-chargement
+  :is(#channel-sidebar, #dm-sidebar, #main, #profile-main)
+  > * {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(#channel-sidebar, #dm-sidebar, #main, #profile-main) > * {
+    transition: none;
+  }
+}
+
+/* Textes à traduire masqués (espace conservé) tant que la traduction n'est
+   pas appliquée — voir 'i18n-en-attente' dans theme-browser.js. */
+:root.i18n-en-attente [data-i18n] {
+  visibility: hidden;
+}
+
+/* Logos et icônes : ni glisser-déposer (Chromium rend toute <img>
+   déplaçable par défaut), ni sélection au double-clic. */
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
 /* --- Rail des serveurs ------------------------------------------- */
 #server-rail {
   width: 72px;
@@ -117,6 +282,44 @@ button {
   border-radius: 14px;
   display: block;
   object-fit: cover;
+}
+
+/* Bouton logo "retour à l'accueil" du rail (messages privés, profil) :
+   partagé ici pour que chaque page qui l'affiche en hérite. */
+#home-btn {
+  width: 44px;
+  height: 44px;
+
+  padding: 0;
+  border: none;
+  border-radius: 14px;
+
+  background: transparent;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+
+  cursor: pointer;
+
+  transition: all 0.15s ease;
+}
+
+#home-btn:hover,
+#home-btn:focus-visible {
+  background: var(--bg-panel-alt);
+  border-radius: 30%;
+}
+
+#home-btn .app-logo {
+  width: 100%;
+  height: 100%;
+
+  object-fit: cover;
+  background: transparent;
+  border-radius: inherit;
 }
 
 #message-prive-btn {
@@ -197,9 +400,93 @@ button {
   display: none;
 }
 
+/* Icône de serveur avec image (voir ChatUiShared.afficherRailServeurs). */
+.server-icon-image {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.server-icon--add {
+  color: var(--online);
+  font-size: 1.3rem;
+}
+
+/* Nom du serveur actif, en haut de la colonne des salons : ouvre son menu. */
+.server-menu-btn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  margin-left: -6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.server-menu-btn:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.server-menu-btn:disabled {
+  cursor: default;
+}
+
+#server-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.server-menu-chevron {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+/* Double classe : doit l'emporter sur `.choice-section-title` (marge nulle
+   en haut), définie plus loin dans ce fichier. */
+/* Boutons pleine largeur empilés dans une fenêtre (menu du serveur,
+   paramètres du salon) : un peu d'air entre eux. */
+.full-width + .full-width,
+.full-width + .confirm-delete-row,
+.confirm-delete-row + .full-width {
+  margin-top: 8px;
+}
+
+.choice-section-title.dialog-section-gap {
+  margin-top: 18px;
+}
+
+/* Avatar carré arrondi d'un serveur dans une liste (recherche de serveurs). */
+.avatar.small.server-avatar {
+  border-radius: 9px;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.avatar.small.server-avatar > img.avatar-img {
+  border-radius: 9px;
+}
+
+/* Un serveur n'a pas de présence : pas de pastille (voir
+   .user-choice .avatar.small::after). */
+.user-choice .avatar.small.server-avatar::after {
+  content: none;
+}
+
 /* --- Colonne des salons -------------------------------------------- */
 #channel-sidebar {
-  width: 232px;
+  width: var(--sidebar-width);
   flex: 0 0 auto;
   background: var(--bg-panel);
   border-right: 1px solid var(--border);
@@ -259,7 +546,7 @@ button {
 }
 
 #channel-list li button:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--hover);
   color: var(--text-primary);
 }
 
@@ -364,8 +651,59 @@ button {
   position: relative;
 }
 
-#user-panel .avatar::after {
-  content: none;
+/* Photo de profil dans n'importe quel rond d'avatar (voir
+   ChatUiShared.remplirAvatar) : couvre l'initiale/le dégradé, la pastille
+   ::after reste par-dessus. */
+.avatar {
+  position: relative;
+}
+
+.avatar > img.avatar-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatar.has-photo {
+  color: transparent;
+}
+
+/* Avatar de l'utilisateur connecté : photo de profil (ou initiale) et
+   pastille verte/rouge de présence (voir ChatUiShared.afficherAvatarCourant).
+   Pas de pastille tant que l'état n'est pas connu (data-presence absent). */
+#user-panel .user-avatar {
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  user-select: none;
+}
+
+#user-panel .user-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+#user-panel .user-avatar[data-presence]::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-panel);
+  background: var(--offline);
+}
+
+#user-panel .user-avatar[data-presence='en-ligne']::after {
+  background: var(--online);
 }
 
 #user-panel .user-info {
@@ -379,95 +717,26 @@ button {
   overflow: hidden;
 }
 
-#user-panel .user-meta {
-  width: 100%;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
-  overflow: hidden;
+/* Nom puis badge de rôle EN DESSOUS : à côté des trois boutons du panneau,
+   il ne reste que ~95 px, trop peu pour "ariane" + "MODÉRATEUR" sur une
+   seule ligne (le badge, qui ne rétrécit pas, était coupé). Le nom garde
+   toute la largeur et passe en "…" s'il est trop long. */
+#user-panel .current-user-row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
 }
 
-#user-panel .presence-label,
-#user-panel .presence-toggle {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 22px;
-  padding: 2px 5px;
-  border: none;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--text-muted);
-  font-family: inherit;
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-align: left;
-  white-space: nowrap;
+#user-panel .current-user-pseudo,
+#user-panel .role-badge {
+  max-width: 100%;
+}
+
+/* Filet de sécurité (traduction plus longue, police système plus large) :
+   "…" plutôt qu'un mot coupé net, libellé complet au survol (title). */
+#user-panel .role-badge {
   overflow: hidden;
   text-overflow: ellipsis;
-  cursor: pointer;
-}
-
-#user-panel .presence-label:hover,
-#user-panel .presence-toggle:hover {
-  background: var(--bg-panel-alt);
-  color: var(--text-primary);
-}
-
-#user-panel .presence-label.offline,
-#user-panel .presence-toggle.offline {
-  color: var(--offline);
-}
-
-#user-panel .language-select,
-#user-panel #theme-select {
-  flex: 0 0 auto;
-  height: 22px;
-  border: none;
-  border-radius: 5px;
-  padding: 2px 18px 2px 5px;
-  background-color: transparent;
-  color: var(--text-muted);
-  font-family: inherit;
-  font-size: 0.68rem;
-  font-weight: 600;
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1.2L5 5.2L9 1.2' fill='none' stroke='%239fb8b3' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 5px center;
-  background-size: 8px 5px;
-  outline: none;
-}
-
-:root[data-theme='clair'] #user-panel .language-select,
-:root[data-theme='clair'] #user-panel #theme-select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1.2L5 5.2L9 1.2' fill='none' stroke='%233a5a54' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-}
-
-#user-panel .language-select:hover,
-#user-panel .language-select:focus,
-#user-panel #theme-select:hover,
-#user-panel #theme-select:focus {
-  background-color: var(--bg-bubble);
-  color: var(--text-primary);
-  outline: none;
-}
-
-#user-panel .language-select {
-  width: 40px;
-}
-
-#user-panel #theme-select {
-  width: 62px;
-}
-
-#user-panel .language-select option,
-#user-panel #theme-select option {
-  background: var(--bg-panel);
-  color: var(--text-primary);
 }
 
 #user-panel .notif-settings-btn {
@@ -529,12 +798,21 @@ button {
 }
 
 #user-panel .notif-menu-option:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--hover);
 }
 
-#user-panel .notif-menu-option input[type='radio'] {
+#user-panel .notif-menu-option input[type='radio'],
+#user-panel .notif-menu-option input[type='checkbox'] {
   margin-top: 3px;
   accent-color: var(--accent-start);
+}
+
+/* Case « Afficher le contenu », séparée des modes (boutons radio). */
+#user-panel .notif-menu-option--case {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 7px 7px;
+  padding-top: 10px;
 }
 
 #user-panel .notif-menu-option-text {
@@ -621,7 +899,7 @@ button {
   margin-left: 8px;
   padding: 3px 7px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--hover-strong);
   color: var(--text-muted);
   font-size: 0.7rem;
 }
@@ -640,7 +918,8 @@ button {
 
 .primary-button,
 .accept-invite {
-  background: #168f70;
+  background: var(--primary);
+  color: var(--on-primary);
 }
 
 .secondary-button,
@@ -649,7 +928,7 @@ button {
 }
 
 .secondary-button.danger {
-  color: #ff8a8a;
+  color: var(--danger-text);
 }
 
 /* Ligne de confirmation "Supprimer ce salon ?" (voir el.roomSettings dans
@@ -662,38 +941,221 @@ button {
   flex-wrap: wrap;
 }
 
-/* Bouton "Retirer" d'un membre (voir el.membres dans renderer.js). */
-.member-remove {
-  margin-left: auto;
-  border: 0;
-  border-radius: 6px;
-  padding: 4px 8px;
-  background: transparent;
-  color: #ff8a8a;
-  font-size: 0.75rem;
-  cursor: pointer;
-}
-.member-remove:hover {
-  background: var(--bg-bubble);
+/* --- Panneau « Membres de … » (voir el.membres dans renderer.js) ----------
+   Une carte par membre : avatar + pastille de présence, nom et ligne
+   secondaire (présence · rôle), actions alignées à droite. */
+.member-list.member-list {
+  max-height: min(60vh, 480px);
+  overflow-y: auto;
 }
 
-#connection-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.85rem;
-  color: var(--text-muted);
+.member-list .member-row {
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
 }
 
-#connection-status .dot {
-  width: 8px;
-  height: 8px;
+.member-row .avatar.member-avatar {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.member-row .avatar.member-avatar::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
+  border: 2px solid var(--bg-panel-alt);
+  background: var(--offline);
+}
+
+.member-row:has(.member-presence[data-presence='en-ligne'])
+  .member-avatar::after {
   background: var(--online);
 }
 
-#connection-status[data-state='reconnexion'] .dot {
-  background: var(--reconnecting);
+.member-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.member-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-details {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.member-role {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--hover-strong);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.member-role--proprietaire {
+  background: color-mix(in srgb, var(--accent-start) 22%, transparent);
+  color: var(--accent-start);
+}
+
+.member-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.member-action {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.member-action:hover {
+  background: var(--hover-strong);
+}
+
+.member-action.danger {
+  color: var(--danger-text);
+}
+
+.member-action.danger:hover {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+/* --- Statut réseau (pastille dans l'en-tête) -------------------------------
+   Discret quand tout va bien (point vert + "Connecté"), plus visible dès que
+   la connexion est perdue : fond teinté, détail de la cause et du compte à
+   rebours, bouton "Réessayer". Voir afficherEtatReseau dans chat-ui-shared.js. */
+.connection-status {
+  --etat: var(--online);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+/* État initial du HTML, avant la première réponse de main.js : l'espace
+   est réservé mais rien n'est affiché (sinon "Déconnecté" clignotait à
+   chaque changement de page). */
+.connection-status[data-state='inconnu'] {
+  visibility: hidden;
+}
+
+.connection-status[data-state='reconnexion'] {
+  --etat: var(--reconnecting);
+}
+
+.connection-status[data-state='deconnecte'] {
+  --etat: var(--offline);
+}
+
+.connection-status:not([data-state='connecte']) {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--etat) 14%, transparent);
+  border-color: color-mix(in srgb, var(--etat) 40%, transparent);
+}
+
+.connection-status .dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--etat);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--etat) 25%, transparent);
+}
+
+.connection-status[data-state='reconnexion'] .dot {
+  animation: pulsation-reseau 1.2s ease-in-out infinite;
+}
+
+@keyframes pulsation-reseau {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.connection-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+#connection-label {
+  font-weight: 600;
+}
+
+.connection-detail {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.connection-retry {
+  margin-left: 4px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 999px;
+  background: var(--etat);
+  color: #06201b;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.connection-retry:hover {
+  filter: brightness(1.1);
+}
+
+.connection-retry:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connection-status[data-state='reconnexion'] .dot {
+    animation: none;
+  }
 }
 
 #message-list {
@@ -756,14 +1218,20 @@ button.historique-statut.historique-statut--bouton:hover {
 .message-row .message-body {
   display: flex;
   flex-direction: column;
+  /* La bulle épouse son texte au lieu de s'étirer sur la largeur de la
+     ligne auteur + heure (voir .message-row.own pour l'alignement à droite). */
+  align-items: flex-start;
   gap: 4px;
   min-width: 0;
+  max-width: 75%;
 }
 
 .message-row .message-meta {
   display: flex;
   align-items: baseline;
   gap: 8px;
+  /* Auteur, heure et « (modifié) » toujours sur une seule ligne. */
+  white-space: nowrap;
 }
 
 .message-row .author {
@@ -781,6 +1249,8 @@ button.historique-statut.historique-statut--bouton:hover {
   font-size: 0.92rem;
   line-height: 1.4;
   word-wrap: break-word;
+  /* Retours à la ligne conservés (ex. message de bienvenue de #annonces). */
+  white-space: pre-wrap;
 }
 
 .message-row.own {
@@ -866,6 +1336,9 @@ dialog {
   color: var(--text-primary);
   background: var(--bg-panel);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+  /* Jamais de défilement horizontal : un contenu trop large (nom sans
+     espace, par exemple) passe à la ligne au lieu d'élargir le dialogue. */
+  overflow-x: hidden;
 }
 
 dialog::backdrop {
@@ -878,14 +1351,33 @@ dialog::backdrop {
 
 .dialog-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 18px;
 }
 
+/* Titre avec un nom de serveur/salon potentiellement très long et sans
+   espace (« Membres de bbbb… ») : il rétrécit et se coupe n'importe où
+   plutôt que de pousser le bouton de fermeture hors du dialogue. */
 .dialog-header h2 {
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
   font-size: 1.15rem;
+  overflow-wrap: anywhere;
+}
+
+.dialog-header > button {
+  flex: 0 0 auto;
+}
+
+/* Même règle pour le contenu (cartes d'invitation, serveurs trouvés,
+   paramètres…) : un nom sans espace passe à la ligne au lieu d'être rogné.
+   Les noms de membres, eux, restent sur une ligne avec « … » (.member-name). */
+#dialog-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 #dialog-content label {
@@ -946,6 +1438,92 @@ dialog::backdrop {
   color: var(--text-muted);
 }
 
+/* Fenêtre "Nouveau message privé" : recherche + liste de candidats. */
+.dm-search {
+  width: 100%;
+  height: 38px;
+  margin-bottom: 12px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-panel-alt);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.dm-search:focus {
+  outline: none;
+  border-color: var(--accent-start);
+}
+
+.choice-section-title {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.user-choice .avatar.small {
+  flex: 0 0 auto;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+/* Pastille de présence des sélecteurs d'utilisateurs (DM et invitations) :
+   définie ici, et pas seulement dans message-prive.css, pour la page des
+   salons aussi. */
+.user-choice .avatar.small::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-panel);
+  background: var(--online);
+}
+
+.user-choice .avatar.small.offline::after {
+  background: var(--offline);
+}
+
+.user-choice-identity {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.user-choice-identity strong {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-choice-identity small {
+  font-size: 0.75rem;
+}
+
+.user-choice .user-choice-action {
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+}
+
+.choice-list .empty-state {
+  padding: 12px 0;
+}
+
+.user-choice:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .invitation-card {
   justify-content: space-between;
 }
@@ -973,23 +1551,28 @@ dialog::backdrop {
   margin-left: auto;
 }
 
+/* En haut, centré sous la barre de titre : en bas à droite, il recouvrait
+   la zone de saisie et le bouton Envoyer. */
 #toast {
   position: fixed;
-  right: 20px;
-  bottom: 20px;
+  top: calc(var(--titlebar-height) + 12px);
+  left: 50%;
+  z-index: 1001;
+  max-width: min(520px, calc(100vw - 40px));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
   padding: 11px 15px;
   border-radius: 8px;
-  background: #168f70;
-  color: white;
+  background: var(--primary);
+  color: var(--on-primary);
   opacity: 0;
-  transform: translateY(10px);
+  transform: translate(-50%, -10px);
   pointer-events: none;
   transition: 0.2s ease;
 }
 
 #toast.visible {
   opacity: 1;
-  transform: translateY(0);
+  transform: translate(-50%, 0);
 }
 
 #toast.error {
@@ -1006,7 +1589,7 @@ dialog::backdrop {
    plutôt que recréé/détruit à chaque rendu. */
 .notif-dot {
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--notif-dot);
   pointer-events: none;
 }
 
@@ -1093,7 +1676,7 @@ dialog::backdrop {
 }
 
 .notif-menu-option:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--hover);
 }
 
 .notif-menu-option input[type='radio'] {
@@ -1118,123 +1701,6 @@ dialog::backdrop {
   font-size: 0.78rem;
 }
 
-/* --- Selects : langue + thème ------------------------------------------- */
-
-.language-select,
-#theme-select {
-  border: none;
-  background-color: var(--bg-panel-alt);
-  color: var(--text-primary);
-
-  font-family: inherit;
-  font-size: 0.85rem;
-  font-weight: 600;
-
-  border-radius: 5px;
-  padding: 4px 28px 4px 8px;
-
-  cursor: pointer;
-
-  /* On retire la flèche native */
-  appearance: none;
-  -webkit-appearance: none;
-
-  /* Petit chevron vers le bas */
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' fill='none' stroke='%239fb8b3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-
-  background-repeat: no-repeat;
-  background-position: right 9px center;
-  background-size: 10px 7px;
-
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease;
-}
-
-/* Le chevron ci-dessus est encodé en dur avec la couleur --text-muted du
-   thème sombre (%239fb8b3, soit #9fb8b3) : un data-URI ne peut pas lire une
-   variable CSS, donc on fournit une seconde image pour le thème clair
-   plutôt que de laisser un chevron clair invisible sur fond clair. Garder
-   cette couleur alignée sur --text-muted du bloc [data-theme='clair']
-   ci-dessus (styles.css) si celui-ci change un jour. */
-:root[data-theme='clair'] .language-select,
-:root[data-theme='clair'] #theme-select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' fill='none' stroke='%233a5a54' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-}
-
-/* Au survol */
-.language-select:hover,
-#theme-select:hover {
-  background-color: var(--bg-bubble);
-  color: var(--text-primary);
-}
-
-/* Quand le select est sélectionné/focus */
-.language-select:focus,
-#theme-select:focus {
-  outline: none;
-}
-
-/* Options du menu */
-.language-select option,
-#theme-select option {
-  background: var(--bg-panel);
-  color: var(--text-primary);
-}
-
-/* Le sélecteur de langue et celui du thème sont des réglages secondaires —
-   volontairement discrets (texte plus petit, fond neutre) et posés sur leur
-   propre ligne avec le statut de présence (voir .user-meta) plutôt que
-   collés juste après le pseudo, pour qu'on ne les confonde pas au premier
-   coup d'œil. */
-.language-select,
-#theme-select {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  background-color: transparent;
-  padding: 2px 20px 2px 6px;
-  background-position: right 6px center;
-  background-size: 8px 6px;
-}
-
-.language-select:hover,
-.language-select:focus,
-#theme-select:hover,
-#theme-select:focus {
-  color: var(--text-primary);
-  background-color: var(--bg-bubble);
-}
-
-/* --- Simulation réseau / présence -------------------------------------- */
-.presence-toggle {
-  border: 0;
-  padding: 0;
-  background: transparent;
-  cursor: pointer;
-}
-.presence-toggle[data-presence='en-ligne']::before,
-.member-presence[data-presence='en-ligne']::before {
-  background: var(--online);
-}
-.presence-toggle[data-presence='hors-ligne']::before,
-.member-presence[data-presence='hors-ligne']::before {
-  background: var(--offline);
-}
-.presence-toggle::before,
-.member-presence::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  display: inline-block;
-  margin-right: 5px;
-}
-.network-simulation {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex-wrap: wrap;
-}
 .network-test-button {
   border: 1px solid var(--border);
   border-radius: 7px;
@@ -1246,11 +1712,7 @@ dialog::backdrop {
 .network-test-button:hover {
   background: var(--bg-bubble);
 }
-#connection-status[data-state='deconnecte'] .dot {
-  background: var(--offline);
-}
 .member-presence {
-  margin-left: auto;
   color: var(--text-muted);
   font-size: 0.75rem;
 }
@@ -1281,7 +1743,7 @@ dialog::backdrop {
   background: var(--bg-bubble);
 }
 .message-action.danger:hover {
-  color: #ff8a8a;
+  color: var(--danger-text);
 }
 
 .message-actions.confirming-delete {
@@ -1294,7 +1756,7 @@ dialog::backdrop {
   font-size: 0.72rem;
 }
 .message-actions.confirming-delete .message-action.danger {
-  color: #ff8a8a;
+  color: var(--danger-text);
 }
 
 /* Modification de message : conserver le rendu visuel du message normal. */

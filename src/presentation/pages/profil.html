@@ -10,6 +10,9 @@
     <title>ChatVardage — Profil</title>
     <link rel="stylesheet" href="css/styles.css" />
     <link rel="stylesheet" href="css/profil.css" />
+    <!-- Chargé AVANT le premier rendu : applique le thème mémorisé (voir
+         theme-browser.js), sinon flash du thème sombre à la navigation. -->
+    <script src="javascript/theme-browser.js"></script>
   </head>
   <body>
     <nav
@@ -33,206 +36,294 @@
     </nav>
 
     <main id="profile-main">
-      <div id="profile-card">
-        <div class="profile-header">
-          <h1 data-i18n="profile.title">Profil</h1>
-          <div class="profile-header-actions">
-            <select
-              id="language-select"
-              aria-label="Langue / Language"
-              class="language-select"
-            >
-              <option value="fr">FR</option>
-              <option value="en">EN</option>
-            </select>
-          </div>
-        </div>
-
-        <section class="profile-section" aria-labelledby="pseudo-section-title">
-          <h2 id="pseudo-section-title" data-i18n="profile.pseudoSectionTitle">
-            Pseudo
-          </h2>
-          <form id="pseudo-form" novalidate>
-            <label for="pseudo-input" data-i18n="profile.pseudoLabel"
-              >Pseudo</label
-            >
-            <input id="pseudo-input" type="text" maxlength="20" autocomplete="off" />
-            <p
-              id="pseudo-message"
-              class="field-message"
-              role="status"
-              aria-live="polite"
-              hidden
-            ></p>
-            <button
-              type="submit"
-              class="primary-button"
-              data-i18n="profile.pseudoSave"
-            >
-              Enregistrer
-            </button>
-          </form>
-        </section>
-
-        <section class="profile-section" aria-labelledby="account-section-title">
-          <h2 id="account-section-title" data-i18n="profile.accountSectionTitle">
-            Compte
-          </h2>
-          <form id="account-form" novalidate>
-            <label for="email-input" data-i18n="profile.emailLabel"
-              >Courriel</label
-            >
-            <input id="email-input" type="email" autocomplete="email" />
-
-            <label
-              for="new-password-input"
-              data-i18n="profile.newPasswordLabel"
-              >Nouveau mot de passe</label
-            >
-            <input
-              id="new-password-input"
-              type="password"
-              autocomplete="new-password"
-              data-i18n-placeholder="profile.newPasswordPlaceholder"
-            />
-
-            <label
-              for="current-password-input"
-              data-i18n="profile.currentPasswordLabel"
-              >Mot de passe actuel</label
-            >
-            <input
-              id="current-password-input"
-              type="password"
-              autocomplete="current-password"
-            />
-            <p
-              class="field-hint"
-              data-i18n="profile.currentPasswordRequiredHint"
-            >
-              Requis pour changer le courriel ou le mot de passe.
-            </p>
-
-            <p
-              id="account-message"
-              class="field-message"
-              role="status"
-              aria-live="polite"
-              hidden
-            ></p>
-            <button
-              type="submit"
-              class="primary-button"
-              data-i18n="profile.accountSave"
-            >
-              Enregistrer
-            </button>
-          </form>
-        </section>
-
-        <section
-          class="profile-section"
-          aria-labelledby="preferences-section-title"
-        >
-          <h2
-            id="preferences-section-title"
-            data-i18n="profile.preferencesSectionTitle"
-          >
-            Préférences
-          </h2>
-          <form id="preferences-form" novalidate>
-            <label for="alias-input" data-i18n="profile.aliasLabel">Alias</label>
-            <input id="alias-input" type="text" maxlength="50" autocomplete="off" />
-            <p class="field-hint" data-i18n="profile.aliasHint">
-              Un nom d'affichage optionnel, différent de ton pseudo.
-            </p>
-
-            <label for="theme-input" data-i18n="profile.themeLabel">Thème</label>
-            <select id="theme-input">
-              <option value="sombre" data-i18n="theme.dark">Sombre</option>
-              <option value="clair" data-i18n="theme.light">Clair</option>
-            </select>
-
-            <label for="notif-mode-input" data-i18n="profile.notificationModeLabel"
-              >Mode de notification</label
-            >
-            <select id="notif-mode-input">
-              <option value="systeme" data-i18n="notifications.systemTitle">
-                Système + son
-              </option>
-              <option value="discret" data-i18n="notifications.discreteTitle">
-                Discret
-              </option>
-              <option value="aucune" data-i18n="notifications.noneTitle">
-                Aucune
-              </option>
-            </select>
-
-            <p
-              id="preferences-message"
-              class="field-message"
-              role="status"
-              aria-live="polite"
-              hidden
-            ></p>
-            <button
-              type="submit"
-              class="primary-button"
-              data-i18n="profile.preferencesSave"
-            >
-              Enregistrer
-            </button>
-          </form>
-        </section>
-
-        <section
-          class="profile-section profile-section--danger"
-          aria-labelledby="delete-section-title"
-        >
-          <h2 id="delete-section-title" data-i18n="profile.deleteSectionTitle">
-            Supprimer le compte
-          </h2>
-          <p data-i18n="profile.deleteWarning">
-            Cette action est irréversible : toutes tes données seront
-            supprimées définitivement.
-          </p>
+      <div id="profile-page">
+        <!-- En-tête : avatar + identité affichée, mis à jour en direct -->
+        <header class="profile-hero">
+          <!-- Photo de profil : cliquer dessus ouvre le sélecteur de fichier
+               (voir choisirAvatar dans profil.js). -->
           <label
-            for="delete-password-input"
-            data-i18n="profile.currentPasswordLabel"
-            >Mot de passe actuel</label
+            class="profile-avatar-wrap"
+            for="avatar-input"
+            title="Changer la photo"
+            data-i18n-title="profile.avatarChange"
           >
+            <span id="profile-avatar" class="profile-avatar"></span>
+            <span class="profile-avatar-edit" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" focusable="false">
+                <path
+                  fill="currentColor"
+                  d="M9 4 7.2 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.2L15 4H9Zm3 5a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"
+                />
+              </svg>
+            </span>
+          </label>
           <input
-            id="delete-password-input"
-            type="password"
-            autocomplete="current-password"
+            id="avatar-input"
+            class="visually-hidden"
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
           />
-          <p
-            id="delete-message"
-            class="field-message"
-            role="status"
-            aria-live="polite"
-            hidden
-          ></p>
-          <div id="delete-account-actions"></div>
-        </section>
+          <div class="profile-identity">
+            <h1 id="profile-display-name">…</h1>
+            <p class="profile-subline">
+              <span id="profile-handle"></span>
+              <span id="profile-role-badge" class="role-badge" hidden></span>
+            </p>
+            <p id="profile-email-display" class="profile-email"></p>
+            <p class="profile-avatar-actions">
+              <label for="avatar-input" class="link-button" data-i18n="profile.avatarChange">
+                Changer la photo
+              </label>
+              <button
+                id="avatar-remove"
+                class="link-button link-button--danger"
+                type="button"
+                data-i18n="profile.avatarRemove"
+                hidden
+              >
+                Retirer la photo
+              </button>
+            </p>
+          </div>
+          <div class="profile-hero-actions">
+            <button
+              id="back-to-dashboard"
+              class="ghost-button"
+              type="button"
+              data-i18n="profile.backToDashboard"
+            >
+              Retour au tableau de bord
+            </button>
+            <button
+              id="logout-btn"
+              class="ghost-button"
+              type="button"
+              data-i18n="nav.logout"
+            >
+              Se déconnecter
+            </button>
+          </div>
+        </header>
 
-        <div class="profile-footer">
-          <button
-            id="back-to-dashboard"
-            class="secondary-button"
-            type="button"
-            data-i18n="profile.backToDashboard"
+        <div class="profile-layout">
+          <nav
+            class="profile-nav"
+            aria-label="Sections du profil"
+            data-i18n-aria-label="profile.navLabel"
           >
-            Retour au tableau de bord
-          </button>
-          <button
-            id="logout-btn"
-            class="secondary-button"
-            type="button"
-            data-i18n="nav.logout"
-          >
-            Se déconnecter
-          </button>
+            <button type="button" data-target="section-identite" data-i18n="profile.identitySectionTitle">
+              Identité
+            </button>
+            <button type="button" data-target="section-compte" data-i18n="profile.accountSectionTitle">
+              Compte
+            </button>
+            <button type="button" data-target="section-preferences" data-i18n="profile.preferencesSectionTitle">
+              Préférences
+            </button>
+            <button type="button" class="danger" data-target="section-danger" data-i18n="profile.dangerZone">
+              Zone dangereuse
+            </button>
+          </nav>
+
+          <div class="profile-sections">
+            <!-- Identité : pseudo (Authentification) + alias (User-Config) -->
+            <section id="section-identite" class="profile-section" aria-labelledby="identite-title">
+              <header class="section-header">
+                <h2 id="identite-title" data-i18n="profile.identitySectionTitle">Identité</h2>
+                <p data-i18n="profile.identityHint">
+                  Comment les autres te voient dans les salons et les messages privés.
+                </p>
+              </header>
+              <form id="identity-form" class="section-body" novalidate>
+                <div class="field">
+                  <label for="pseudo-input" data-i18n="profile.pseudoLabel">Pseudo</label>
+                  <div class="input-prefix">
+                    <span aria-hidden="true">@</span>
+                    <input id="pseudo-input" type="text" maxlength="20" autocomplete="off" required />
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="alias-input" data-i18n="profile.aliasLabel">Alias</label>
+                  <input id="alias-input" type="text" maxlength="50" autocomplete="off" />
+                  <p class="field-hint" data-i18n="profile.aliasHint">
+                    Un nom d'affichage optionnel, différent de ton pseudo.
+                  </p>
+                </div>
+                <footer class="section-footer">
+                  <p id="identity-message" class="field-message" role="status" aria-live="polite" hidden></p>
+                  <button type="submit" class="primary-button" data-i18n="profile.save" disabled>
+                    Enregistrer
+                  </button>
+                </footer>
+              </form>
+            </section>
+
+            <!-- Compte : courriel / mot de passe -->
+            <section id="section-compte" class="profile-section" aria-labelledby="compte-title">
+              <header class="section-header">
+                <h2 id="compte-title" data-i18n="profile.accountSectionTitle">Compte</h2>
+                <p data-i18n="profile.accountSectionHint">
+                  Change ton mot de passe. Le courriel ne peut pas être modifié.
+                </p>
+              </header>
+              <form id="account-form" class="section-body" novalidate>
+                <div class="field">
+                  <label for="email-input" data-i18n="profile.emailLabel">Courriel</label>
+                  <!-- Le courriel n'est pas modifiable : affiché pour
+                       information seulement (voir profil.js). -->
+                  <input
+                    id="email-input"
+                    type="email"
+                    autocomplete="email"
+                    readonly
+                    aria-readonly="true"
+                    aria-describedby="email-readonly-hint"
+                  />
+                  <p id="email-readonly-hint" class="field-hint" data-i18n="profile.emailReadonlyHint">
+                    Le courriel ne peut pas être modifié.
+                  </p>
+                </div>
+                <div class="field">
+                  <label for="new-password-input" data-i18n="profile.newPasswordLabel">
+                    Nouveau mot de passe
+                  </label>
+                  <input
+                    id="new-password-input"
+                    type="password"
+                    autocomplete="new-password"
+                    data-i18n-placeholder="profile.newPasswordPlaceholder"
+                  />
+                </div>
+                <div id="current-password-field" class="field" hidden>
+                  <label for="current-password-input" data-i18n="profile.currentPasswordLabel">
+                    Mot de passe actuel
+                  </label>
+                  <input id="current-password-input" type="password" autocomplete="current-password" />
+                </div>
+                <footer class="section-footer">
+                  <p id="account-message" class="field-message" role="status" aria-live="polite" hidden></p>
+                  <button type="submit" class="primary-button" data-i18n="profile.save" disabled>
+                    Enregistrer
+                  </button>
+                </footer>
+              </form>
+            </section>
+
+            <!-- Préférences : appliquées et enregistrées immédiatement -->
+            <section id="section-preferences" class="profile-section" aria-labelledby="preferences-title">
+              <header class="section-header">
+                <h2 id="preferences-title" data-i18n="profile.preferencesSectionTitle">Préférences</h2>
+                <p data-i18n="profile.preferencesAutoSaved">
+                  Chaque changement est appliqué et enregistré immédiatement.
+                </p>
+              </header>
+              <div class="section-body">
+                <fieldset class="field">
+                  <legend data-i18n="profile.themeLabel">Thème</legend>
+                  <div class="choice-grid choice-grid--2">
+                    <label class="choice-card theme-card">
+                      <input type="radio" name="theme" value="sombre" />
+                      <span class="theme-preview theme-preview--sombre" aria-hidden="true">
+                        <span></span><span></span><span></span>
+                      </span>
+                      <span class="choice-title" data-i18n="theme.dark">Sombre</span>
+                    </label>
+                    <label class="choice-card theme-card">
+                      <input type="radio" name="theme" value="clair" />
+                      <span class="theme-preview theme-preview--clair" aria-hidden="true">
+                        <span></span><span></span><span></span>
+                      </span>
+                      <span class="choice-title" data-i18n="theme.light">Clair</span>
+                    </label>
+                  </div>
+                </fieldset>
+
+                <fieldset class="field">
+                  <legend data-i18n="profile.presenceLabel">Présence</legend>
+                  <div class="segmented segmented--presence">
+                    <label>
+                      <input type="radio" name="presence" value="en-ligne" />
+                      <span><i class="presence-dot" aria-hidden="true"></i><b data-i18n="network.online">En ligne</b></span>
+                    </label>
+                    <label>
+                      <input type="radio" name="presence" value="hors-ligne" />
+                      <span><i class="presence-dot" aria-hidden="true"></i><b data-i18n="network.offline">Hors ligne</b></span>
+                    </label>
+                  </div>
+                  <p class="field-hint" data-i18n="profile.presenceHint">
+                    Ce que les autres voient à côté de ton nom.
+                  </p>
+                </fieldset>
+
+                <fieldset class="field">
+                  <legend data-i18n="profile.languageLabel">Langue</legend>
+                  <div class="segmented">
+                    <label>
+                      <input type="radio" name="langue" value="fr" />
+                      <span>Français</span>
+                    </label>
+                    <label>
+                      <input type="radio" name="langue" value="en" />
+                      <span>English</span>
+                    </label>
+                  </div>
+                </fieldset>
+
+                <fieldset class="field">
+                  <legend data-i18n="profile.notificationModeLabel">Mode de notification</legend>
+                  <div class="choice-grid">
+                    <label class="choice-card">
+                      <input type="radio" name="modeNotification" value="systeme" />
+                      <span class="choice-text">
+                        <span class="choice-title" data-i18n="notifications.systemTitle">Système + son</span>
+                        <span class="choice-desc" data-i18n="notifications.systemDesc"></span>
+                      </span>
+                    </label>
+                    <label class="choice-card">
+                      <input type="radio" name="modeNotification" value="discret" />
+                      <span class="choice-text">
+                        <span class="choice-title" data-i18n="notifications.discreteTitle">Discret</span>
+                        <span class="choice-desc" data-i18n="notifications.discreteDesc"></span>
+                      </span>
+                    </label>
+                    <label class="choice-card">
+                      <input type="radio" name="modeNotification" value="aucune" />
+                      <span class="choice-text">
+                        <span class="choice-title" data-i18n="notifications.noneTitle">Aucune</span>
+                        <span class="choice-desc" data-i18n="notifications.noneDesc"></span>
+                      </span>
+                    </label>
+                  </div>
+                </fieldset>
+              </div>
+            </section>
+
+            <!-- Zone dangereuse -->
+            <section
+              id="section-danger"
+              class="profile-section profile-section--danger"
+              aria-labelledby="danger-title"
+            >
+              <header class="section-header">
+                <h2 id="danger-title" data-i18n="profile.deleteSectionTitle">Supprimer le compte</h2>
+                <p data-i18n="profile.deleteWarning">
+                  Cette action est irréversible : toutes tes données seront supprimées définitivement.
+                </p>
+              </header>
+              <div class="section-body">
+                <div class="field">
+                  <label for="delete-password-input" data-i18n="profile.currentPasswordLabel">
+                    Mot de passe actuel
+                  </label>
+                  <input id="delete-password-input" type="password" autocomplete="current-password" />
+                </div>
+                <footer class="section-footer">
+                  <p id="delete-message" class="field-message" role="status" aria-live="polite" hidden></p>
+                  <div id="delete-account-actions"></div>
+                </footer>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
     </main>
@@ -240,7 +331,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
 
     <script src="javascript/i18n-browser.js"></script>
-    <script src="javascript/theme-browser.js"></script>
     <script src="javascript/profil.js"></script>
   </body>
 </html>

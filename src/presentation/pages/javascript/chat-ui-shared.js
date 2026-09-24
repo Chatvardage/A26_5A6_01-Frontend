@@ -1,19 +1,42 @@
 (function () {
   'use strict';
 
+  // Compte à rebours "nouvelle tentative dans X s" : rafraîchi chaque
+  // seconde tant qu'une tentative est planifiée (voir planifierReconnexion
+  // dans RealGatewayRuntime.js, qui fournit `prochaineTentative`).
+  let minuteurCompteARebours = null;
+
+  function texteDetailReseau(etat, t) {
+    if (etat.statut === 'connecte' || etat.statut === 'inconnu') return '';
+    if (etat.cause === 'hors-ligne') return t('network.deviceOffline');
+    if (etat.prochaineTentative) {
+      const secondes = Math.max(
+        0,
+        Math.ceil((etat.prochaineTentative - Date.now()) / 1000)
+      );
+      return secondes > 0
+        ? `${t('network.serverUnreachable')} · ${t('network.retryIn', { s: secondes })}`
+        : t('network.retrying');
+    }
+    if (etat.statut === 'reconnexion') return t('network.retrying');
+    return '';
+  }
+
   function afficherEtatReseau({ etat, elements, t, composerAutorise = true }) {
     if (!etat) return;
     const {
       statutConnexion,
       libelleConnexion,
+      detailConnexion,
+      reessayer,
       messageInput,
       submitButton,
-      presenceCourante,
-      couperReseau,
-      reconnecterReseau,
     } = elements;
 
-    if (statutConnexion) statutConnexion.dataset.state = etat.statut;
+    if (statutConnexion) {
+      statutConnexion.dataset.state = etat.statut;
+      statutConnexion.dataset.cause = etat.cause ?? '';
+    }
     if (libelleConnexion) {
       const libelles = {
         connecte: t('network.connected'),
@@ -21,6 +44,28 @@
         reconnexion: t('network.reconnecting'),
       };
       libelleConnexion.textContent = libelles[etat.statut] ?? etat.statut;
+    }
+
+    const majDetail = () => {
+      if (!detailConnexion) return;
+      const texte = texteDetailReseau(etat, t);
+      detailConnexion.textContent = texte;
+      detailConnexion.hidden = !texte;
+    };
+    majDetail();
+    if (minuteurCompteARebours) clearInterval(minuteurCompteARebours);
+    minuteurCompteARebours = etat.prochaineTentative
+      ? setInterval(majDetail, 1000)
+      : null;
+
+    // "Réessayer" n'a de sens que si une tentative est en attente : ni
+    // connecté, ni machine hors ligne (rien à tenter tant que l'OS n'a pas
+    // de réseau — la reconnexion repart d'elle-même à son retour).
+    if (reessayer) {
+      reessayer.hidden = !(
+        (etat.statut === 'deconnecte' || etat.statut === 'reconnexion') &&
+        etat.cause !== 'hors-ligne'
+      );
     }
 
     // Le champ de message et son bouton d'envoi ne dépendent QUE de la
@@ -37,10 +82,6 @@
     if (submitButton) submitButton.disabled = composerBloque;
 
     const bloque = etat.statut !== 'connecte';
-    if (presenceCourante) presenceCourante.disabled = bloque;
-    if (couperReseau) couperReseau.disabled = bloque;
-    if (reconnecterReseau)
-      reconnecterReseau.disabled = etat.statut !== 'deconnecte';
     document
       .querySelectorAll('[data-requires-network="true"]')
       .forEach((element) => {
@@ -48,12 +89,240 @@
       });
   }
 
-  function afficherPresenceCourante({ element, utilisateurId, presences, t }) {
-    if (!element || !utilisateurId) return;
-    const statut = presences[utilisateurId] ?? 'hors-ligne';
-    element.dataset.presence = statut;
-    element.textContent =
-      statut === 'en-ligne' ? t('network.online') : t('network.offline');
+  const DELAI_RECHERCHE_UTILISATEURS_MS = 250;
+
+  /**
+   * Sélecteur d'utilisateur réutilisable (nouveau message privé, invitation
+   * dans un salon) : un champ de recherche, puis une liste qui affiche des
+   * suggestions tant que le champ est vide, et les résultats de la recherche
+   * par début de pseudo (GET /api/users/search) sinon.
+   *
+   * @param {object} options
+   * @param {Function} options.t traduction
+   * @param {Function} options.messageErreur traduction d'une erreur
+   * @param {() => Promise<object[]>} options.obtenirSuggestions
+   * @param {(texte: string) => Promise<object[]>} options.rechercher
+   * @param {(user: object) => {libelle: string, desactive?: boolean}} options.decrireAction
+   *   texte à droite de chaque ligne ; `desactive` grise la ligne (ex. déjà
+   *   membre du salon)
+   * @param {(user: object) => void} options.surChoix
+   * @param {(user: object) => boolean} [options.garderSuggestion] filtre des
+   *   suggestions (les résultats de recherche, eux, sont tous affichés)
+   * @param {string} options.messageAucuneSuggestion
+   * @returns {HTMLElement[]} éléments à insérer dans le dialogue ; le champ
+   *   reçoit le focus au prochain tour de boucle
+   */
+  function creerSelecteurUtilisateurs({
+    t,
+    messageErreur,
+    obtenirSuggestions,
+    rechercher,
+    decrireAction,
+    surChoix,
+    garderSuggestion = () => true,
+    messageAucuneSuggestion,
+  }) {
+    let minuteur = null;
+    // Numéro de la dernière requête lancée : une réponse arrivée après une
+    // requête plus récente est ignorée (frappe rapide).
+    let numero = 0;
+
+    const champ = document.createElement('input');
+    champ.type = 'search';
+    champ.classList.add('dm-search');
+    champ.maxLength = 20;
+    champ.autocomplete = 'off';
+    champ.placeholder = t('dm.searchPlaceholder');
+    champ.setAttribute('aria-label', t('dm.searchPlaceholder'));
+
+    const titreEl = document.createElement('p');
+    titreEl.classList.add('choice-section-title');
+    const listeEl = document.createElement('div');
+    listeEl.classList.add('choice-list');
+    listeEl.setAttribute('aria-live', 'polite');
+
+    function creerLigne(user) {
+      const nom = nomAffiche(user);
+      const { libelle, desactive = false } = decrireAction(user);
+      const bouton = document.createElement('button');
+      bouton.type = 'button';
+      bouton.classList.add('user-choice');
+      bouton.disabled = desactive;
+
+      const avatar = document.createElement('span');
+      avatar.classList.add('avatar', 'small');
+      avatar.classList.toggle('offline', !user.present);
+      avatar.textContent = nom.charAt(0).toUpperCase();
+      avatar.title = user.present ? t('dm.online') : t('dm.offline');
+      remplirAvatar(avatar, user.avatar);
+
+      const identite = document.createElement('span');
+      identite.classList.add('user-choice-identity');
+      const nomEl = document.createElement('strong');
+      nomEl.textContent = nom;
+      identite.appendChild(nomEl);
+      if (user.alias) {
+        const pseudoEl = document.createElement('small');
+        pseudoEl.textContent = `@${user.pseudo}`;
+        identite.appendChild(pseudoEl);
+      }
+
+      const action = document.createElement('span');
+      action.classList.add('user-choice-action');
+      action.textContent = libelle;
+
+      bouton.append(avatar, identite, action);
+      bouton.addEventListener('click', () => surChoix(user));
+      return bouton;
+    }
+
+    function afficher({ titre = '', utilisateurs = [], messageVide }) {
+      titreEl.textContent = titre;
+      titreEl.hidden = !titre;
+      if (!utilisateurs.length) {
+        const vide = document.createElement('p');
+        vide.classList.add('empty-state');
+        vide.textContent = messageVide;
+        listeEl.replaceChildren(vide);
+        return;
+      }
+      listeEl.replaceChildren(...utilisateurs.map(creerLigne));
+    }
+
+    async function afficherSuggestions() {
+      const n = ++numero;
+      afficher({ messageVide: t('dm.searching') });
+      let utilisateurs = [];
+      try {
+        utilisateurs = (await obtenirSuggestions()).filter(garderSuggestion);
+      } catch {
+        // Liste vide : la recherche reste disponible.
+      }
+      if (n !== numero) return;
+      afficher({
+        titre: t('dm.suggestionsTitle'),
+        utilisateurs,
+        messageVide: messageAucuneSuggestion,
+      });
+    }
+
+    async function lancerRecherche(texte) {
+      const n = ++numero;
+      afficher({ messageVide: t('dm.searching') });
+      try {
+        const utilisateurs = await rechercher(texte);
+        if (n !== numero) return;
+        afficher({
+          titre: t('dm.resultsTitle'),
+          utilisateurs,
+          messageVide: t('dm.noResults'),
+        });
+      } catch (erreur) {
+        if (n !== numero) return;
+        // 404 : Authentification pas encore à jour (route /search absente).
+        afficher({
+          messageVide: String(erreur?.message ?? '').includes('ERR_HTTP_404')
+            ? t('dm.searchUnavailable')
+            : messageErreur(erreur),
+        });
+      }
+    }
+
+    champ.addEventListener('input', () => {
+      window.clearTimeout(minuteur);
+      const texte = champ.value.trim();
+      minuteur = window.setTimeout(
+        () => (texte ? lancerRecherche(texte) : afficherSuggestions()),
+        DELAI_RECHERCHE_UTILISATEURS_MS
+      );
+    });
+    // Les dialogues sont des <form method="dialog"> : sans ça, Entrée les
+    // fermerait. Entrée choisit plutôt le premier résultat disponible.
+    champ.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      listeEl.querySelector('.user-choice:not(:disabled)')?.click();
+    });
+
+    void afficherSuggestions();
+    window.setTimeout(() => champ.focus(), 0);
+    return [champ, titreEl, listeEl];
+  }
+
+  /**
+   * Nom affiché d'un utilisateur : son alias (nom d'affichage choisi dans
+   * son profil, User-Config-Service) s'il en a un, sinon son pseudo.
+   */
+  function nomAffiche(utilisateur) {
+    return utilisateur?.alias || utilisateur?.pseudo || '';
+  }
+
+  /**
+   * Photo de profil dans un rond d'avatar existant (liste, messages,
+   * membres…). Sans photo, l'élément garde son contenu (initiale ou dégradé).
+   * Insère l'<img> en premier enfant pour ne pas écraser les autres
+   * (pastille "non lu" des conversations privées, par exemple).
+   */
+  function remplirAvatar(element, avatar) {
+    if (!element) return;
+    let image = element.querySelector(':scope > img.avatar-img');
+    if (!avatar) {
+      image?.remove();
+      element.classList.remove('has-photo');
+      return;
+    }
+    if (!image) {
+      image = document.createElement('img');
+      image.className = 'avatar-img';
+      image.alt = '';
+      image.draggable = false;
+      element.prepend(image);
+    }
+    if (image.getAttribute('src') !== avatar) image.src = avatar;
+    element.classList.add('has-photo');
+  }
+
+  /**
+   * Avatar de l'utilisateur connecté (panneau du bas) : photo de profil si
+   * définie (préférence `avatar`, User-Config-Service), sinon l'initiale de
+   * l'alias/pseudo, et une pastille verte (en ligne) ou rouge (hors ligne).
+   * « En ligne » exige la présence 'en-ligne' ET une connexion réseau
+   * établie : coupé du serveur, on n'est de fait plus joignable.
+   */
+  function afficherAvatarCourant({
+    element,
+    utilisateur,
+    preferences,
+    presences,
+    etatReseau,
+    t,
+  }) {
+    if (!element) return;
+    const nom = preferences?.alias || utilisateur?.pseudo || '';
+    const avatar = preferences?.avatar;
+    if (avatar) {
+      let image = element.querySelector('img');
+      if (!image) {
+        image = document.createElement('img');
+        image.alt = '';
+        image.draggable = false;
+        element.replaceChildren(image);
+      }
+      if (image.getAttribute('src') !== avatar) image.src = avatar;
+    } else {
+      element.textContent = nom.charAt(0).toUpperCase();
+    }
+
+    if (!utilisateur || !etatReseau || etatReseau.statut === 'inconnu') {
+      delete element.dataset.presence;
+      element.removeAttribute('title');
+      return;
+    }
+    const enLigne =
+      etatReseau.statut === 'connecte' &&
+      presences?.[utilisateur.id] === 'en-ligne';
+    element.dataset.presence = enLigne ? 'en-ligne' : 'hors-ligne';
+    element.title = enLigne ? t('network.online') : t('network.offline');
   }
 
   async function chargerEtatReseauEtPresences({ api, onEtat, onPresences }) {
@@ -66,68 +335,143 @@
     return { reseau, presences };
   }
 
-  function brancherControlesReseauPresence({
-    api,
-    elements,
-    getEtatReseau,
-    getUtilisateurId,
-    getPresences,
-    notifierErreur,
-  }) {
-    elements.couperReseau?.addEventListener('click', async () => {
+  /** Bouton "Réessayer" de l'indicateur réseau (la présence se modifie
+   * désormais depuis la page profil). */
+  function brancherBoutonReessayer({ api, element, getEtatReseau, notifierErreur }) {
+    element?.addEventListener('click', async () => {
+      if (getEtatReseau()?.statut === 'connecte') return;
       try {
-        // Zéro argument : ce n'est plus une simulation ciblant un
-        // utilisateur simulé (voir le commentaire de classe dans
-        // RealGatewayRuntime.js) — ferme réellement LE socket de la session
-        // courante, déduite du jeton côté serveur.
-        await api.simulerCoupureReseau();
-      } catch (erreur) {
-        notifierErreur(erreur);
-      }
-    });
-
-    elements.reconnecterReseau?.addEventListener('click', async () => {
-      if (getEtatReseau()?.statut !== 'deconnecte') return;
-      try {
-        // Zéro argument, même raison que ci-dessus — plus de délai
-        // artificiel non plus (l'ancien mock simulait la latence réseau,
-        // le vrai socket.io reconnecte à son propre rythme).
-        await api.simulerReconnexionReseau();
-      } catch (erreur) {
-        notifierErreur(erreur);
-      }
-    });
-
-    elements.presenceCourante?.addEventListener('click', async () => {
-      if (getEtatReseau()?.statut !== 'connecte') return;
-      const utilisateurId = getUtilisateurId();
-      if (!utilisateurId) return;
-      const actuelle = getPresences()[utilisateurId] ?? 'hors-ligne';
-      const prochaine = actuelle === 'en-ligne' ? 'hors-ligne' : 'en-ligne';
-      try {
-        // Un seul argument désormais : le "soi" est implicite via le JWT
-        // côté serveur (voir RealGatewayRuntime.modifierPresence), on ne
-        // peut plus changer la présence de quelqu'un d'autre par ce biais
-        // (ça n'a d'ailleurs jamais été le cas réellement, seul le mock le
-        // permettait).
-        await api.modifierPresence(prochaine);
+        await api.reessayerConnexion();
       } catch (erreur) {
         notifierErreur(erreur);
       }
     });
   }
 
-  // Détermine si un utilisateur a le droit de gérer les salons (créer,
-  // renommer, changer la visibilité, supprimer, inviter, retirer un membre) —
-  // réservé aux modérateurs/admins (voir RoleUtilisateur et peutGererSalons
-  // dans src/domain/entities/Utilisateur.ts). Duplication volontaire de cette
-  // même petite fonction pure : ce fichier est chargé comme un <script>
-  // classique, sans système de module (voir le commentaire en tête de
-  // renderer.js/message-prive.js sur nodeIntegration désactivé), donc pas
-  // d'import possible depuis le domaine TypeScript — même raisonnement que
-  // creerDmId(), dupliqué pour la même raison dans RealGatewayRuntime.js.
-  function peutGererSalons(utilisateur) {
-    return utilisateur?.role === 'moderateur' || utilisateur?.role === 'admin';
+  // --- Rôles dans un serveur ---------------------------------------------
+  // Mêmes règles que src/domain/entities/Serveur.ts (et, côté serveur, que
+  // Room-Service, qui fait foi) : dupliquées ici parce que ce fichier est un
+  // script classique, sans import possible (même raison que creerDmId dans
+  // RealGatewayRuntime.js). Ne servent qu'à masquer les actions
+  // indisponibles. `role` = `monRole` d'un serveur ('admin', 'proprietaire',
+  // 'moderateur', 'membre' ou null).
+  const RANG_ROLE = { membre: 1, moderateur: 2, proprietaire: 3, admin: 4 };
+
+  function rangRole(role) {
+    return RANG_ROLE[role] ?? 0;
+  }
+
+  /** Créer / modifier / supprimer des salons, expulser, voir les invitations. */
+  function peutModererServeur(role) {
+    return rangRole(role) >= RANG_ROLE.moderateur;
+  }
+
+  /** Renommer, rendre public/privé, supprimer le serveur, nommer des modérateurs. */
+  function peutGererServeur(role) {
+    return rangRole(role) >= RANG_ROLE.proprietaire;
+  }
+
+  function initialesServeur(nom) {
+    return String(nom ?? '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((mot) => mot.charAt(0).toUpperCase())
+      .join('');
+  }
+
+  /**
+   * Icônes des serveurs dans le rail de gauche (page des salons ET page des
+   * messages privés) : une par serveur, insérées juste avant `avant` (le
+   * bouton « + »). Remplace les icônes précédemment rendues.
+   *
+   * @param {object} options
+   * @param {HTMLElement} options.conteneur #server-rail
+   * @param {HTMLElement|null} options.avant élément avant lequel insérer
+   * @param {object[]} options.serveurs résumés { id, nom, icone }
+   * @param {string|null} options.serveurActifId
+   * @param {Set<string>} options.nonLus serveurs à pastiller
+   * @param {(serveur: object) => void} options.surChoix
+   */
+  // Dernière liste de serveurs affichée dans le rail, pour la redessiner
+  // AUSSITÔT au chargement de la page suivante (voir afficherRailDepuisCache)
+  // au lieu d'attendre le réseau : sinon les icônes apparaissaient d'un coup
+  // et le bouton « + » descendait à chaque changement de page. localStorage
+  // (et non sessionStorage) : il survit de façon fiable à la navigation
+  // file:// entre pages. Vidé à la déconnexion (oublierRailEnCache).
+  const CLEF_RAIL_EN_CACHE = 'chatvardage:rail-serveurs';
+
+  function memoriserRail(serveurs) {
+    try {
+      localStorage.setItem(
+        CLEF_RAIL_EN_CACHE,
+        JSON.stringify(
+          (serveurs ?? []).map(({ id, nom, icone }) => ({ id, nom, icone }))
+        )
+      );
+    } catch {
+      // Stockage plein ou indisponible : le rail attendra simplement le réseau.
+    }
+  }
+
+  function afficherRailDepuisCache(options) {
+    let serveurs = null;
+    try {
+      serveurs = JSON.parse(localStorage.getItem(CLEF_RAIL_EN_CACHE) ?? 'null');
+    } catch {
+      serveurs = null;
+    }
+    if (!Array.isArray(serveurs)) return;
+    afficherRailServeurs({ ...options, serveurs, memoriser: false });
+  }
+
+  function oublierRailEnCache() {
+    try {
+      localStorage.removeItem(CLEF_RAIL_EN_CACHE);
+    } catch {
+      // Rien à oublier.
+    }
+  }
+
+  function afficherRailServeurs({
+    conteneur,
+    avant,
+    serveurs,
+    serveurActifId,
+    nonLus,
+    surChoix,
+    memoriser = true,
+  }) {
+    if (!conteneur) return;
+    if (memoriser) memoriserRail(serveurs);
+    conteneur
+      .querySelectorAll('.server-icon[data-serveur-id]')
+      .forEach((icone) => icone.remove());
+    for (const serveur of serveurs ?? []) {
+      const bouton = document.createElement('button');
+      bouton.type = 'button';
+      bouton.className = 'server-icon';
+      bouton.classList.toggle('active', serveur.id === serveurActifId);
+      bouton.dataset.serveurId = serveur.id;
+      bouton.title = serveur.nom;
+      bouton.setAttribute('aria-label', serveur.nom);
+      if (serveur.icone) {
+        const image = document.createElement('img');
+        image.className = 'server-icon-image';
+        image.alt = '';
+        image.src = serveur.icone;
+        bouton.appendChild(image);
+      } else {
+        bouton.appendChild(document.createTextNode(initialesServeur(serveur.nom)));
+      }
+      const pastille = document.createElement('span');
+      pastille.className = 'notif-dot notif-dot--rail';
+      pastille.hidden = !nonLus?.has(serveur.id);
+      bouton.appendChild(pastille);
+      bouton.addEventListener('click', () => surChoix(serveur));
+      conteneur.insertBefore(bouton, avant ?? null);
+    }
   }
 
   const etatsActionsMessage = new Map();
@@ -465,13 +809,22 @@
 
   window.ChatUiShared = Object.freeze({
     afficherEtatReseau,
-    afficherPresenceCourante,
+    afficherAvatarCourant,
+    remplirAvatar,
+    nomAffiche,
+    creerSelecteurUtilisateurs,
     chargerEtatReseauEtPresences,
-    brancherControlesReseauPresence,
+    brancherBoutonReessayer,
     creerActionsMessage,
     oublierEtatActionMessage,
     creerMessageEnAttente,
     creerActionsMessageNonLivre,
-    peutGererSalons,
+    rangRole,
+    peutModererServeur,
+    peutGererServeur,
+    initialesServeur,
+    afficherRailServeurs,
+    afficherRailDepuisCache,
+    oublierRailEnCache,
   });
 })();

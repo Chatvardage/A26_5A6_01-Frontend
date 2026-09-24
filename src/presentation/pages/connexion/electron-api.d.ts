@@ -45,6 +45,12 @@ declare global {
       /** Déconnexion explicite (voir page profil). */
       deconnexionSession: () => Promise<void>;
       /**
+       * Motif d'un retour automatique à cet écran (ex. 'session-expiree'
+       * quand le jeton a expiré en cours d'utilisation), lu une seule fois ;
+       * `null` après une déconnexion volontaire ou au démarrage.
+       */
+      obtenirMotifRetourConnexion: () => Promise<string | null>;
+      /**
        * Demande au processus main de charger le tableau de bord (dashboard)
        * une fois la session locale établie. Le retour de navigation lui-même
        * se fait côté main (voir main.js, canal `navigation:tableau-de-bord`) ;

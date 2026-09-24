@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useEffect, type FormEvent } from 'react';
+import { useCallback, useRef, useState, type FormEvent } from 'react';
 import mascotLogo from '../../../../assets/icon.png';
 import type { AuthGateway } from '../../../infrastructure/gateways/AuthGateway';
 import { t, LANGUES_SUPPORTEES } from '../../../i18n/i18n-web';
@@ -17,21 +17,15 @@ interface LoginPageProps {
   langue: string;
   /** Demande un changement de langue ; le parent est responsable de le confirmer via l'IPC. */
   changerLangue: (langue: string) => void;
-  /** Thème actuel ('sombre' ou 'clair'), même principe que `langue` ci-dessus. */
-  theme: string;
-  /** Demande un changement de thème ; le parent est responsable de le confirmer via l'IPC. */
-  changerTheme: (theme: string) => void;
   /** Appelé une fois la session établie ; par défaut, redirige vers le tableau de bord via electronAPI. */
   onSessionEtablie?: () => void;
   /** Bascule vers l'écran d'inscription (voir main.tsx / InscriptionPage.tsx). */
   allerAInscription: () => void;
+  /** Clé de traduction d'un message d'information à afficher en arrivant
+   * (ex. 'auth.sessionExpired'), ou null. */
+  messageRetour?: string | null;
 }
 
-/** Valeurs supportées pour `theme` — même esprit que LANGUES_SUPPORTEES
- * (i18n-web.ts), mais pas besoin d'un module dédié pour deux valeurs fixes
- * qui ne sont jamais traduites elles-mêmes (seuls leurs libellés le sont,
- * via theme.dark/theme.light dans translations.json). */
-const THEMES_SUPPORTEES = ['sombre', 'clair'] as const;
 
 interface ErreurSoumission {
   /** Clé de traduction (ex. "auth.invalidFormat") ou code brut venant du
@@ -65,10 +59,9 @@ export function LoginPage({
   gateway,
   langue,
   changerLangue,
-  theme,
-  changerTheme,
   onSessionEtablie,
   allerAInscription,
+  messageRetour = null,
 }: LoginPageProps) {
   const [identifiant, setIdentifiant] = useState('');
   const [motDePasse, setMotDePasse] = useState('');
@@ -78,12 +71,6 @@ export function LoginPage({
 
   const identifiantRef = useRef<HTMLInputElement>(null);
 
-  // Applique le thème sur <html> dès qu'il change (prop pilotée par
-  // main.tsx) — tout le reste (couleurs) réagit via les blocs
-  // `:root[data-theme='clair']` de connexion.css, rien d'autre à faire ici.
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -139,23 +126,6 @@ export function LoginPage({
         ))}
       </div>
 
-      <div
-        className="theme-switch"
-        role="group"
-        aria-label={t(langue, 'theme.label')}
-      >
-        {THEMES_SUPPORTEES.map((valeur) => (
-          <button
-            key={valeur}
-            type="button"
-            className={`theme-btn ${valeur === theme ? 'active' : ''}`}
-            onClick={() => changerTheme(valeur)}
-            aria-pressed={valeur === theme}
-          >
-            {t(langue, `theme.${valeur === 'sombre' ? 'dark' : 'light'}`)}
-          </button>
-        ))}
-      </div>
 
       <div className="login-brand">ChatVardage</div>
       <form className="login-card" onSubmit={handleSubmit} noValidate>
@@ -191,6 +161,12 @@ export function LoginPage({
           value={motDePasse}
           onChange={(event) => setMotDePasse(event.target.value)}
         />
+
+        {messageRetour && !erreurSoumission && (
+          <p className="field-message" role="status" data-kind="info">
+            {t(langue, messageRetour)}
+          </p>
+        )}
 
         {erreurSoumission && (
           <p

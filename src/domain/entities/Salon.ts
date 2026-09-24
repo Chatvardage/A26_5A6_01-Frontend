@@ -11,12 +11,10 @@ export type Visibilite = 'public' | 'prive';
  * Un salon a un identifiant unique, un nom, une visibilité (public ou privé)
  * et une liste de membres.
  *
- * Il n'y a PAS de notion d'« hôte »/propriétaire avec des droits particuliers
- * sur son propre salon : l'autorité de gestion (créer/renommer/changer la
- * visibilité/supprimer/inviter/retirer un membre) vient uniquement du rôle
- * global de l'utilisateur (`moderateur`/`admin`, voir `peutGererSalons` dans
- * le domaine `Utilisateur`), la même pour tous les salons. `creeParId` est
- * purement informationnel (affichage « créé par »), jamais utilisé pour une
+ * Un salon appartient à un serveur : l'autorité de gestion vient du rôle de
+ * l'utilisateur dans ce serveur (propriétaire, modérateur ; voir
+ * `Serveur.ts`), pas de son rôle global. `creeParId` est purement
+ * informationnel (affichage « créé par »), jamais utilisé pour une
  * vérification de droit.
  */
 export interface Salon {
@@ -149,8 +147,8 @@ export function quitterSalon(
 }
 
 /**
- * Change le nom d'un salon. L'autorisation (réservée aux modérateurs/admins,
- * voir `peutGererSalons` dans le domaine Utilisateur) est vérifiée en amont,
+ * Change le nom d'un salon. L'autorisation (modérateur du serveur minimum,
+ * voir `peutModererServeur` dans `Serveur.ts`) est vérifiée en amont,
  * côté UI et par le backend — cette fonction est une simple transformation
  * de données, sans notion d'hôte.
  *

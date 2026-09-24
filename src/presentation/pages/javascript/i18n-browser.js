@@ -68,6 +68,8 @@
    */
   function appliquerTraductionsStatiques() {
     global.document.documentElement.lang = langueActuelle;
+    // Voir 'i18n-en-attente' dans theme-browser.js.
+    global.document.documentElement.classList.remove('i18n-en-attente');
     global.document.querySelectorAll('[data-i18n]').forEach((element) => {
       element.textContent = t(element.dataset.i18n);
     });

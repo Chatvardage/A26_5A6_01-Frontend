@@ -44,6 +44,36 @@
     return `notif:lecture:${utilisateurId}`;
   }
 
+  function clefApercu(utilisateurId) {
+    return `notif:apercu:${utilisateurId}`;
+  }
+
+  /**
+   * Vrai (par défaut) si le texte du message apparaît dans la notification
+   * système. Désactivable : ces notifications sont visibles sur un écran
+   * verrouillé. Préférence locale, comme le mode.
+   */
+  function afficheApercu(utilisateurId) {
+    if (!utilisateurId) return true;
+    try {
+      return global.localStorage.getItem(clefApercu(utilisateurId)) !== 'non';
+    } catch {
+      return true;
+    }
+  }
+
+  function definirApercu(utilisateurId, affiche) {
+    if (!utilisateurId) return;
+    try {
+      global.localStorage.setItem(
+        clefApercu(utilisateurId),
+        affiche ? 'oui' : 'non'
+      );
+    } catch {
+      // Best-effort, comme definirMode.
+    }
+  }
+
   function obtenirMode(utilisateurId) {
     if (!utilisateurId) return MODE_PAR_DEFAUT;
     try {
@@ -242,7 +272,13 @@
           `[notifications:message-simule] pas de notification système : mode actuel = "${mode}" (seul le mode "systeme" en déclenche).`
         );
       } else {
-        notifierMessageSysteme?.(message);
+        // Contenu masqué si l'utilisateur l'a demandé (écran verrouillé) :
+        // main.js affiche alors un texte générique à la place.
+        notifierMessageSysteme?.(
+          afficheApercu(utilisateurId)
+            ? message
+            : { ...message, contenu: '', apercuMasque: true }
+        );
       }
     } catch (erreur) {
       console.error('[notifications:message-simule] ERREUR:', erreur);
@@ -257,6 +293,8 @@
     obtenirMode,
     definirMode,
     afficheRonds,
+    afficheApercu,
+    definirApercu,
     marquerCommeLu,
     estNonLu,
     dernierMessageSalon,

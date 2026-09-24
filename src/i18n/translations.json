@@ -40,7 +40,8 @@
       "registerTitle": "Créer un compte",
       "register": "Créer le compte",
       "registering": "Création du compte…",
-      "defaultPseudoHint": "Un pseudo par défaut vous sera attribué ; vous pourrez le changer plus tard dans votre profil."
+      "defaultPseudoHint": "Un pseudo par défaut vous sera attribué ; vous pourrez le changer plus tard dans votre profil.",
+      "sessionExpired": "Ta session a expiré. Reconnecte-toi pour continuer."
     },
     "nav": {
       "servers": "Serveurs",
@@ -83,7 +84,16 @@
       "invitationAccepted": "Invitation acceptée.",
       "invitationDeclined": "Invitation refusée.",
       "membersOf": "Membres de #{name}",
-      "system": "Système"
+      "system": "Système",
+      "alreadyMember": "Déjà membre",
+      "alreadyInvited": "Déjà invité·e",
+      "noInviteSuggestions": "Aucune suggestion : cherche quelqu'un par son pseudo ci-dessus.",
+      "moderatorsOnlyLabel": "Réservé aux modérateurs",
+      "writeModeratorsLabel": "Seuls les modérateurs peuvent écrire",
+      "readOnlyPlaceholder": "Seuls les modérateurs peuvent écrire dans ce salon.",
+      "defaultAnnouncements": "annonces",
+      "defaultGeneral": "général",
+      "welcomeMessage": "Bienvenue sur Chatvardage ! 👋\n\nChatvardage fonctionne un peu comme Discord :\n\n• Serveurs : la colonne de gauche liste tes serveurs. Tu fais automatiquement partie de celui-ci. Avec le +, tu peux créer ton propre serveur (tu en deviens propriétaire) ou chercher des serveurs publics à rejoindre. Un serveur privé ne se rejoint que sur invitation.\n\n• Salons : chaque serveur a ses salons. Ici, #annonces sert aux nouvelles de l'app (seuls les administrateurs y écrivent) et #général est ouvert à tout le monde.\n\n• Messages privés : l'icône de bulle, en haut à gauche, mène à tes conversations privées. Le + permet d'écrire à quelqu'un en cherchant son pseudo.\n\n• Ton profil : l'icône de personne, en bas à gauche, permet de changer ta photo, ton alias, ta présence, le thème, la langue et tes notifications.\n\nDans ton propre serveur, tu peux nommer des modérateurs et créer des salons réservés aux modérateurs.\n\nBon clavardage !"
     },
     "notifications": {
       "title": "Notifications",
@@ -95,7 +105,12 @@
       "discreteDesc": "Un rond sur la conversation, rien d'autre",
       "noneTitle": "Aucune",
       "noneDesc": "Pas de notification",
-      "preferenceUpdated": "Préférence de notification mise à jour."
+      "preferenceUpdated": "Préférence de notification mise à jour.",
+      "fallbackToast": "Nouveau message : {texte}",
+      "newMessageTitle": "Nouveau message",
+      "previewTitle": "Afficher le contenu",
+      "previewDesc": "Le texte du message apparaît dans la notification système, même sur un écran verrouillé",
+      "hiddenPreview": "Nouveau message reçu"
     },
     "dm": {
       "title": "Messages privés",
@@ -114,7 +129,14 @@
       "noMessage": "Aucun message",
       "noOtherUsers": "Aucun autre utilisateur disponible.",
       "openExisting": "Ouvrir",
-      "newLabel": "Nouveau"
+      "newLabel": "Nouveau",
+      "searchPlaceholder": "Rechercher un pseudo…",
+      "searching": "Recherche…",
+      "suggestionsTitle": "Suggestions",
+      "resultsTitle": "Résultats",
+      "noSuggestions": "Aucune suggestion : cherche quelqu'un par son pseudo ci-dessus.",
+      "noResults": "Aucun utilisateur ne correspond.",
+      "searchUnavailable": "La recherche n'est pas disponible sur ce serveur (service Authentification à mettre à jour)."
     },
     "typing": {
       "suffix": " est en train d'écrire...",
@@ -151,7 +173,8 @@
       "ERR_IDENTIFIANTS_INVALIDES": "Pseudo, courriel ou mot de passe incorrect.",
       "ERR_COURRIEL_DEJA_UTILISE": "Ce courriel est déjà associé à un compte.",
       "ERR_RESEAU_INDISPONIBLE": "Impossible de joindre le serveur pour le moment. Réessayez plus tard.",
-      "ERR_HTTP_409": "Ce pseudo est déjà pris, choisissez-en un autre."
+      "ERR_HTTP_409": "Ce pseudo est déjà pris, choisissez-en un autre.",
+      "ERR_RECONNEXION_REQUISE": "Mot de passe modifié. Reconnecte-toi avec ton nouveau mot de passe."
     },
     "network": {
       "connected": "Connecté",
@@ -159,9 +182,12 @@
       "reconnecting": "Reconnexion…",
       "online": "En ligne",
       "offline": "Hors ligne",
-      "cut": "Coupure",
-      "reconnect": "Reconnexion",
-      "changePresence": "Changer la présence"
+      "changePresence": "Changer la présence",
+      "retryNow": "Réessayer",
+      "deviceOffline": "Pas de connexion Internet",
+      "serverUnreachable": "Serveur injoignable",
+      "retryIn": "nouvelle tentative dans {s} s",
+      "retrying": "tentative en cours…"
     },
     "messages": {
       "edit": "Modifier",
@@ -190,7 +216,8 @@
       "deleted": "Salon supprimé.",
       "updated": "Salon mis à jour.",
       "removeMember": "Retirer",
-      "memberRemoved": "Membre retiré."
+      "memberRemoved": "Membre retiré.",
+      "save": "Enregistrer"
     },
     "pseudoChoice": {
       "title": "Choisis ton pseudo",
@@ -211,9 +238,9 @@
       "newPasswordLabel": "Nouveau mot de passe",
       "newPasswordPlaceholder": "Laisser vide pour ne pas changer",
       "currentPasswordLabel": "Mot de passe actuel",
-      "currentPasswordRequiredHint": "Requis pour changer le courriel ou le mot de passe.",
+      "currentPasswordRequiredHint": "Le mot de passe actuel est requis.",
       "accountSave": "Enregistrer",
-      "accountUpdated": "Compte mis à jour.",
+      "accountUpdated": "Mot de passe mis à jour.",
       "deleteSectionTitle": "Supprimer le compte",
       "deleteWarning": "Cette action est irréversible : toutes tes données seront supprimées définitivement.",
       "deleteConfirm": "Es-tu sûr·e de vouloir supprimer ton compte ? Cette action est irréversible.",
@@ -229,7 +256,61 @@
       "preferencesSave": "Enregistrer",
       "preferencesUpdated": "Préférences mises à jour.",
       "backToDashboard": "Retour au tableau de bord",
-      "loading": "Chargement du profil…"
+      "loading": "Chargement du profil…",
+      "identitySectionTitle": "Identité",
+      "identityHint": "Comment les autres te voient dans les salons et les messages privés.",
+      "save": "Enregistrer",
+      "saving": "Enregistrement…",
+      "saved": "Modifications enregistrées.",
+      "preferencesAutoSaved": "Chaque changement est appliqué et enregistré immédiatement.",
+      "dangerZone": "Zone dangereuse",
+      "navLabel": "Sections du profil",
+      "presenceHint": "Ce que les autres voient à côté de ton nom.",
+      "avatarChange": "Changer la photo",
+      "avatarRemove": "Retirer la photo",
+      "avatarUpdated": "Photo de profil mise à jour.",
+      "avatarRemoved": "Photo de profil retirée.",
+      "avatarInvalid": "Ce fichier n'est pas une image lisible (PNG, JPEG, WebP ou GIF).",
+      "avatarTooLarge": "Image trop volumineuse (10 Mo maximum).",
+      "accountSectionHint": "Change ton mot de passe. Le courriel ne peut pas être modifié.",
+      "emailReadonlyHint": "Le courriel ne peut pas être modifié.",
+      "currentPasswordIncorrect": "Mot de passe actuel incorrect."
+    },
+    "servers": {
+      "addTitle": "Ajouter un serveur",
+      "createTitle": "Créer un serveur",
+      "nameLabel": "Nom du serveur",
+      "publicLabel": "Serveur public (tout le monde peut le trouver et le rejoindre)",
+      "create": "Créer le serveur",
+      "created": "Serveur créé.",
+      "discoverTitle": "Rejoindre un serveur public",
+      "searchPlaceholder": "Rechercher un serveur…",
+      "noPublic": "Aucun serveur public à rejoindre.",
+      "join": "Rejoindre",
+      "joined": "Serveur rejoint.",
+      "memberCount": "{n} membre(s)",
+      "menu": "Menu du serveur",
+      "invitePeople": "Inviter des gens",
+      "inviteInto": "Inviter dans {name}",
+      "membersOf": "Membres de {name}",
+      "roleOwner": "Propriétaire",
+      "makeModerator": "Nommer modérateur",
+      "removeModerator": "Retirer modérateur",
+      "roleUpdated": "Rôle mis à jour.",
+      "kick": "Expulser",
+      "kicked": "Membre expulsé.",
+      "updated": "Serveur mis à jour.",
+      "leave": "Quitter le serveur",
+      "leaveConfirm": "Quitter ce serveur ?",
+      "left": "Tu as quitté le serveur.",
+      "delete": "Supprimer le serveur",
+      "deleteConfirm": "Supprimer ce serveur et tous ses salons ?",
+      "deleted": "Serveur supprimé.",
+      "defaultServerInfo": "Chatvardage est le serveur de tout le monde : tu ne peux pas le quitter.",
+      "noActions": "Aucune action disponible.",
+      "kickedFrom": "Tu as été expulsé·e du serveur {name}.",
+      "newInvitation": "Nouvelle invitation à rejoindre un serveur.",
+      "deletedNotice": "Le serveur {name} a été supprimé."
     }
   },
   "en": {
@@ -273,7 +354,8 @@
       "registerTitle": "Create an account",
       "register": "Create account",
       "registering": "Creating account…",
-      "defaultPseudoHint": "A default username will be assigned to you; you can change it later in your profile."
+      "defaultPseudoHint": "A default username will be assigned to you; you can change it later in your profile.",
+      "sessionExpired": "Your session has expired. Please sign in again."
     },
     "nav": {
       "servers": "Servers",
@@ -316,7 +398,16 @@
       "invitationAccepted": "Invitation accepted.",
       "invitationDeclined": "Invitation declined.",
       "membersOf": "Members of #{name}",
-      "system": "System"
+      "system": "System",
+      "alreadyMember": "Already a member",
+      "alreadyInvited": "Already invited",
+      "noInviteSuggestions": "No suggestions: search someone by username above.",
+      "moderatorsOnlyLabel": "Moderators only",
+      "writeModeratorsLabel": "Only moderators can write",
+      "readOnlyPlaceholder": "Only moderators can write in this channel.",
+      "defaultAnnouncements": "announcements",
+      "defaultGeneral": "general",
+      "welcomeMessage": "Welcome to Chatvardage! 👋\n\nChatvardage works a bit like Discord:\n\n• Servers: the left column lists your servers. You're automatically a member of this one. With the +, you can create your own server (you become its owner) or search for public servers to join. A private server can only be joined by invitation.\n\n• Channels: each server has its own channels. Here, #announcements is for app news (only administrators can post) and #general is open to everyone.\n\n• Private messages: the speech bubble icon, at the top left, leads to your private conversations. The + lets you write to someone by searching for their username.\n\n• Your profile: the person icon, at the bottom left, lets you change your photo, alias, presence, theme, language and notifications.\n\nIn your own server, you can appoint moderators and create moderator-only channels.\n\nHappy chatting!"
     },
     "notifications": {
       "title": "Notifications",
@@ -328,7 +419,12 @@
       "discreteDesc": "A dot on the conversation, nothing else",
       "noneTitle": "None",
       "noneDesc": "No notification",
-      "preferenceUpdated": "Notification preference updated."
+      "preferenceUpdated": "Notification preference updated.",
+      "fallbackToast": "New message: {texte}",
+      "newMessageTitle": "New message",
+      "previewTitle": "Show message content",
+      "previewDesc": "The message text appears in the system notification, even on a locked screen",
+      "hiddenPreview": "New message received"
     },
     "dm": {
       "title": "Direct Messages",
@@ -347,7 +443,14 @@
       "noMessage": "No messages",
       "noOtherUsers": "No other users available.",
       "openExisting": "Open",
-      "newLabel": "New"
+      "newLabel": "New",
+      "searchPlaceholder": "Search a username…",
+      "searching": "Searching…",
+      "suggestionsTitle": "Suggestions",
+      "resultsTitle": "Results",
+      "noSuggestions": "No suggestions: search someone by username above.",
+      "noResults": "No matching user.",
+      "searchUnavailable": "Search is not available on this server (Authentication service needs an update)."
     },
     "typing": {
       "suffix": " is typing...",
@@ -384,7 +487,8 @@
       "ERR_IDENTIFIANTS_INVALIDES": "Incorrect username, email or password.",
       "ERR_COURRIEL_DEJA_UTILISE": "This email is already associated with an account.",
       "ERR_RESEAU_INDISPONIBLE": "Couldn't reach the server right now. Please try again later.",
-      "ERR_HTTP_409": "This username is already taken, choose another one."
+      "ERR_HTTP_409": "This username is already taken, choose another one.",
+      "ERR_RECONNEXION_REQUISE": "Password changed. Please sign in again with your new password."
     },
     "network": {
       "connected": "Connected",
@@ -392,9 +496,12 @@
       "reconnecting": "Reconnecting…",
       "online": "Online",
       "offline": "Offline",
-      "cut": "Disconnect",
-      "reconnect": "Reconnect",
-      "changePresence": "Change presence"
+      "changePresence": "Change presence",
+      "retryNow": "Retry",
+      "deviceOffline": "No internet connection",
+      "serverUnreachable": "Server unreachable",
+      "retryIn": "retrying in {s}s",
+      "retrying": "trying now…"
     },
     "messages": {
       "edit": "Edit",
@@ -423,7 +530,8 @@
       "deleted": "Channel deleted.",
       "updated": "Channel updated.",
       "removeMember": "Remove",
-      "memberRemoved": "Member removed."
+      "memberRemoved": "Member removed.",
+      "save": "Save"
     },
     "pseudoChoice": {
       "title": "Choose your username",
@@ -444,9 +552,9 @@
       "newPasswordLabel": "New password",
       "newPasswordPlaceholder": "Leave empty to keep unchanged",
       "currentPasswordLabel": "Current password",
-      "currentPasswordRequiredHint": "Required to change your email or password.",
+      "currentPasswordRequiredHint": "Your current password is required.",
       "accountSave": "Save",
-      "accountUpdated": "Account updated.",
+      "accountUpdated": "Password updated.",
       "deleteSectionTitle": "Delete account",
       "deleteWarning": "This action cannot be undone: all your data will be permanently deleted.",
       "deleteConfirm": "Are you sure you want to delete your account? This action cannot be undone.",
@@ -462,7 +570,61 @@
       "preferencesSave": "Save",
       "preferencesUpdated": "Preferences updated.",
       "backToDashboard": "Back to dashboard",
-      "loading": "Loading profile…"
+      "loading": "Loading profile…",
+      "identitySectionTitle": "Identity",
+      "identityHint": "How others see you in rooms and private messages.",
+      "save": "Save",
+      "saving": "Saving…",
+      "saved": "Changes saved.",
+      "preferencesAutoSaved": "Every change is applied and saved right away.",
+      "dangerZone": "Danger zone",
+      "navLabel": "Profile sections",
+      "presenceHint": "What others see next to your name.",
+      "avatarChange": "Change photo",
+      "avatarRemove": "Remove photo",
+      "avatarUpdated": "Profile photo updated.",
+      "avatarRemoved": "Profile photo removed.",
+      "avatarInvalid": "This file is not a readable image (PNG, JPEG, WebP or GIF).",
+      "avatarTooLarge": "Image too large (10 MB max).",
+      "accountSectionHint": "Change your password. The email address cannot be changed.",
+      "emailReadonlyHint": "The email address cannot be changed.",
+      "currentPasswordIncorrect": "Current password is incorrect."
+    },
+    "servers": {
+      "addTitle": "Add a server",
+      "createTitle": "Create a server",
+      "nameLabel": "Server name",
+      "publicLabel": "Public server (anyone can find and join it)",
+      "create": "Create server",
+      "created": "Server created.",
+      "discoverTitle": "Join a public server",
+      "searchPlaceholder": "Search a server…",
+      "noPublic": "No public server to join.",
+      "join": "Join",
+      "joined": "Server joined.",
+      "memberCount": "{n} member(s)",
+      "menu": "Server menu",
+      "invitePeople": "Invite people",
+      "inviteInto": "Invite to {name}",
+      "membersOf": "Members of {name}",
+      "roleOwner": "Owner",
+      "makeModerator": "Make moderator",
+      "removeModerator": "Remove moderator",
+      "roleUpdated": "Role updated.",
+      "kick": "Kick",
+      "kicked": "Member kicked.",
+      "updated": "Server updated.",
+      "leave": "Leave server",
+      "leaveConfirm": "Leave this server?",
+      "left": "You left the server.",
+      "delete": "Delete server",
+      "deleteConfirm": "Delete this server and all its channels?",
+      "deleted": "Server deleted.",
+      "defaultServerInfo": "Chatvardage is everyone's server: you can't leave it.",
+      "noActions": "No action available.",
+      "kickedFrom": "You were kicked from the server {name}.",
+      "newInvitation": "New invitation to join a server.",
+      "deletedNotice": "The server {name} was deleted."
     }
   }
 }

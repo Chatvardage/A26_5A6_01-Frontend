@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   creerUtilisateur,
   genererPseudoParDefaut,
-  peutGererSalons,
   validationCourriel,
   validationMotDePasse,
   validationPseudo,
@@ -73,26 +72,6 @@ describe('genererPseudoParDefaut', () => {
   it('tronque à 20 caractères maximum', () => {
     const local = 'a'.repeat(30);
     expect(genererPseudoParDefaut(`${local}@example.com`)).toHaveLength(20);
-  });
-});
-
-describe('peutGererSalons', () => {
-  it('retourne true pour un modérateur', () => {
-    expect(peutGererSalons({ role: 'moderateur' })).toBe(true);
-  });
-
-  it('retourne true pour un admin', () => {
-    expect(peutGererSalons({ role: 'admin' })).toBe(true);
-  });
-
-  it('retourne false pour un utilisateur régulier', () => {
-    expect(peutGererSalons({ role: 'utilisateur' })).toBe(false);
-  });
-
-  it('retourne false si le rôle est inconnu (undefined/null)', () => {
-    expect(peutGererSalons({ role: undefined })).toBe(false);
-    expect(peutGererSalons(null)).toBe(false);
-    expect(peutGererSalons(undefined)).toBe(false);
   });
 });
 

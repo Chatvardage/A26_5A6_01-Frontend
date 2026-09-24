@@ -1,5 +1,88 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+// --- Barre de titre personnalisée ----------------------------------------------
+// Hors macOS, la fenêtre n'a pas de cadre (frame: false, voir createWindow
+// dans main.js) : on ajoute sur chaque page une bande glissable avec le nom
+// de l'app et les boutons réduire/agrandir/fermer. Son style (.app-titlebar)
+// vit dans styles.css et connexion.css, qui réservent sa place dès le
+// premier affichage (la page ne « saute » donc pas quand elle apparaît).
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const ICONES_FENETRE = {
+  reduire: 'M2 6h8',
+  agrandir: 'M2.5 2.5h7v7h-7z',
+  restaurer: 'M4 2h6v6M2 4h6v6H2z',
+  fermer: 'M2.5 2.5l7 7M9.5 2.5l-7 7',
+};
+
+function creerIconeFenetre(nom) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 12 12');
+  svg.setAttribute('aria-hidden', 'true');
+  const trace = document.createElementNS(SVG_NS, 'path');
+  trace.setAttribute('d', ICONES_FENETRE[nom]);
+  svg.appendChild(trace);
+  return svg;
+}
+
+function creerBoutonFenetre(nom, libelle, canal) {
+  const bouton = document.createElement('button');
+  bouton.type = 'button';
+  bouton.className = `app-titlebar-btn app-titlebar-btn--${nom}`;
+  bouton.setAttribute('aria-label', libelle);
+  bouton.title = libelle;
+  bouton.appendChild(creerIconeFenetre(nom));
+  bouton.addEventListener('click', () => ipcRenderer.invoke(canal));
+  return bouton;
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  if (document.querySelector('.app-titlebar')) return;
+  const barre = document.createElement('div');
+  barre.className = 'app-titlebar';
+  const titre = document.createElement('span');
+  titre.className = 'app-titlebar-title';
+  titre.textContent = 'ChatVardage';
+  barre.appendChild(titre);
+
+  if (process.platform === 'darwin') {
+    document.documentElement.classList.add('platform-darwin');
+  } else {
+    const boutons = document.createElement('div');
+    boutons.className = 'app-titlebar-controls';
+    const agrandir = creerBoutonFenetre(
+      'agrandir',
+      'Agrandir',
+      'fenetre:agrandir'
+    );
+    const afficherMaximisee = (maximisee) => {
+      agrandir.replaceChildren(
+        creerIconeFenetre(maximisee ? 'restaurer' : 'agrandir')
+      );
+    };
+    ipcRenderer.on('fenetre:maximisee', (_event, maximisee) =>
+      afficherMaximisee(maximisee)
+    );
+    ipcRenderer
+      .invoke('fenetre:est-maximisee')
+      .then(afficherMaximisee)
+      .catch(() => {});
+    boutons.append(
+      creerBoutonFenetre('reduire', 'Réduire', 'fenetre:reduire'),
+      agrandir,
+      creerBoutonFenetre('fermer', 'Fermer', 'fenetre:fermer')
+    );
+    barre.appendChild(boutons);
+    // Double-clic sur la bande : agrandir/restaurer, comme une barre native.
+    barre.addEventListener('dblclick', (event) => {
+      if (!event.target.closest('.app-titlebar-controls')) {
+        ipcRenderer.invoke('fenetre:agrandir');
+      }
+    });
+  }
+
+  document.body.prepend(barre);
+});
+
 // --- API preload minimale ---------------------------------------------------
 // Principe : le renderer n'a JAMAIS accès à ipcRenderer, require, process, fs,
 // etc. Il n'a accès qu'aux méthodes explicitement listées ci-dessous.
@@ -41,6 +124,13 @@ contextBridge.exposeInMainWorld('notifications', {
   // conversationId }`. Chaque page (renderer.js / message-prive.js) décide
   // d'ouvrir directement la conversation si elle est déjà sur la bonne
   // page, ou de naviguer vers l'autre page en mémorisant la cible.
+  // Repli quand le système n'a pas de service de notifications (ex. WSL,
+  // voir notifierParRepli dans main.js) : `{ type, conversationId, contenu }`.
+  onNotificationRepli: (callback) => {
+    const ecouteur = (_event, message) => callback(message);
+    ipcRenderer.on('notifications:repli', ecouteur);
+    return () => ipcRenderer.removeListener('notifications:repli', ecouteur);
+  },
   onNavigateToConversation: (callback) => {
     const ecouteur = (_event, cible) => callback(cible);
     ipcRenderer.on('notifications:naviguer-vers-conversation', ecouteur);
@@ -82,9 +172,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   configObtenir: () => ipcRenderer.invoke('config:obtenir'),
   configModifier: (donnees) => ipcRenderer.invoke('config:modifier', donnees),
 
+  // Préférences du compte (thème, langue, mode de notification, alias),
+  // tenues à jour par main.js depuis User-Config-Service et poussées à
+  // chaque changement via 'preferences:change'.
+  obtenirPreferences: () => ipcRenderer.invoke('preferences:obtenir'),
+  modifierPreferences: (donnees) =>
+    ipcRenderer.invoke('preferences:modifier', donnees),
+  onPreferencesChange: (rappel) => {
+    const ecouteur = (_event, preferences) => rappel(preferences);
+    ipcRenderer.on('preferences:change', ecouteur);
+    return () => ipcRenderer.removeListener('preferences:change', ecouteur);
+  },
+
   obtenirEtatReseau: () => ipcRenderer.invoke('reseau:etat'),
-  simulerCoupureReseau: () => ipcRenderer.invoke('reseau:coupure'),
-  simulerReconnexionReseau: () => ipcRenderer.invoke('reseau:reconnexion'),
+  // "Réessayer maintenant" : saute le délai de la reconnexion automatique.
+  reessayerConnexion: () => ipcRenderer.invoke('reseau:reessayer'),
   obtenirPresences: () => ipcRenderer.invoke('presence:obtenir'),
   modifierPresence: (statut) =>
     ipcRenderer.invoke('presence:modifier', { statut }),
@@ -92,6 +194,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const ecouteur = (_event, etat) => rappel(etat);
     ipcRenderer.on('reseau:etat-change', ecouteur);
     return () => ipcRenderer.removeListener('reseau:etat-change', ecouteur);
+  },
+  // Avatar/alias d'autres utilisateurs modifié : payload = liste d'ids.
+  onProfilsPublicsChange: (rappel) => {
+    const ecouteur = (_event, ids) => rappel(ids);
+    ipcRenderer.on('utilisateurs:profils-change', ecouteur);
+    return () =>
+      ipcRenderer.removeListener('utilisateurs:profils-change', ecouteur);
+  },
+  // Changement dans un de mes serveurs : `{ serveurId, raison, cibleId }`
+  // (raison : modifie, supprime, membres, expulse, invitation, salons).
+  onServeurChange: (rappel) => {
+    const ecouteur = (_event, evenement) => rappel(evenement);
+    ipcRenderer.on('serveurs:change', ecouteur);
+    return () => ipcRenderer.removeListener('serveurs:change', ecouteur);
   },
   onPresenceChange: (rappel) => {
     const ecouteur = (_event, presence) => rappel(presence);
@@ -125,6 +241,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // déconnecter" du dashboard/messages privés/profil, après l'appel à
   // deconnexionSession() ci-dessus.
   allerALaConnexion: () => ipcRenderer.invoke('navigation:connexion'),
+  // Motif d'un retour automatique à l'écran de connexion ('session-expiree'
+  // ou null), lu une seule fois (voir main.js).
+  obtenirMotifRetourConnexion: () =>
+    ipcRenderer.invoke('navigation:motif-retour-connexion'),
 
   obtenirLangue: () => ipcRenderer.invoke('langue:obtenir'),
   definirLangue: (langue) => ipcRenderer.invoke('langue:definir', { langue }),
@@ -135,28 +255,43 @@ contextBridge.exposeInMainWorld('electronAPI', {
   definirTheme: (theme) => ipcRenderer.invoke('theme:definir', { theme }),
   obtenirThemeParDefaut: () => ipcRenderer.invoke('theme:par-defaut'),
 
-  obtenirEtatSalons: (utilisateurId) =>
-    ipcRenderer.invoke('salons:etat', { utilisateurId }),
-  // Pagination "charger plus ancien" de l'historique d'un salon (voir
-  // obtenirMessagesSalonAvant dans MockGatewayRuntime.js) : salons:etat
+  // État de la page des salons : mes serveurs, le serveur actif (ou celui
+  // contenant `salonId`) avec ses salons, mes invitations.
+  obtenirEtatSalons: ({ serveurId, salonId } = {}) =>
+    ipcRenderer.invoke('salons:etat', { serveurId, salonId }),
+  // Pagination "charger plus ancien" de l'historique d'un salon : salons:etat
   // ci-dessus ne renvoie déjà plus que la page de messages la plus récente.
   obtenirMessagesSalonAvant: (donnees) =>
     ipcRenderer.invoke('salons:messages-avant', donnees),
+
+  // Serveurs (Room-Service). Les droits réels sont vérifiés côté serveur.
+  obtenirServeurs: () => ipcRenderer.invoke('serveurs:lister'),
+  creerServeur: (donnees) => ipcRenderer.invoke('serveurs:creer', donnees),
+  modifierServeur: (donnees) =>
+    ipcRenderer.invoke('serveurs:modifier', donnees),
+  supprimerServeur: (serveurId) =>
+    ipcRenderer.invoke('serveurs:supprimer', { serveurId }),
+  rejoindreServeur: (serveurId) =>
+    ipcRenderer.invoke('serveurs:rejoindre', { serveurId }),
+  quitterServeur: (serveurId) =>
+    ipcRenderer.invoke('serveurs:quitter', { serveurId }),
+  decouvrirServeurs: (texte) =>
+    ipcRenderer.invoke('serveurs:decouvrir', { texte }),
+  expulserMembre: (donnees) => ipcRenderer.invoke('serveurs:expulser', donnees),
+  changerRoleMembre: (donnees) =>
+    ipcRenderer.invoke('serveurs:changer-role', donnees),
+  inviterAuServeur: (donnees) =>
+    ipcRenderer.invoke('serveurs:inviter', donnees),
+  accepterInvitation: (donnees) =>
+    ipcRenderer.invoke('serveurs:accepter-invitation', donnees),
+  refuserInvitation: (donnees) =>
+    ipcRenderer.invoke('serveurs:refuser-invitation', donnees),
+
+  // Salons d'un serveur : modérateur du serveur minimum.
   creerSalon: (donnees) => ipcRenderer.invoke('salons:creer', donnees),
-  // Gestion d'un salon (réservée aux modérateurs/admins, voir
-  // peutGererSalons côté domaine Utilisateur) : renommer/changer visibilité,
-  // supprimer, quitter, retirer un membre.
   modifierSalon: (donnees) => ipcRenderer.invoke('salons:modifier', donnees),
   supprimerSalon: (salonId) =>
     ipcRenderer.invoke('salons:supprimer', { salonId }),
-  quitterSalon: (salonId) => ipcRenderer.invoke('salons:quitter', { salonId }),
-  retirerMembreSalon: (donnees) =>
-    ipcRenderer.invoke('salons:retirer-membre', donnees),
-  inviterAuSalon: (donnees) => ipcRenderer.invoke('salons:inviter', donnees),
-  accepterInvitation: (donnees) =>
-    ipcRenderer.invoke('salons:accepter-invitation', donnees),
-  refuserInvitation: (donnees) =>
-    ipcRenderer.invoke('salons:refuser-invitation', donnees),
   envoyerMessageSalon: (donnees) =>
     ipcRenderer.invoke('salons:envoyer-message', donnees),
   modifierMessage: (donnees) =>
@@ -165,8 +300,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('messages:supprimer', donnees),
   navigate: (page) => ipcRenderer.invoke('navigate', page),
   obtenirUtilisateurs: () => ipcRenderer.invoke('utilisateurs:lister'),
+  // Fenêtre "Nouveau message privé" : suggestions (membres de ses salons,
+  // interlocuteurs connus) et recherche par début de pseudo.
+  obtenirSuggestionsDm: () => ipcRenderer.invoke('utilisateurs:suggestions-dm'),
+  rechercherUtilisateurs: (texte) =>
+    ipcRenderer.invoke('utilisateurs:rechercher', { texte }),
   obtenirConversationsPrivees: (utilisateurId) =>
     ipcRenderer.invoke('obtenir-conversations-privees', { utilisateurId }),
+  // Pastilles « non lu » : { id, lastMessage } par conversation, en un seul
+  // appel réseau (sans l'historique de chaque conversation).
+  obtenirResumesConversationsPrivees: () =>
+    ipcRenderer.invoke('resumes-conversations-privees'),
   // Pagination "charger plus ancien" de l'historique d'une conversation
   // privée (voir obtenirMessagesPriveesAvant dans MockGatewayRuntime.js) :
   // obtenir-conversations-privees ci-dessus ne renvoie déjà plus que la page

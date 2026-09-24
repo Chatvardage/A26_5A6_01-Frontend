@@ -14,11 +14,10 @@
 tests n'existent plus, ainsi que le switch `CHATVARDAGE_BACKEND=mock`). L'app
 parle uniquement au vrai backend via `RealGatewayRuntime`
 (`src/infrastructure/gateways/RealGatewayRuntime.js`, côté processus main,
-chemin réellement exécuté par Electron). `HttpWebSocketGateway`
-(`src/infrastructure/gateways/HttpWebSocketGateway.ts`) reste une
-implémentation TypeScript de référence du même contrat `ChatGateway`/
-`AuthGateway`, pour un usage hors Electron — elle n'est pas branchée dans
-l'app elle-même (voir son en-tête).
+chemin réellement exécuté par Electron). C'est la seule implémentation du
+contrat : l'ancienne implémentation de référence `HttpWebSocketGateway.ts`,
+jamais branchée et désynchronisée du vrai Gateway, a été retirée
+(récupérable dans l'historique Git).
 
 ### Comment ça marche
 
@@ -28,9 +27,11 @@ l'app elle-même (voir son en-tête).
 - **Socket.IO** (namespace `/messages`) pour le temps réel : nouveaux
   messages (salon et DM), messages modifiés/supprimés, indicateur de saisie.
 - Reconnexion automatique avec un délai croissant (1s → 15s max) si la
-  connexion tombe involontairement, avec passage de l'état `connecte` →
-  `reconnexion` → `connecte` (ou `deconnecte` si la fermeture est
-  volontaire — boutons "Coupure"/"Reconnexion").
+  connexion tombe (`disconnect` ou `connect_error`), avec passage de l'état
+  `connecte` → `reconnexion` → `connecte`. L'état réseau de l'OS
+  (`net.isOnline`, sortie de veille via `powerMonitor`) est relayé par
+  main.js : hors ligne → `deconnecte` (cause `hors-ligne`), sans tentative.
+  Un battement de cœur `GET /api/health` (15 s) détecte un socket zombie.
 
 ### Infrastructure réelle (ChatVardage)
 
@@ -75,7 +76,13 @@ respectifs pour le détail par service.
 
 Socket.IO (`/messages`, `auth: { token }`) : `private-message.created/updated/deleted`,
 `room-message.created/updated/deleted` (client émet aussi `room-message.join`/
-`leave`/`send`), `typing` (éphémère, salon et DM).
+`leave`/`send` — seulement après `connexion.prete`, voir plus bas),
+`connexion.prete` (socket authentifié par Message-Service : le client
+annonce alors sa présence et rejoint ses salons ; avant, le serveur refuse
+ses événements — repli au bout de 5 s si l'événement n'arrive jamais, par
+exemple face à un Message-Service plus ancien), `room-message.revoked` (accès au salon perdu : le client
+oublie la room et la rejoindra si l'accès revient), `typing` (éphémère,
+salon et DM).
 
 **Rôles et autorisation** : il n'y a plus de notion d'« hôte »/propriétaire
 par salon. L'autorité (créer/renommer/changer visibilité/supprimer un salon,
@@ -83,10 +90,13 @@ inviter, retirer un membre) vient uniquement du rôle global de l'utilisateur
 (`utilisateur` / `moderateur` / `admin`, retourné par Authentification) —
 voir `peutGererSalons` dans `src/domain/entities/Utilisateur.ts`.
 
-**Lacune backend connue et assumée** : aucun service n'expose la présence
-d'un AUTRE utilisateur (seule la sienne, via `/api/config-utilisateur/presence`) —
-la présence affichée pour les autres reste "hors-ligne" par défaut tant que
-ce n'est pas ajouté côté backend.
+**Présence et photos des autres** : `GET /api/config-utilisateur/publiques?ids=…`
+(User-Config-Service) renvoie alias, avatar et présence **effective** (`actif`
+= statut `enLigne` ET signe de vie de moins de 90 s). Le client renvoie
+`PUT /api/config-utilisateur/presence` toutes les 20 s tant qu'il est « en
+ligne » : une app fermée, plantée ou coupée du réseau apparaît donc hors
+ligne aux autres au bout de 90 s. Présences rafraîchies toutes les 20 s,
+avatars un tour sur six (~2 min) ou dès qu'un nouvel utilisateur apparaît.
 
 ### Authentification (pseudo/courriel + mot de passe)
 

@@ -8,9 +8,10 @@ import type { Utilisateur } from '../../domain/entities/Utilisateur.ts';
  * utilisateur DÉJÀ identifié (ancien flux "pseudo seul, sans mot de passe").
  * Réutiliser ce même nom pour un login par identifiant + mot de passe
  * casserait sa signature pour toute implémentation existante de
- * `ChatGateway` (ex. MockGateway.ts, utilisé par les tests). `AuthGateway`
- * peut donc être implémenté EN PLUS de `ChatGateway` par une même classe
- * (voir HttpWebSocketGateway.ts) sans conflit de nom.
+ * `ChatGateway`. `AuthGateway` peut donc être implémenté EN PLUS de
+ * `ChatGateway` par une même classe sans conflit de nom. Implémentation
+ * réelle : RealGatewayRuntime.js (processus main), exposée à la page de
+ * connexion via window.electronAPI (voir main.tsx).
  */
 
 /** Identifiants fournis à l'écran de connexion : pseudo OU courriel, au choix. */

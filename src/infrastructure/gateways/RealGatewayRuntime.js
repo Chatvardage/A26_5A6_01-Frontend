@@ -18,7 +18,34 @@ const DELAI_RECONNEXION_INITIAL_MS = 1000;
 const DELAI_RECONNEXION_MAX_MS = 15000;
 const TAILLE_PAGE_MESSAGES = 15;
 const INTERVALLE_POLL_PRESENCE_MS = 20000;
+// Limite serveur de GET /api/config-utilisateur/publiques.
+const NOMBRE_MAX_IDS_PUBLICS = 100;
+// Limite serveur de GET /api/users/lookup (Authentification, LOOKUP_MAX_IDS) :
+// au-delà, la requête entière est refusée (400).
+const NOMBRE_MAX_IDS_LOOKUP = 100;
+// Un « hors ligne » reçu en temps réel (socket fermé, voir Message-Service)
+// prime sur le sondage pendant ce délai : User-Config-Service ne constate
+// l'absence qu'après ~90 s sans signe de vie (voir `actif`).
+const DUREE_PRIORITE_HORS_LIGNE_MS = 100_000;
+const INTERVALLE_BATTEMENT_COEUR_MS = 15000;
+// Repli si Message-Service n'envoie jamais 'connexion.prete' (version plus
+// ancienne, déployée séparément) : passé ce délai après 'connect', le socket
+// est considéré comme prêt — l'authentification côté serveur (un appel à
+// Auth-Service, 3 s max) est alors forcément terminée.
+const DELAI_REPLI_CONNEXION_PRETE_MS = 5000;
+// Délai d'accusé de réception de 'room-message.join' (Message-Service
+// vérifie l'accès auprès de Room-Service, ROOM_SERVICE_TIMEOUT_MS = 3 s).
+const DELAI_ACK_REJOINDRE_SALON_MS = 8000;
+const DELAI_BATTEMENT_COEUR_MS = 5000;
+// Cause d'un état non connecté (voir EtatConnexion.ts) : affichée à
+// l'utilisateur pour distinguer "ta machine n'a pas de réseau" de "le
+// serveur ne répond pas".
+const CAUSE_HORS_LIGNE = 'hors-ligne';
+const CAUSE_SERVEUR_INJOIGNABLE = 'serveur-injoignable';
 const NOM_FICHIER_SESSION = 'session.json';
+// Appels qui ne supposent pas de session ouverte : un 401 y veut dire
+// « identifiants invalides », jamais « session expirée ».
+const CHEMINS_SANS_SESSION = ['/api/auth/login', '/api/auth/register'];
 
 /**
  * Chemin du petit fichier JSON persistant le jeton de session (voir
@@ -33,20 +60,64 @@ function cheminFichierSession() {
   return path.join(app.getPath('userData'), NOM_FICHIER_SESSION);
 }
 
+/**
+ * Chiffrement du jeton par le système (`safeStorage` d'Electron : trousseau
+ * Windows/macOS, libsecret/KWallet sous Linux), ou `null` s'il n'est pas
+ * disponible. Sous Linux sans trousseau, Electron se rabat sur une clé fixe
+ * ('basic_text') : c'est alors de l'obscurcissement, pas une vraie protection.
+ */
+function coffreJeton() {
+  const { safeStorage } = require('electron');
+  return safeStorage?.isEncryptionAvailable?.() ? safeStorage : null;
+}
+
+/**
+ * Relit le jeton persisté. Format courant : `{ jetonChiffre }` (base64 du
+ * jeton chiffré par coffreJeton). Ancien format `{ jeton }` en clair : relu,
+ * puis réécrit chiffré si possible (migration sans reconnexion). Tout échec
+ * (fichier absent ou illisible, déchiffrement impossible — trousseau changé,
+ * autre machine…) renvoie `null` : l'utilisateur se reconnecte simplement.
+ */
 function chargerJetonPersiste() {
   try {
     const contenu = fs.readFileSync(cheminFichierSession(), 'utf8');
     const donnees = JSON.parse(contenu);
-    return typeof donnees.jeton === 'string' && donnees.jeton ? donnees.jeton : null;
+    if (typeof donnees.jetonChiffre === 'string' && donnees.jetonChiffre) {
+      const coffre = coffreJeton();
+      if (!coffre) return null;
+      const jeton = coffre.decryptString(Buffer.from(donnees.jetonChiffre, 'base64'));
+      return jeton || null;
+    }
+    if (typeof donnees.jeton === 'string' && donnees.jeton) {
+      if (coffreJeton()) sauvegarderJetonPersiste(donnees.jeton);
+      return donnees.jeton;
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
+/**
+ * Persiste le jeton de session (ou l'efface si `jeton` est vide). Chiffré par
+ * le système quand c'est possible ; sinon, en clair (repli) — dans les deux
+ * cas dans un fichier lisible par son seul propriétaire (0600).
+ */
 function sauvegarderJetonPersiste(jeton) {
   try {
     if (jeton) {
-      fs.writeFileSync(cheminFichierSession(), JSON.stringify({ jeton }), 'utf8');
+      const coffre = coffreJeton();
+      const donnees = coffre
+        ? { jetonChiffre: coffre.encryptString(jeton).toString('base64') }
+        : { jeton };
+      const chemin = cheminFichierSession();
+      fs.writeFileSync(chemin, JSON.stringify(donnees), {
+        encoding: 'utf8',
+        mode: 0o600,
+      });
+      // `mode` ne s'applique qu'à la création : un ancien fichier garderait
+      // ses droits d'origine.
+      fs.chmodSync(chemin, 0o600);
     } else {
       fs.rmSync(cheminFichierSession(), { force: true });
     }
@@ -77,11 +148,11 @@ function sauvegarderJetonPersiste(jeton) {
  * IGNORÉS : l'acteur réel est toujours l'utilisateur authentifié
  * (`this.utilisateurConnecte`), déduit du jeton JWT côté serveur.
  *
- * Lacune backend connue et assumée (voir Architecture.md) : aucun service
- * n'expose la présence d'un AUTRE utilisateur (seul `PUT
- * /api/config-utilisateur/presence` existe, pour SOI-MÊME). La présence des
- * autres utilisateurs reste donc affichée "hors-ligne" par défaut tant que ce
- * n'est pas ajouté côté backend.
+ * Présence et avatar des AUTRES utilisateurs : lus via
+ * `GET /api/config-utilisateur/publiques` (voir chargerProfilsPublics), avec
+ * la présence EFFECTIVE calculée par le serveur (`actif` : statut choisi
+ * `enLigne` ET signe de vie récent — voir demarrerPollPresence, qui renvoie
+ * le nôtre toutes les 20 s).
  */
 class RealGatewayRuntime {
   constructor(config = obtenirConfiguration(), options = {}) {
@@ -101,6 +172,11 @@ class RealGatewayRuntime {
     this.socket = null;
     this.fermetureVoulue = false;
     this.delaiReconnexionActuelMs = DELAI_RECONNEXION_INITIAL_MS;
+    this.minuteurReconnexion = null;
+    this.minuteurBattementCoeur = null;
+    // Dernier état réseau connu du système d'exploitation (voir
+    // signalerReseauSysteme) : optimiste par défaut.
+    this.horsLigneSysteme = false;
 
     // Cache local des états de saisie reçus par Socket.IO (voir traiterSaisieEntrante).
     this.etatsSaisie = [];
@@ -110,6 +186,26 @@ class RealGatewayRuntime {
     // (lacune backend, voir le commentaire de classe ci-dessus), seule la
     // nôtre (via User-Config-Service) est fiable.
     this.presences = {};
+
+    // Profils publics connus (id -> { alias, avatar }), y compris le nôtre
+    // (voir memoriserProfilSoi) — voir chargerProfilsPublics.
+    this.profilsPublics = new Map();
+    // Le sondage ne retélécharge PAS les photos (jusqu'à ~90 Ko chacune, pour
+    // chaque utilisateur connu) : un changement arrive en temps réel
+    // ('profil.changed', voir traiterProfilEntrant). Seule exception : après
+    // une reconnexion du socket, un tour avec photos rattrape les changements
+    // manqués pendant la coupure.
+    this.avatarsARafraichir = false;
+    // Vrai après la première connexion du socket de la session (voir 'connect').
+    this.dejaConnecte = false;
+    // Dernier « hors ligne » reçu en temps réel par utilisateur (id -> date),
+    // voir DUREE_PRIORITE_HORS_LIGNE_MS.
+    this.horsLigneTempsReel = new Map();
+    // Utilisateurs en ligne selon Message-Service : instantané reçu à la
+    // connexion du socket ('presence.snapshot'), tenu à jour par les
+    // 'presence.changed'. Fait foi tant que le socket est connecté ; null
+    // sinon (on revient alors au sondage seul).
+    this.enLigneTempsReel = null;
 
     // Cache des utilisateurs "connus" (id -> {id, pseudo, role}), construit
     // opportunément (connexion, DM, événements temps réel) : il n'existe pas
@@ -125,11 +221,17 @@ class RealGatewayRuntime {
     // générique pour les deux (voir chat-ui-shared.js: creerActionsMessage).
     this.indexMessages = new Map();
 
-    // Ids de salons déjà rejoints (join HTTP + Socket.IO room) durant cette
-    // session, pour éviter de rejoindre en double (voir assurerAdhesionSalon
-    // / rejoindreSocketSalon).
+    // Ids des salons dont on a rejoint la room Socket.IO durant cette session
+    // (voir assurerAdhesionSocketSeulement / rejoindreSocketSalon).
     this.salonsRejoints = new Set();
     this.roomsSocketRejointes = new Set();
+    // Vrai une fois le socket courant authentifié par Message-Service
+    // ('connexion.prete', voir connecterSocket).
+    this.socketPret = false;
+    this.minuteurRepliConnexionPrete = null;
+    // Vrai pendant la revérification du jeton après un 401 (voir
+    // verifierSessionApres401).
+    this.verificationSessionEnCours = false;
 
     // Partenaires de conversation privée connus localement cette session,
     // en complément de GET /api/messages/conversations (voir
@@ -137,6 +239,13 @@ class RealGatewayRuntime {
     // garantit qu'une conversation tout juste démarrée apparaisse
     // immédiatement sans attendre un rafraîchissement serveur.
     this.partenairesDmConnus = new Set();
+
+    // Serveurs de l'utilisateur (dernier GET /api/servers) et index
+    // salonId -> serveurId, pour router un message entrant vers son serveur
+    // (pastille "non lu" du rail) et ouvrir le bon serveur depuis une
+    // notification.
+    this.serveurs = new Map();
+    this.salonVersServeur = new Map();
 
     this.minuteurPollPresence = null;
 
@@ -197,6 +306,16 @@ class RealGatewayRuntime {
       throw new Error('ERR_RESEAU_INDISPONIBLE');
     }
     if (!reponse.ok) {
+      // Session ouverte et requête refusée : le jeton a peut-être expiré ou
+      // été révoqué (voir verifierSessionApres401). Pas pour la connexion /
+      // l'inscription elles-mêmes, ni pendant une reprise de session.
+      if (
+        reponse.status === 401 &&
+        this.utilisateurConnecte &&
+        !CHEMINS_SANS_SESSION.includes(chemin)
+      ) {
+        void this.verifierSessionApres401();
+      }
       const corpsErreur = await reponse.json().catch(() => null);
       const erreur = new Error(`ERR_HTTP_${reponse.status}`);
       erreur.statut = reponse.status;
@@ -207,11 +326,18 @@ class RealGatewayRuntime {
     return reponse.json();
   }
 
-  definirEtatConnexion(statut) {
+  definirEtatConnexion(statut, { cause, prochaineTentative } = {}) {
     this.etatConnexion = {
       statut,
-      depuis: Date.now(),
+      // `depuis` ne bouge que si le statut change (ex. plusieurs tentatives
+      // de reconnexion successives gardent le même "depuis").
+      depuis:
+        this.etatConnexion?.statut === statut
+          ? this.etatConnexion.depuis
+          : Date.now(),
       reconnexions: this.reconnexions,
+      cause: statut === 'connecte' ? undefined : cause,
+      prochaineTentative,
     };
     this.emettre('etat-connexion', this.etatConnexion);
     return { ...this.etatConnexion };
@@ -247,7 +373,11 @@ class RealGatewayRuntime {
    * utilisateur non-admin.
    */
   obtenirUtilisateurs() {
-    return [...this.utilisateursConnus.values()].map((item) => ({ ...item }));
+    return [...this.utilisateursConnus.values()].map((item) => ({
+      ...item,
+      alias: this.profilsPublics.get(item.id)?.alias ?? null,
+      avatar: this.profilsPublics.get(item.id)?.avatar ?? null,
+    }));
   }
 
   /**
@@ -259,21 +389,171 @@ class RealGatewayRuntime {
    * l'UI).
    */
   async resoudrePseudos(ids) {
-    const inconnus = [...new Set(ids)].filter(
-      (id) => id && !this.utilisateursConnus.has(id)
+    const uniques = [...new Set(ids)].filter(Boolean);
+    const inconnus = uniques.filter((id) => !this.utilisateursConnus.has(id));
+    // Profils publics (avatar, présence) jamais chargés : en parallèle de la
+    // résolution des pseudos, pour que la première vue affiche déjà les photos.
+    const sansProfil = uniques.filter(
+      (id) =>
+        id !== this.utilisateurConnecte?.id && !this.profilsPublics.has(id)
     );
-    if (!inconnus.length) return;
-    try {
-      const resultats = await this.appelHttp(
-        `/api/users/lookup?ids=${inconnus.map(encodeURIComponent).join(',')}`
+    await Promise.all([
+      inconnus.length ? this.resoudrePseudosInconnus(inconnus) : null,
+      sansProfil.length ? this.chargerProfilsPublics(sansProfil) : null,
+    ]);
+  }
+
+  async resoudrePseudosInconnus(inconnus) {
+    // Par lots (voir NOMBRE_MAX_IDS_LOOKUP), en parallèle : un lot en erreur
+    // n'empêche pas de résoudre les autres.
+    const lots = [];
+    for (let i = 0; i < inconnus.length; i += NOMBRE_MAX_IDS_LOOKUP) {
+      lots.push(inconnus.slice(i, i + NOMBRE_MAX_IDS_LOOKUP));
+    }
+    await Promise.all(
+      lots.map(async (lot) => {
+        try {
+          const resultats = await this.appelHttp(
+            `/api/users/lookup?ids=${lot.map(encodeURIComponent).join(',')}`
+          );
+          for (const item of resultats ?? []) {
+            this.enregistrerUtilisateurConnu(item);
+          }
+        } catch {
+          // Résolution best-effort : voir docstring.
+        }
+      })
+    );
+  }
+
+  /**
+   * Charge alias/avatar/présence d'autres utilisateurs
+   * (`GET /api/config-utilisateur/publiques`, 100 ids par requête). Émet
+   * 'presence' pour chaque présence qui change, et 'profils-publics' si un
+   * avatar ou un alias a changé (pour que l'UI redessine). Best-effort.
+   */
+  async chargerProfilsPublics(ids, { inclureAvatar = true } = {}) {
+    const cibles = [...new Set(ids)].filter(
+      (id) => id && id !== this.utilisateurConnecte?.id
+    );
+    const profilsModifies = [];
+    for (let i = 0; i < cibles.length; i += NOMBRE_MAX_IDS_PUBLICS) {
+      const lot = cibles.slice(i, i + NOMBRE_MAX_IDS_PUBLICS);
+      let resultats;
+      try {
+        resultats = await this.appelHttp(
+          `/api/config-utilisateur/publiques?ids=${lot.map(encodeURIComponent).join(',')}` +
+            (inclureAvatar ? '' : '&inclureAvatar=false')
+        );
+      } catch {
+        continue;
+      }
+      const parId = new Map((resultats ?? []).map((p) => [p.idUtilisateur, p]));
+      for (const id of lot) {
+        // Absent de la réponse = aucune configuration : hors ligne, sans photo.
+        const profil = parId.get(id);
+        const precedent = this.profilsPublics.get(id);
+        const suivant = {
+          alias: profil?.alias ?? null,
+          avatar: inclureAvatar
+            ? (profil?.avatar ?? null)
+            : (precedent?.avatar ?? null),
+        };
+        if (
+          precedent &&
+          (precedent.alias !== suivant.alias || precedent.avatar !== suivant.avatar)
+        ) {
+          profilsModifies.push(id);
+        }
+        this.profilsPublics.set(id, suivant);
+        const horsLigneRecent =
+          Date.now() - (this.horsLigneTempsReel.get(id) ?? 0) <
+          DUREE_PRIORITE_HORS_LIGNE_MS;
+        // Hors ligne selon User-Config-Service : fait toujours foi. En ligne :
+        // confirmé par le temps réel s'il est disponible (voir
+        // enLigneTempsReel), sinon sauf « hors ligne » tout récent.
+        const confirmeEnLigne = this.enLigneTempsReel
+          ? this.enLigneTempsReel.has(id)
+          : !horsLigneRecent;
+        const statut =
+          profil?.actif && confirmeEnLigne ? 'en-ligne' : 'hors-ligne';
+        if (this.presences[id] !== statut) {
+          this.definirPresenceInterne({ utilisateurId: id, statut });
+        }
+      }
+    }
+    if (profilsModifies.length) this.emettre('profils-publics', profilsModifies);
+  }
+
+  /**
+   * Candidats "Nouveau message privé" : description d'affichage (nom,
+   * alias, avatar, présence) d'une liste d'ids déjà résolus, sans
+   * soi-même, triée par nom affiché.
+   */
+  decrireUtilisateurs(ids) {
+    const moi = this.utilisateurConnecte?.id;
+    return [...new Set(ids)]
+      .filter((id) => id !== moi && this.utilisateursConnus.has(id))
+      .map((id) => ({
+        id,
+        pseudo: this.utilisateursConnus.get(id).pseudo,
+        alias: this.profilsPublics.get(id)?.alias ?? null,
+        avatar: this.profilsPublics.get(id)?.avatar ?? null,
+        present: this.presences[id] === 'en-ligne',
+      }))
+      .sort((a, b) =>
+        (a.alias || a.pseudo).localeCompare(b.alias || b.pseudo, undefined, {
+          sensitivity: 'base',
+        })
       );
-      for (const item of resultats ?? []) {
-        this.enregistrerUtilisateurConnu(item);
+  }
+
+  /**
+   * Suggestions de personnes à qui écrire, sans rien taper : membres de
+   * tous ses serveurs (`GET /api/servers`, sans charger les messages) et
+   * interlocuteurs de DM déjà connus. Ne dépend donc plus
+   * d'une visite préalable de la page des salons.
+   */
+  async obtenirSuggestionsDm() {
+    const ids = new Set(this.partenairesDmConnus);
+    try {
+      const serveurs = await this.chargerServeurs();
+      for (const serveur of serveurs) {
+        for (const membre of serveur.membres) ids.add(membre.utilisateurId);
       }
     } catch {
-      // Résolution best-effort : voir docstring.
+      // Best-effort : on garde au moins les interlocuteurs connus.
     }
+    await this.resoudrePseudos([...ids]);
+    return this.decrireUtilisateurs([...ids]);
   }
+
+  /**
+   * Recherche par début de pseudo (`GET /api/users/search`, Authentification)
+   * pour écrire à quelqu'un avec qui on ne partage aucun salon.
+   */
+  async rechercherUtilisateurs(texte) {
+    const q = String(texte ?? '').trim().slice(0, 20);
+    if (!q) return [];
+    const resultats = await this.appelHttp(
+      `/api/users/search?q=${encodeURIComponent(q)}&limit=20`
+    );
+    for (const item of resultats ?? []) this.enregistrerUtilisateurConnu(item);
+    const ids = (resultats ?? []).map((item) => item.id);
+    await this.resoudrePseudos(ids);
+    return this.decrireUtilisateurs(ids);
+  }
+
+  /** Notre propre alias/avatar, pour obtenirUtilisateurs() (messages que
+   * l'on a soi-même envoyés, liste des membres). */
+  memoriserProfilSoi(config) {
+    if (!this.utilisateurConnecte) return;
+    this.profilsPublics.set(this.utilisateurConnecte.id, {
+      alias: config.alias ?? null,
+      avatar: config.avatar ?? null,
+    });
+  }
+
 
   // --- Session / authentification --------------------------------------------
 
@@ -297,9 +577,15 @@ class RealGatewayRuntime {
     this.enregistrerUtilisateurConnu(this.utilisateurConnecte);
     this.sauvegarderJetonPersiste(jeton);
     this.fermetureVoulue = false;
+    this.annulerReconnexionPlanifiee();
+    this.delaiReconnexionActuelMs = DELAI_RECONNEXION_INITIAL_MS;
+    // L'appel HTTP qui vient de réussir prouve que le serveur est joignable :
+    // 'connecte' tout de suite, le socket prendra le relais (et planifiera
+    // une reconnexion s'il n'arrive pas à s'ouvrir).
+    this.horsLigneSysteme = false;
+    const etatConnexion = this.definirEtatConnexion('connecte');
     this.connecterSocket();
     this.demarrerPollPresence();
-    const etatConnexion = this.definirEtatConnexion('connecte');
     return { utilisateur: this.utilisateurConnecte, etatConnexion };
   }
 
@@ -325,9 +611,15 @@ class RealGatewayRuntime {
    * sur une valeur que l'utilisateur n'a de toute façon pas choisie
    * lui-même — il pourra la changer ensuite sur l'écran "Choisis ton pseudo"
    * (voir InscriptionPage.tsx) ou la page profil.
+   *
+   * UNE seule relance : Authentification renvoie le même 409 pour un pseudo
+   * OU un courriel déjà pris. Si le pseudo randomisé (quasi sûrement libre)
+   * est lui aussi refusé, c'est le courriel : inutile d'insister, chaque
+   * tentative compte dans la limite du Gateway (10 inscriptions / min) et
+   * le message finirait en « trop de tentatives » au lieu de « déjà utilisé ».
    */
   async inscrire({ courriel, motDePasse, pseudo }) {
-    const TENTATIVES_MAX = 4;
+    const TENTATIVES_MAX = 2;
     let pseudoTente = pseudo;
     let derniereErreur;
     for (let tentative = 0; tentative < TENTATIVES_MAX; tentative += 1) {
@@ -361,9 +653,13 @@ class RealGatewayRuntime {
     try {
       const utilisateur = await this.appelHttp('/api/auth/me');
       return this.ouvrirSession({ utilisateur, jeton });
-    } catch {
+    } catch (erreur) {
       this.jeton = null;
-      this.sauvegarderJetonPersiste(null);
+      // Ne purger le jeton que s'il est réellement refusé : un lancement
+      // hors ligne ne doit pas déconnecter définitivement l'utilisateur.
+      if (erreur?.statut === 401 || erreur?.statut === 403 || erreur?.statut === 404) {
+        this.sauvegarderJetonPersiste(null);
+      }
       return null;
     }
   }
@@ -371,8 +667,9 @@ class RealGatewayRuntime {
   async deconnexion() {
     this.fermetureVoulue = true;
     this.arreterPollPresence();
-    this.socket?.disconnect();
-    this.socket = null;
+    this.annulerReconnexionPlanifiee();
+    this.arreterBattementCoeur();
+    this.fermerSocket();
     this.jeton = null;
     this.utilisateurConnecte = null;
     this.sauvegarderJetonPersiste(null);
@@ -384,12 +681,48 @@ class RealGatewayRuntime {
     // systématiquement pour repartir sur une base propre.
     this.utilisateursConnus.clear();
     this.presences = {};
+    this.profilsPublics.clear();
+    this.avatarsARafraichir = false;
+    this.dejaConnecte = false;
+    this.horsLigneTempsReel.clear();
+    this.enLigneTempsReel = null;
     this.indexMessages.clear();
     this.salonsRejoints.clear();
     this.roomsSocketRejointes.clear();
     this.partenairesDmConnus.clear();
+    this.serveurs.clear();
+    this.salonVersServeur.clear();
     this.etatsSaisie = [];
     this.definirEtatConnexion('deconnecte');
+  }
+
+  /**
+   * Un 401 ne veut pas toujours dire « session expirée » : Authentification
+   * répond aussi 401 pour un mot de passe actuel incorrect (changement de mot
+   * de passe, suppression du compte). On revérifie donc le jeton lui-même
+   * (`GET /api/auth/me`) : s'il est refusé (expiré après 24 h, révoqué par un
+   * changement de mot de passe sur un autre appareil…), la session est
+   * fermée et 'session-expiree' est émis — main.js ramène alors l'app à
+   * l'écran de connexion. Une seule vérification à la fois ; une erreur
+   * réseau ne permet de rien conclure.
+   */
+  async verifierSessionApres401() {
+    if (this.verificationSessionEnCours) return;
+    this.verificationSessionEnCours = true;
+    const jeton = this.jeton;
+    try {
+      const reponse = await fetch(`${this.baseUrlHttp}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${jeton}` },
+      });
+      if (reponse.status === 401 && this.jeton === jeton) {
+        await this.deconnexion();
+        this.emettre('session-expiree');
+      }
+    } catch {
+      // Réseau indisponible : rien à conclure, la session est gardée.
+    } finally {
+      this.verificationSessionEnCours = false;
+    }
   }
 
   /** Utilisateur authentifié courant, ou `null` si personne n'est connecté. */
@@ -421,17 +754,18 @@ class RealGatewayRuntime {
     const utilisateur = this.mapperUtilisateur(brut);
     this.utilisateurConnecte = utilisateur;
     this.enregistrerUtilisateurConnu(utilisateur);
+    this.annoncerProfil();
     return utilisateur;
   }
 
   /**
-   * Change le courriel et/ou le mot de passe — le mot de passe ACTUEL est
+   * Change le mot de passe (le courriel n'est pas modifiable) — le mot de passe ACTUEL est
    * obligatoire ici (vérifié par le serveur), pour empêcher qu'un jeton volé
    * ne permette une prise de contrôle permanente du compte.
    */
-  async profilModifierCompte({ courriel, motDePasse, motDePasseActuel }) {
+  async profilModifierCompte({ motDePasse, motDePasseActuel }) {
+    // Pas de courriel : Authentification refuse de le modifier via /me.
     const corps = { mot_de_passe_actuel: motDePasseActuel };
-    if (courriel !== undefined) corps.courriel = courriel;
     if (motDePasse !== undefined) corps.mot_de_passe = motDePasse;
     const brut = await this.appelHttp('/api/auth/me', {
       methode: 'PATCH',
@@ -440,7 +774,37 @@ class RealGatewayRuntime {
     const utilisateur = this.mapperUtilisateur(brut);
     this.utilisateurConnecte = utilisateur;
     this.enregistrerUtilisateurConnu(utilisateur);
+    if (motDePasse !== undefined) {
+      await this.renouvelerJetonApresChangementMotDePasse(
+        utilisateur.courriel,
+        motDePasse
+      );
+    }
     return utilisateur;
+  }
+
+  /**
+   * Authentification révoque TOUS les jetons existants quand le mot de passe
+   * change (`version_auth` incrémentée) — y compris celui de cette session :
+   * sans nouveau jeton, chaque requête suivante échouait en 401. On se
+   * reconnecte donc avec le nouveau mot de passe, puis on rouvre le socket
+   * (authentifié avec l'ancien jeton). Si cette reconnexion échoue, le mot
+   * de passe est bien changé mais la session est perdue : code dédié pour
+   * que l'UI demande de se reconnecter.
+   */
+  async renouvelerJetonApresChangementMotDePasse(identifiant, motDePasse) {
+    let reponse;
+    try {
+      reponse = await this.appelHttp('/api/auth/login', {
+        methode: 'POST',
+        corps: { identifiant, mot_de_passe: motDePasse },
+      });
+    } catch {
+      throw new Error('ERR_RECONNEXION_REQUISE');
+    }
+    this.jeton = reponse.jeton;
+    this.sauvegarderJetonPersiste(reponse.jeton);
+    this.connecterSocket();
   }
 
   async profilSupprimerCompte(motDePasseActuel) {
@@ -461,47 +825,136 @@ class RealGatewayRuntime {
       statutPresence: brut.statutPresence === 'enLigne' ? 'en-ligne' : 'hors-ligne',
       vuLaDerniereFois: brut.vuLaDerniereFois ?? null,
       modeNotification: brut.modeNotification,
+      avatar: brut.avatar ?? null,
     };
   }
 
   async configObtenir() {
-    const brut = await this.appelHttp('/api/config-utilisateur');
-    return this.mapperConfig(brut);
+    const config = this.mapperConfig(
+      await this.appelHttp('/api/config-utilisateur')
+    );
+    this.memoriserProfilSoi(config);
+    return config;
   }
 
-  async configModifier({ alias, theme, langue, modeNotification }) {
+  async configModifier({ alias, theme, langue, modeNotification, avatar }) {
     const corps = {};
+    // Chaîne vide = retirer l'avatar (même convention que l'alias).
+    if (avatar !== undefined) corps.avatar = avatar ?? '';
     if (alias !== undefined) corps.alias = alias;
     if (theme !== undefined) corps.theme = theme;
     if (langue !== undefined) corps.langue = langue;
     if (modeNotification !== undefined) corps.modeNotification = modeNotification;
-    const brut = await this.appelHttp('/api/config-utilisateur', {
-      methode: 'PATCH',
-      corps,
+    const config = this.mapperConfig(
+      await this.appelHttp('/api/config-utilisateur', {
+        methode: 'PATCH',
+        corps,
+      })
+    );
+    this.memoriserProfilSoi(config);
+    // Seuls l'alias et l'avatar sont visibles des autres (pas le thème…).
+    if (alias !== undefined || avatar !== undefined) this.annoncerProfil();
+    return config;
+  }
+
+  /** Signale aux autres clients que notre profil public a changé. */
+  annoncerProfil() {
+    if (this.socketPret && this.socket?.connected) {
+      this.socket.emit('profil.update');
+    }
+  }
+
+  /**
+   * Profil d'un autre utilisateur modifié ('profil.changed') : on recharge
+   * son pseudo (Authentification) et son alias/avatar (User-Config-Service).
+   * 'profils-publics' est émis si quelque chose a changé, pour que l'UI
+   * redessine.
+   */
+  async rafraichirProfil(utilisateurId) {
+    const pseudoAvant = this.utilisateursConnus.get(utilisateurId)?.pseudo;
+    await Promise.all([
+      this.resoudrePseudosInconnus([utilisateurId]),
+      this.chargerProfilsPublics([utilisateurId]),
+    ]);
+    const pseudoApres = this.utilisateursConnus.get(utilisateurId)?.pseudo;
+    if (pseudoAvant !== undefined && pseudoAvant !== pseudoApres) {
+      this.emettre('profils-publics', [utilisateurId]);
+    }
+  }
+
+  traiterProfilEntrant(evt) {
+    const id = evt?.userId;
+    if (typeof id !== 'string' || id === this.utilisateurConnecte?.id) return;
+    // Uniquement les utilisateurs qu'on affiche déjà quelque part.
+    if (!this.utilisateursConnus.has(id) && !this.profilsPublics.has(id)) return;
+    void this.rafraichirProfil(id);
+  }
+
+  /**
+   * Changement dans un de nos serveurs, signalé par Room-Service via
+   * Message-Service : relayé aux pages ('serveur-change'), qui rechargent.
+   */
+  traiterServeurEntrant(evt) {
+    if (typeof evt?.serveurId !== 'string' || typeof evt.raison !== 'string') {
+      return;
+    }
+    this.emettre('serveur-change', {
+      serveurId: evt.serveurId,
+      raison: evt.raison,
+      cibleId: typeof evt.cibleId === 'string' ? evt.cibleId : null,
     });
-    return this.mapperConfig(brut);
   }
 
   // --- WebSocket (Socket.IO) : événements temps réel ---------------------------
 
   connecterSocket() {
-    this.socket?.disconnect();
+    this.fermerSocket();
     const socket = this.creerSocket(`${this.baseUrlSocket}/messages`, {
       auth: { token: this.jeton },
-      reconnection: false, // backoff géré nous-même, voir plus bas (même logique qu'avant)
+      reconnection: false, // backoff géré nous-même, voir planifierReconnexion
       transports: ['websocket'],
     });
     this.socket = socket;
 
     socket.on('connect', () => {
+      if (this.socket !== socket) return;
+      this.annulerReconnexionPlanifiee();
       this.delaiReconnexionActuelMs = DELAI_RECONNEXION_INITIAL_MS;
       this.definirEtatConnexion('connecte');
+      this.demarrerBattementCoeur();
+      // Profils modifiés pendant la coupure : rattrapés au prochain sondage
+      // (voir avatarsARafraichir). Inutile à la toute première connexion,
+      // les profils viennent d'être chargés avec leurs photos.
+      if (this.dejaConnecte) this.avatarsARafraichir = true;
+      this.dejaConnecte = true;
+      // Présence et salons : PAS ici, mais sur 'connexion.prete' (plus bas),
+      // avec un repli si cet événement n'arrive jamais.
+      clearTimeout(this.minuteurRepliConnexionPrete);
+      this.minuteurRepliConnexionPrete = setTimeout(() => {
+        if (this.socket === socket && !this.socketPret) marquerPret();
+      }, DELAI_REPLI_CONNEXION_PRETE_MS);
+    });
+
+    // Message-Service a fini d'authentifier ce socket. 'connect' arrive
+    // AVANT (dès la poignée de main) : un 'presence.update' ou un
+    // 'room-message.join' émis à ce moment-là est refusé par le serveur
+    // (socket pas encore authentifié) — on restait alors « hors ligne »
+    // pour les autres après une coupure réseau, et sans messages en direct.
+    const marquerPret = () => {
+      clearTimeout(this.minuteurRepliConnexionPrete);
+      this.socketPret = true;
+      // Les autres clients ont pu nous voir « hors ligne » pendant la coupure.
+      this.annoncerPresence();
       // Rejoint à nouveau les rooms Socket.IO des salons déjà connus (une
       // reconnexion Socket.IO démarre une session serveur neuve).
       this.roomsSocketRejointes.clear();
       for (const salonId of this.salonsRejoints) {
         this.rejoindreSocketSalon(salonId);
       }
+    };
+    socket.on('connexion.prete', () => {
+      if (this.socket !== socket) return;
+      marquerPret();
     });
 
     socket.on('private-message.created', (m) => this.traiterMessageDmEntrant(m));
@@ -515,32 +968,58 @@ class RealGatewayRuntime {
       this.traiterMessageSalonSupprime(m)
     );
     socket.on('typing', (evt) => this.traiterSaisieEntrante(evt));
-
-    socket.on('disconnect', () => {
-      if (this.fermetureVoulue) return;
-      this.definirEtatConnexion('reconnexion');
-      const delai = this.delaiReconnexionActuelMs;
-      this.delaiReconnexionActuelMs = Math.min(
-        this.delaiReconnexionActuelMs * 2,
-        DELAI_RECONNEXION_MAX_MS
-      );
-      setTimeout(() => {
-        if (this.fermetureVoulue) return;
-        this.reconnexions += 1;
-        this.connecterSocket();
-      }, delai);
+    // Présence en temps réel (voir Message-Service, 'presence.changed').
+    socket.on('presence.changed', (evt) => this.traiterPresenceEntrante(evt));
+    socket.on('presence.snapshot', (evt) => this.traiterInstantanePresence(evt));
+    socket.on('profil.changed', (evt) => this.traiterProfilEntrant(evt));
+    socket.on('serveur.change', (evt) => this.traiterServeurEntrant(evt));
+    // Accès à un salon perdu (expulsion, salon réservé…) : Message-Service a
+    // retiré ce socket de la room. On l'oublie pour pouvoir la rejoindre de
+    // nouveau si l'accès revient (voir rejoindreSocketSalon).
+    socket.on('room-message.revoked', (evt) => {
+      if (typeof evt?.roomId === 'string') {
+        this.roomsSocketRejointes.delete(evt.roomId);
+      }
     });
 
+    // Le garde `this.socket !== socket` ignore les événements d'un socket
+    // déjà remplacé ou fermé volontairement (voir fermerSocket).
+    socket.on('disconnect', () => {
+      if (this.socket !== socket) return;
+      this.enLigneTempsReel = null;
+      this.planifierReconnexion();
+    });
+
+    // Avec `reconnection: false`, un échec de connexion n'émet QUE
+    // 'connect_error' (jamais 'disconnect') : sans ce rappel, une tentative
+    // ratée laissait l'app bloquée indéfiniment sur "Reconnexion…".
     socket.on('connect_error', () => {
-      // Suivi par 'disconnect' dans la plupart des cas : la reconnexion s'y
-      // fait, pas ici — évite de dupliquer la logique de backoff.
+      if (this.socket !== socket) return;
+      this.planifierReconnexion();
     });
   }
 
   rejoindreSocketSalon(salonId) {
-    if (!this.socket || this.roomsSocketRejointes.has(salonId)) return;
-    this.socket.emit('room-message.join', { roomId: salonId });
+    const socket = this.socket;
+    // Socket pas encore authentifié : le salon (déjà dans salonsRejoints)
+    // sera rejoint à la réception de 'connexion.prete'.
+    if (!socket || !this.socketPret || this.roomsSocketRejointes.has(salonId)) {
+      return;
+    }
+    // Marqué tout de suite (évite les doublons pendant l'attente), puis
+    // oublié si Message-Service ne confirme pas : accès refusé (il n'appelle
+    // alors pas l'accusé de réception) ou Room-Service trop lent. Le salon
+    // sera redemandé au prochain obtenirEtat / à la prochaine reconnexion,
+    // au lieu de rester à tort « rejoint » sans jamais recevoir de message.
     this.roomsSocketRejointes.add(salonId);
+    socket
+      .timeout(DELAI_ACK_REJOINDRE_SALON_MS)
+      .emit('room-message.join', { roomId: salonId }, (erreur, reponse) => {
+        if (this.socket !== socket) return;
+        if (erreur || reponse?.joined !== true) {
+          this.roomsSocketRejointes.delete(salonId);
+        }
+      });
   }
 
   traiterMessageDmEntrant(brut) {
@@ -567,6 +1046,7 @@ class RealGatewayRuntime {
     this.emettre('message-recu', {
       conversationType: 'salon',
       salonId: brut.roomId,
+      serveurId: this.salonVersServeur.get(brut.roomId) ?? null,
       message,
     });
   }
@@ -605,25 +1085,32 @@ class RealGatewayRuntime {
 
   // --- Salons (HTTP, voir Room-Service) ----------------------------------------
 
+  // --- Serveurs et salons (Room-Service, façon Discord) ----------------------
+
   /**
-   * Convertit un `RoomResponse` (Room-Service) vers le DTO salon utilisé côté
-   * UI. Le champ hôte/propriétaire (`hoteId` dans l'ancien contrat) est
-   * remplacé par `creeParId` — purement informationnel, aucune autorisation
-   * n'en dépend plus (voir Salon.ts domaine) : la gestion d'un salon est
-   * réservée aux modérateurs/admins (rôle global), pas à son créateur.
-   * Plusieurs noms de champ source sont tolérés par prudence (le contrat
-   * exact du backend a pu varier pendant le développement parallèle).
+   * Salon d'un serveur, dans la forme attendue par renderer.js. `membreIds`
+   * = membres du serveur qui voient ce salon (liste des membres, invitation) ;
+   * `visibilite: 'prive'` pour un salon réservé aux modérateurs (affiché
+   * avec un cadenas).
    */
-  mapperSalon(brut) {
+  mapperSalon(brut, serveur) {
+    const reserve = brut.acces === 'moderateurs';
+    const membres = serveur?.membres ?? [];
     return {
       type: 'salon',
       id: brut.id,
+      serveurId: brut.serveurId,
       nom: brut.nom,
-      visibilite: brut.visibilite,
-      creeParId:
-        brut.creePar ?? brut.createdBy ?? brut.creeParId ?? brut.hoteId,
-      membreIds: brut.membreIds ?? [],
-      membresInvites: brut.membresInvites ?? [],
+      position: brut.position,
+      acces: brut.acces,
+      ecriture: brut.ecriture,
+      peutEcrire: brut.peutEcrire,
+      visibilite: reserve ? 'prive' : 'public',
+      creeParId: brut.creePar ?? null,
+      membreIds: membres
+        .filter((membre) => !reserve || membre.role !== 'membre')
+        .map((membre) => membre.utilisateurId),
+      membresInvites: serveur?.invitations ?? [],
     };
   }
 
@@ -639,20 +1126,37 @@ class RealGatewayRuntime {
     };
   }
 
-  async assurerAdhesionSalon(salonId) {
-    if (this.salonsRejoints.has(salonId)) return;
-    try {
-      await this.appelHttp(`/api/rooms/${encodeURIComponent(salonId)}/join`, {
-        methode: 'POST',
-      });
-    } catch {
-      // Déjà membre, ou salon privé sans invitation : on laisse l'appel
-      // suivant (envoi de message) remonter l'erreur réelle le cas échéant,
-      // plutôt que de bloquer ici sur une erreur qui n'en est pas toujours
-      // une (cas "déjà membre").
+  resumeServeur(serveur) {
+    return {
+      id: serveur.id,
+      nom: serveur.nom,
+      icone: serveur.icone ?? null,
+      public: serveur.public,
+      parDefaut: serveur.parDefaut,
+      monRole: serveur.monRole,
+      nombreMembres: serveur.nombreMembres,
+      salonIds: serveur.salons.map((salon) => salon.id),
+    };
+  }
+
+  /** GET /api/servers, mémorisé (voir `this.serveurs`). */
+  async chargerServeurs() {
+    const serveurs = await this.appelHttp('/api/servers');
+    this.serveurs.clear();
+    this.salonVersServeur.clear();
+    for (const serveur of serveurs) {
+      this.serveurs.set(serveur.id, serveur);
+      for (const salon of serveur.salons) {
+        this.salonVersServeur.set(salon.id, serveur.id);
+      }
     }
-    this.salonsRejoints.add(salonId);
-    this.rejoindreSocketSalon(salonId);
+    return serveurs;
+  }
+
+  /** Liste légère des serveurs (rail de la page messages privés). */
+  async obtenirServeurs() {
+    const serveurs = await this.chargerServeurs();
+    return serveurs.map((serveur) => this.resumeServeur(serveur));
   }
 
   async obtenirMessagesSalonAvant({ salonId, avantId, taille }) {
@@ -669,8 +1173,7 @@ class RealGatewayRuntime {
     return { messages, finHistorique: bruts.length < limite };
   }
 
-  async hydraterSalonAvecMessages(brutSalon) {
-    const salon = this.mapperSalon(brutSalon);
+  async hydraterSalonAvecMessages(salon) {
     try {
       const { messages, finHistorique } = await this.obtenirMessagesSalonAvant({
         salonId: salon.id,
@@ -681,116 +1184,190 @@ class RealGatewayRuntime {
     }
   }
 
-  async obtenirEtat() {
-    const [salonsBruts, invitationsBrutes] = await Promise.all([
-      this.appelHttp('/api/rooms'),
-      this.appelHttp('/api/rooms/invitations/me'),
+  /**
+   * État de la page des salons : mes serveurs (rail), le serveur actif avec
+   * ses salons (et leurs derniers messages) et mes invitations.
+   * Serveur actif : celui qui contient `salonId` s'il est fourni (ouverture
+   * depuis une notification), sinon `serveurId`, sinon le premier
+   * (Chatvardage).
+   */
+  async obtenirEtat({ serveurId, salonId } = {}) {
+    const [serveurs, invitationsBrutes] = await Promise.all([
+      this.chargerServeurs(),
+      this.appelHttp('/api/servers/invitations/me'),
     ]);
-    const salons = await Promise.all(
-      salonsBruts.map((brut) => this.hydraterSalonAvecMessages(brut))
-    );
-    // Ne marque "déjà rejoint" (skip du HTTP join dans assurerAdhesionSalon)
-    // que les salons dont on est RÉELLEMENT déjà membre — `GET /api/rooms`
-    // liste aussi les salons publics pas encore rejoints (visibles mais pas
-    // membre), qu'il ne faut pas confondre avec une adhésion réelle sous
-    // peine d'échec silencieux à l'envoi du premier message (pas de HTTP
-    // join tenté).
-    const moi = this.utilisateurConnecte?.id;
-    for (const salon of salons) {
-      if (moi && salon.membreIds.includes(moi)) {
+    const actifId =
+      (salonId && this.salonVersServeur.get(salonId)) ||
+      (serveurId && this.serveurs.has(serveurId) ? serveurId : null) ||
+      serveurs[0]?.id;
+    const actif = this.serveurs.get(actifId) ?? null;
+
+    // Rooms Socket.IO de TOUS les salons visibles de tous mes serveurs : les
+    // messages des autres serveurs allument leur pastille "non lu" du rail.
+    for (const serveur of serveurs) {
+      for (const salon of serveur.salons) {
         this.assurerAdhesionSocketSeulement(salon.id);
       }
     }
 
-    const idsAResoudre = new Set();
-    for (const salon of salons) {
-      if (salon.creeParId) idsAResoudre.add(salon.creeParId);
-      for (const id of salon.membreIds ?? []) idsAResoudre.add(id);
-    }
-    await this.resoudrePseudos([...idsAResoudre]);
+    const salons = actif
+      ? await Promise.all(
+          actif.salons.map((brut) =>
+            this.hydraterSalonAvecMessages(this.mapperSalon(brut, actif))
+          )
+        )
+      : [];
+
+    await this.resoudrePseudos([
+      ...(actif?.membres ?? []).map((membre) => membre.utilisateurId),
+      ...invitationsBrutes.map((invitation) => invitation.invitePar),
+    ]);
 
     return {
       utilisateurs: this.obtenirUtilisateurs(),
+      serveurs: serveurs.map((serveur) => this.resumeServeur(serveur)),
+      serveurActif: actif
+        ? {
+            ...this.resumeServeur(actif),
+            proprietaireId: actif.proprietaireId,
+            membres: actif.membres,
+            invitations: actif.invitations,
+          }
+        : null,
       salons,
-      invitations: invitationsBrutes.map((brut) => this.mapperSalon(brut)),
+      invitations: invitationsBrutes.map((invitation) => ({
+        id: invitation.serveur.id,
+        nom: invitation.serveur.nom,
+        public: invitation.serveur.public,
+        nombreMembres: invitation.serveur.nombreMembres,
+        invitePar: invitation.invitePar,
+      })),
     };
   }
 
-  /** Rejoint la room Socket.IO d'un salon dont on est déjà membre, sans appeler le HTTP `join` (déjà membre). */
+  /** Rejoint la room Socket.IO d'un salon (l'appartenance est au serveur). */
   assurerAdhesionSocketSeulement(salonId) {
     this.salonsRejoints.add(salonId);
     this.rejoindreSocketSalon(salonId);
   }
 
-  async creerSalon({ nom, prive }) {
-    const brut = await this.appelHttp('/api/rooms', {
+  // Serveurs ----------------------------------------------------------------
+
+  async creerServeur({ nom, public: estPublic }) {
+    return this.appelHttp('/api/servers', {
       methode: 'POST',
-      corps: { nom, visibilite: prive ? 'prive' : 'public' },
+      corps: { nom, public: Boolean(estPublic) },
     });
-    this.assurerAdhesionSocketSeulement(brut.id);
-    return this.hydraterSalonAvecMessages(brut);
   }
 
-  async modifierSalon({ salonId, nom, visibilite }) {
+  async modifierServeur({ serveurId, nom, public: estPublic, icone }) {
     const corps = {};
     if (nom !== undefined) corps.nom = nom;
-    if (visibilite !== undefined) corps.visibilite = visibilite;
-    const brut = await this.appelHttp(`/api/rooms/${encodeURIComponent(salonId)}`, {
+    if (estPublic !== undefined) corps.public = estPublic;
+    if (icone !== undefined) corps.icone = icone ?? '';
+    return this.appelHttp(`/api/servers/${encodeURIComponent(serveurId)}`, {
       methode: 'PATCH',
       corps,
     });
-    return this.mapperSalon(brut);
+  }
+
+  async supprimerServeur(serveurId) {
+    await this.appelHttp(`/api/servers/${encodeURIComponent(serveurId)}`, {
+      methode: 'DELETE',
+    });
+    return { serveurId };
+  }
+
+  async rejoindreServeur(serveurId) {
+    return this.appelHttp(
+      `/api/servers/${encodeURIComponent(serveurId)}/join`,
+      { methode: 'POST' }
+    );
+  }
+
+  async quitterServeur(serveurId) {
+    await this.appelHttp(
+      `/api/servers/${encodeURIComponent(serveurId)}/leave`,
+      { methode: 'POST' }
+    );
+    return { serveurId };
+  }
+
+  /** Serveurs publics dont je ne suis pas membre (recherche par nom). */
+  async decouvrirServeurs(texte) {
+    const q = String(texte ?? '').trim().slice(0, 80);
+    return this.appelHttp(
+      `/api/servers/decouvrir${q ? `?q=${encodeURIComponent(q)}` : ''}`
+    );
+  }
+
+  async expulserMembre({ serveurId, utilisateurId }) {
+    return this.appelHttp(
+      `/api/servers/${encodeURIComponent(serveurId)}/members/${encodeURIComponent(utilisateurId)}`,
+      { methode: 'DELETE' }
+    );
+  }
+
+  async changerRoleMembre({ serveurId, utilisateurId, role }) {
+    return this.appelHttp(
+      `/api/servers/${encodeURIComponent(serveurId)}/members/${encodeURIComponent(utilisateurId)}`,
+      { methode: 'PATCH', corps: { role } }
+    );
+  }
+
+  async inviter({ serveurId, utilisateurId }) {
+    return this.appelHttp(
+      `/api/servers/${encodeURIComponent(serveurId)}/invitations`,
+      { methode: 'POST', corps: { utilisateurId } }
+    );
+  }
+
+  async accepterInvitation({ serveurId }) {
+    return this.appelHttp(
+      `/api/servers/${encodeURIComponent(serveurId)}/invitations/accept`,
+      { methode: 'POST' }
+    );
+  }
+
+  async refuserInvitation({ serveurId }) {
+    await this.appelHttp(
+      `/api/servers/${encodeURIComponent(serveurId)}/invitations/refuse`,
+      { methode: 'POST' }
+    );
+    return { serveurId };
+  }
+
+  // Salons ------------------------------------------------------------------
+
+  async creerSalon({ serveurId, nom, acces, ecriture }) {
+    const brut = await this.appelHttp(
+      `/api/servers/${encodeURIComponent(serveurId)}/channels`,
+      { methode: 'POST', corps: { nom, acces, ecriture } }
+    );
+    this.salonVersServeur.set(brut.id, serveurId);
+    this.assurerAdhesionSocketSeulement(brut.id);
+    return this.mapperSalon(brut, this.serveurs.get(serveurId));
+  }
+
+  async modifierSalon({ salonId, nom, acces, ecriture }) {
+    const corps = {};
+    if (nom !== undefined) corps.nom = nom;
+    if (acces !== undefined) corps.acces = acces;
+    if (ecriture !== undefined) corps.ecriture = ecriture;
+    const brut = await this.appelHttp(
+      `/api/channels/${encodeURIComponent(salonId)}`,
+      { methode: 'PATCH', corps }
+    );
+    return this.mapperSalon(brut, this.serveurs.get(brut.serveurId));
   }
 
   async supprimerSalon(salonId) {
-    await this.appelHttp(`/api/rooms/${encodeURIComponent(salonId)}`, {
+    await this.appelHttp(`/api/channels/${encodeURIComponent(salonId)}`, {
       methode: 'DELETE',
     });
     this.salonsRejoints.delete(salonId);
     this.roomsSocketRejointes.delete(salonId);
-    return { salonId };
-  }
-
-  async quitterSalonDistant(salonId) {
-    await this.appelHttp(`/api/rooms/${encodeURIComponent(salonId)}/leave`, {
-      methode: 'POST',
-    });
-    this.salonsRejoints.delete(salonId);
-    this.roomsSocketRejointes.delete(salonId);
-    if (this.socket) this.socket.emit('room-message.leave', { roomId: salonId });
-    return { salonId };
-  }
-
-  async retirerMembreSalon({ salonId, utilisateurId }) {
-    const brut = await this.appelHttp(
-      `/api/rooms/${encodeURIComponent(salonId)}/members/${encodeURIComponent(utilisateurId)}`,
-      { methode: 'DELETE' }
-    );
-    return this.mapperSalon(brut);
-  }
-
-  async inviter({ salonId, utilisateurId }) {
-    const brut = await this.appelHttp(
-      `/api/rooms/${encodeURIComponent(salonId)}/invitations`,
-      { methode: 'POST', corps: { utilisateurId } }
-    );
-    return this.mapperSalon(brut);
-  }
-
-  async accepterInvitation({ salonId }) {
-    const brut = await this.appelHttp(
-      `/api/rooms/${encodeURIComponent(salonId)}/invitations/accept`,
-      { methode: 'POST' }
-    );
-    this.assurerAdhesionSocketSeulement(brut.id);
-    return this.hydraterSalonAvecMessages(brut);
-  }
-
-  async refuserInvitation({ salonId }) {
-    await this.appelHttp(
-      `/api/rooms/${encodeURIComponent(salonId)}/invitations/refuse`,
-      { methode: 'POST' }
-    );
+    this.salonVersServeur.delete(salonId);
     return { salonId };
   }
 
@@ -798,7 +1375,6 @@ class RealGatewayRuntime {
 
   async envoyerMessage({ salonId, contenu }) {
     this.verifierReseauConnecte();
-    await this.assurerAdhesionSalon(salonId);
     const brut = await this.appelHttp(
       `/api/messages/rooms/${encodeURIComponent(salonId)}`,
       { methode: 'POST', corps: { content: contenu } }
@@ -864,6 +1440,8 @@ class RealGatewayRuntime {
           id: autreUtilisateurId,
           pseudo: autre?.pseudo ?? autreUtilisateurId,
           present: this.presences[autreUtilisateurId] === 'en-ligne',
+          alias: this.profilsPublics.get(autreUtilisateurId)?.alias ?? null,
+          avatar: this.profilsPublics.get(autreUtilisateurId)?.avatar ?? null,
         },
         messages,
         finHistorique,
@@ -904,6 +1482,26 @@ class RealGatewayRuntime {
     return conversations
       .filter(Boolean)
       .sort((a, b) => (b.lastMessage?.envoi ?? 0) - (a.lastMessage?.envoi ?? 0));
+  }
+
+  /**
+   * Version légère de obtenirConversationsPrivees, pour les pastilles « non
+   * lu » : seulement l'id de chaque conversation et son dernier message, en
+   * UN appel (`GET /api/messages/conversations`), sans recharger
+   * l'historique de chaque interlocuteur.
+   */
+  async obtenirResumesConversationsPrivees() {
+    if (!this.utilisateurConnecte) return [];
+    const resume = await this.appelHttp('/api/messages/conversations');
+    return (resume ?? []).map((item) => {
+      this.partenairesDmConnus.add(item.otherUserId);
+      const dernier = this.mapperMessageDm(item.lastMessage);
+      this.indexMessages.set(dernier.id, { type: 'dm' });
+      return {
+        id: creerDmId(this.utilisateurConnecte.id, item.otherUserId),
+        lastMessage: dernier,
+      };
+    });
   }
 
   async demarrerConversationPrivee({ autreUtilisateurId }) {
@@ -979,18 +1577,81 @@ class RealGatewayRuntime {
       methode: 'PUT',
       corps: { statut: statut === 'en-ligne' ? 'enLigne' : 'horsLigne' },
     });
-    return this.definirPresenceInterne({
+    const presence = this.definirPresenceInterne({
       utilisateurId: this.utilisateurConnecte.id,
       statut,
     });
+    this.annoncerPresence();
+    return presence;
   }
 
   /**
-   * Voir le commentaire de classe : la présence des AUTRES utilisateurs n'est
-   * pas exposée par le backend — seule la nôtre (rafraîchie régulièrement,
-   * voir demarrerPollPresence) est fiable. Les autres utilisateurs connus
-   * s'affichent "hors-ligne" par défaut plutôt que de mentir sur un statut
-   * qu'on ne connaît pas réellement.
+   * Relaie notre présence aux autres clients en temps réel (Message-Service
+   * la diffuse via 'presence.changed'), une fois qu'elle est connue et le
+   * socket ouvert. User-Config-Service reste la source de vérité ; le
+   * sondage réconcilie toutes les 20 s.
+   */
+  annoncerPresence() {
+    const statut = this.presences[this.utilisateurConnecte?.id];
+    if (!statut || !this.socketPret || !this.socket?.connected) return;
+    this.socket.emit('presence.update', { statut });
+  }
+
+  /**
+   * Instantané reçu à la connexion du socket : utilisateurs actuellement en
+   * ligne. Tout autre utilisateur connu est hors ligne, y compris ceux qui ont
+   * quitté juste avant (dont on n'a pas reçu l'annonce).
+   */
+  traiterInstantanePresence(evt) {
+    if (
+      !Array.isArray(evt?.enLigne) ||
+      !evt.enLigne.every((id) => typeof id === 'string')
+    ) {
+      return;
+    }
+    this.enLigneTempsReel = new Set(evt.enLigne);
+    const moi = this.utilisateurConnecte?.id;
+    const connus = new Set([
+      ...this.utilisateursConnus.keys(),
+      ...Object.keys(this.presences),
+      ...evt.enLigne,
+    ]);
+    for (const id of connus) {
+      if (id === moi) continue;
+      const statut = this.enLigneTempsReel.has(id) ? 'en-ligne' : 'hors-ligne';
+      if (this.presences[id] !== statut) {
+        this.definirPresenceInterne({ utilisateurId: id, statut });
+      }
+    }
+  }
+
+  traiterPresenceEntrante(evt) {
+    if (
+      typeof evt?.userId !== 'string' ||
+      (evt.statut !== 'en-ligne' && evt.statut !== 'hors-ligne')
+    ) {
+      return;
+    }
+    if (evt.statut === 'hors-ligne') {
+      this.horsLigneTempsReel.set(evt.userId, Date.now());
+      this.enLigneTempsReel?.delete(evt.userId);
+    } else {
+      this.horsLigneTempsReel.delete(evt.userId);
+      this.enLigneTempsReel?.add(evt.userId);
+    }
+    if (this.presences[evt.userId] !== evt.statut) {
+      this.definirPresenceInterne({
+        utilisateurId: evt.userId,
+        statut: evt.statut,
+      });
+    }
+  }
+
+  /**
+   * Présences connues : la nôtre (statut choisi, voir demarrerPollPresence)
+   * et celles des autres utilisateurs connus (présence effective, voir
+   * chargerProfilsPublics). Hors ligne par défaut tant qu'elle n'est pas
+   * chargée, plutôt que d'afficher un statut qu'on ne connaît pas.
    */
   obtenirPresences() {
     const carte = {};
@@ -1004,18 +1665,56 @@ class RealGatewayRuntime {
     return carte;
   }
 
+  /**
+   * Toutes les 20 s, tant qu'une session est ouverte :
+   *  1. relit notre configuration (statut choisi, éventuellement modifié
+   *     depuis un autre appareil) ;
+   *  2. si on est `enLigne`, renvoie ce statut au serveur : c'est notre
+   *     signe de vie (rafraîchit vuLaDerniereFois). Sans lui, le serveur nous
+   *     considère absent au bout de 90 s (voir `actif`) ;
+   *  3. rafraîchit la présence (et, un tour sur N, l'avatar) des autres
+   *     utilisateurs connus.
+   * Un compte qui n'a jamais défini sa présence (vuLaDerniereFois nul)
+   * passe `enLigne` par défaut à la première connexion.
+   */
   demarrerPollPresence() {
     this.arreterPollPresence();
     const rafraichir = async () => {
       if (!this.utilisateurConnecte) return;
       try {
-        const config = await this.appelHttp('/api/config-utilisateur');
-        this.definirPresenceInterne({
-          utilisateurId: this.utilisateurConnecte.id,
-          statut: config.statutPresence === 'enLigne' ? 'en-ligne' : 'hors-ligne',
-        });
+        const config = await this.configObtenir();
+        const jamaisDefinie = config.vuLaDerniereFois === null;
+        const statut = jamaisDefinie ? 'en-ligne' : config.statutPresence;
+        if (statut === 'en-ligne') {
+          await this.appelHttp('/api/config-utilisateur/presence', {
+            methode: 'PUT',
+            corps: { statut: 'enLigne' },
+          });
+        }
+        if (this.presences[this.utilisateurConnecte.id] !== statut) {
+          this.definirPresenceInterne({
+            utilisateurId: this.utilisateurConnecte.id,
+            statut,
+          });
+          // Changée ailleurs (autre appareil) ou connue pour la première fois.
+          this.annoncerPresence();
+        }
       } catch {
         // Best-effort : un échec de poll ne doit pas interrompre l'app.
+      }
+      const autres = [...this.utilisateursConnus.keys()];
+      const avecAvatars = this.avatarsARafraichir;
+      this.avatarsARafraichir = false;
+      // Tant que le temps réel fonctionne (socket prêt, instantané reçu), la
+      // présence des autres arrive déjà par 'presence.changed' : inutile de
+      // réinterroger tous les utilisateurs connus toutes les 20 s (des
+      // centaines sur le serveur par défaut). Sondage complet seulement
+      // sans temps réel, ou pour rattraper les photos après une reconnexion.
+      const tempsReelActif = this.socketPret && this.enLigneTempsReel !== null;
+      if (autres.length && (!tempsReelActif || avecAvatars)) {
+        await this.chargerProfilsPublics(autres, {
+          inclureAvatar: avecAvatars,
+        });
       }
     };
     this.minuteurPollPresence = setInterval(
@@ -1030,22 +1729,145 @@ class RealGatewayRuntime {
     this.minuteurPollPresence = null;
   }
 
-  // --- Réseau (boutons "Coupure"/"Reconnexion") ---------------------------------
-  // Ne sont plus des simulations : "Coupure" ferme volontairement le socket
-  // Socket.IO, "Reconnexion" le rouvre — comportement réel, backoff
-  // exponentiel existant conservé pour les coupures involontaires.
+  // --- Réseau : reconnexion automatique ------------------------------------------
+  // Trois sources de vérité, combinées ici :
+  //  - le socket Socket.IO lui-même ('connect' / 'disconnect' / 'connect_error') ;
+  //  - l'état réseau du système d'exploitation, relayé par main.js
+  //    (net.isOnline / powerMonitor, voir signalerReseauSysteme/signalerReveil) :
+  //    inutile de marteler le serveur quand la machine n'a pas de réseau ;
+  //  - un battement de cœur HTTP (GET /api/health) tant qu'on est connecté,
+  //    pour détecter un socket "zombie" bien avant le ping/pong Socket.IO.
 
-  simulerCoupure() {
-    this.fermetureVoulue = true;
-    this.socket?.disconnect();
-    return this.definirEtatConnexion('deconnecte');
+  sessionActive() {
+    return Boolean(this.jeton && this.utilisateurConnecte);
   }
 
-  async simulerReconnexion() {
+  /** Ferme le socket courant SANS déclencher de reconnexion (voir le garde
+   * `this.socket !== socket` dans les écouteurs de connecterSocket). */
+  fermerSocket() {
+    const socket = this.socket;
+    this.socket = null;
+    this.socketPret = false;
+    clearTimeout(this.minuteurRepliConnexionPrete);
+    // Plus de flux temps réel : l'instantané de présence n'est plus fiable.
+    this.enLigneTempsReel = null;
+    socket?.disconnect();
+  }
+
+  annulerReconnexionPlanifiee() {
+    if (this.minuteurReconnexion) clearTimeout(this.minuteurReconnexion);
+    this.minuteurReconnexion = null;
+  }
+
+  /**
+   * Planifie la prochaine tentative de connexion avec un délai exponentiel
+   * (1 s, 2 s, 4 s… plafonné à DELAI_RECONNEXION_MAX_MS). Idempotente : un
+   * `disconnect` suivi d'un `connect_error` ne planifie qu'une seule tentative.
+   */
+  planifierReconnexion() {
+    if (!this.sessionActive() || this.fermetureVoulue) return;
+    this.arreterBattementCoeur();
+    if (this.horsLigneSysteme) {
+      this.definirEtatConnexion('deconnecte', { cause: CAUSE_HORS_LIGNE });
+      return;
+    }
+    if (this.minuteurReconnexion) return;
+    const delai = this.delaiReconnexionActuelMs;
+    this.delaiReconnexionActuelMs = Math.min(
+      this.delaiReconnexionActuelMs * 2,
+      DELAI_RECONNEXION_MAX_MS
+    );
+    this.definirEtatConnexion('reconnexion', {
+      cause: CAUSE_SERVEUR_INJOIGNABLE,
+      prochaineTentative: Date.now() + delai,
+    });
+    this.minuteurReconnexion = setTimeout(() => {
+      this.minuteurReconnexion = null;
+      if (!this.sessionActive() || this.fermetureVoulue || this.horsLigneSysteme)
+        return;
+      this.reconnexions += 1;
+      this.definirEtatConnexion('reconnexion', {
+        cause: CAUSE_SERVEUR_INJOIGNABLE,
+      });
+      this.connecterSocket();
+    }, delai);
+  }
+
+  /** Bouton "Réessayer maintenant" : saute le délai en cours et repart d'un
+   * backoff minimal. Sans effet (hors état) si la machine est hors ligne. */
+  reconnecterMaintenant() {
+    if (!this.sessionActive()) return this.obtenirEtatConnexion();
+    this.annulerReconnexionPlanifiee();
     this.delaiReconnexionActuelMs = DELAI_RECONNEXION_INITIAL_MS;
     this.fermetureVoulue = false;
+    if (this.horsLigneSysteme) {
+      return this.definirEtatConnexion('deconnecte', { cause: CAUSE_HORS_LIGNE });
+    }
+    this.definirEtatConnexion('reconnexion', {
+      cause: this.etatConnexion.cause ?? CAUSE_SERVEUR_INJOIGNABLE,
+    });
     this.connecterSocket();
     return this.obtenirEtatConnexion();
+  }
+
+  /** Relayé par main.js à chaque changement de connectivité de l'OS. */
+  signalerReseauSysteme(enLigne) {
+    const etaitHorsLigne = this.horsLigneSysteme;
+    this.horsLigneSysteme = !enLigne;
+    if (!enLigne) {
+      if (etaitHorsLigne) return;
+      this.annulerReconnexionPlanifiee();
+      this.arreterBattementCoeur();
+      this.fermerSocket();
+      if (this.sessionActive()) {
+        this.definirEtatConnexion('deconnecte', { cause: CAUSE_HORS_LIGNE });
+      }
+      return;
+    }
+    if (etaitHorsLigne) this.reconnecterMaintenant();
+  }
+
+  /** Sortie de veille : le socket d'avant la mise en veille est presque
+   * toujours mort sans le savoir, on en ouvre un neuf immédiatement. */
+  signalerReveil() {
+    if (this.sessionActive() && !this.fermetureVoulue) {
+      this.reconnecterMaintenant();
+    }
+  }
+
+  demarrerBattementCoeur() {
+    this.arreterBattementCoeur();
+    this.minuteurBattementCoeur = setInterval(async () => {
+      if (this.etatConnexion.statut !== 'connecte') return;
+      const socket = this.socket;
+      try {
+        const reponse = await this.fetchAvecDelai(
+          `${this.baseUrlHttp}/api/health`,
+          DELAI_BATTEMENT_COEUR_MS
+        );
+        if (!reponse.ok) throw new Error(`HTTP ${reponse.status}`);
+      } catch {
+        // Le socket a pu être remplacé pendant l'appel : n'agir que s'il
+        // s'agit toujours du même.
+        if (this.socket !== socket || this.etatConnexion.statut !== 'connecte')
+          return;
+        this.fermerSocket();
+        this.planifierReconnexion();
+      }
+    }, INTERVALLE_BATTEMENT_COEUR_MS);
+  }
+
+  arreterBattementCoeur() {
+    if (this.minuteurBattementCoeur) clearInterval(this.minuteurBattementCoeur);
+    this.minuteurBattementCoeur = null;
+  }
+
+  fetchAvecDelai(url, delaiMs) {
+    const controleur = new AbortController();
+    const minuteur = setTimeout(() => controleur.abort(), delaiMs);
+    return fetch(url, { signal: controleur.signal }).finally(() =>
+      clearTimeout(minuteur)
+    );
   }
 
   // --- État de saisie (Socket.IO, éphémère) --------------------------------------

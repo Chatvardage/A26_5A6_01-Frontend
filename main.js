@@ -7,6 +7,9 @@ const {
   shell,
   ipcMain,
   session,
+  net,
+  powerMonitor,
+  screen,
 } = require('electron');
 const path = require('path');
 const { fileURLToPath } = require('url');
@@ -22,6 +25,24 @@ const {
   LANGUES_SUPPORTEES,
 } = require('./src/i18n/i18n.js');
 const translations = require('./src/i18n/translations.json');
+
+// --- Profil séparé (tests à plusieurs comptes) --------------------------------
+// CHATVARDAGE_PROFIL=2 npm start : dossier de données distinct (session.json,
+// localStorage, cache) et donc verrou d'instance unique distinct — voir
+// requestSingleInstanceLock plus bas, qui est propre à chaque dossier
+// userData. Permet d'ouvrir une deuxième fenêtre connectée à un autre compte.
+// Doit être fait avant tout accès à userData (session, verrou).
+const PROFIL = process.env.CHATVARDAGE_PROFIL?.trim();
+if (PROFIL) {
+  if (!/^[A-Za-z0-9_-]{1,32}$/.test(PROFIL)) {
+    console.error(
+      `[ChatVardage] CHATVARDAGE_PROFIL invalide : "${PROFIL}" (lettres, chiffres, _ ou -, 32 max).`
+    );
+    process.exit(1);
+  }
+  app.setPath('userData', `${app.getPath('userData')}-${PROFIL}`);
+  console.log(`[ChatVardage] Profil "${PROFIL}" : ${app.getPath('userData')}`);
+}
 
 // Instance UNIQUE du gateway réel (Serveur-API, voir A26_5A6_01-Infra),
 // partagée par la page de connexion et le dashboard — voir le commentaire
@@ -41,6 +62,22 @@ const isDev = process.env.NODE_ENV === 'development';
 // bas) — même principe que chatGateway, une instance/état unique côté
 // main, pas un par page.
 let langueActuelle = LANGUE_PAR_DEFAUT;
+// Langue choisie EXPLICITEMENT sur l'écran de connexion/inscription (clic
+// FR/EN sans session ouverte), ou null. Seule celle-ci est enregistrée dans
+// le profil à la connexion : sinon, la langue par défaut (ou celle du compte
+// précédent, après une déconnexion) écraserait celle du profil.
+let langueChoisieAvantConnexion = null;
+
+// Préférences du compte connecté (voir "Préférences synchronisées" plus bas).
+const THEME_PAR_DEFAUT = 'sombre';
+const THEMES_SUPPORTEES = ['sombre', 'clair'];
+const MODE_NOTIFICATION_PAR_DEFAUT = 'systeme';
+const MODES_NOTIFICATION = ['systeme', 'discret', 'aucune'];
+let themeActuel = THEME_PAR_DEFAUT;
+let modeNotificationActuel = MODE_NOTIFICATION_PAR_DEFAUT;
+let aliasActuel = null;
+// Image de profil (data URL) ou null — voir User-Config-Service.
+let avatarActuel = null;
 
 // Active les logs de diagnostic liés aux notifications (avertissement WSL,
 // décisions de showMessageNotification, transitions minimize/restore/
@@ -86,6 +123,21 @@ const APP_ICON_PATH = path.join(__dirname, 'assets', 'icon.png');
 // Évite le flash de fenêtre blanche par défaut d'Electron au démarrage ;
 // reprend la teinte sombre de la maquette (voir maquette/maquette_multi.pdf).
 const WINDOW_BACKGROUND_COLOR = '#0d3d38';
+// Fond natif de la fenêtre pour le thème clair (= --bg-panel de styles.css) :
+// visible une fraction de seconde entre deux pages, il doit suivre le thème.
+const WINDOW_BACKGROUND_COLOR_CLAIR = '#e3f6ef';
+
+function couleurFondFenetre() {
+  return themeActuel === 'clair'
+    ? WINDOW_BACKGROUND_COLOR_CLAIR
+    : WINDOW_BACKGROUND_COLOR;
+}
+
+// Barre de titre personnalisée : hors macOS, la fenêtre est sans cadre
+// (frame: false) — le cadre natif laissait une barre et un contour blancs
+// sous Linux/WSLg. La bande glissable, avec le nom de l'app et les boutons
+// réduire/agrandir/fermer (canaux 'fenetre:*' plus bas), est injectée par
+// preload.js et stylée par styles.css / connexion.css (.app-titlebar).
 
 const DEFAULT_WINDOW_WIDTH = 1280;
 const DEFAULT_WINDOW_HEIGHT = 800;
@@ -239,6 +291,78 @@ function estProbablementWSL() {
   }
 }
 
+// --- Service de notifications Linux (D-Bus) ---------------------------------
+// Sous Linux, Notification.show() passe par libnotify, qui appelle D-Bus de
+// façon SYNCHRONE dans le processus main. Quand aucun démon de notifications
+// ne tourne mais que le service est déclaré « activable » (cas typique de
+// WSL), D-Bus tente de le démarrer (StartServiceByName) et libnotify attend
+// jusqu'à l'expiration (~25 s) : toute l'application est figée pendant ce
+// temps. On vérifie donc, en arrière-plan et sans jamais bloquer (processus
+// `gdbus` séparé, délai court), qu'un service est RÉELLEMENT actif avant
+// d'appeler libnotify ; sinon, repli (voir notifierParRepli).
+// CHATVARDAGE_NOTIFICATIONS_SYSTEME=1 force les notifications natives,
+// =0 les désactive.
+const INTERVALLE_SONDE_NOTIFICATIONS_MS = 60_000;
+const DELAI_SONDE_NOTIFICATIONS_MS = 3000;
+// 'disponible' | 'absent' | 'inconnu' (sonde pas encore terminée : repli).
+let serviceNotificationsLinux =
+  process.platform === 'linux' ? 'inconnu' : 'disponible';
+
+function sonderServiceNotificationsLinux() {
+  if (process.platform !== 'linux') return;
+  const forcage = process.env.CHATVARDAGE_NOTIFICATIONS_SYSTEME;
+  if (forcage === '1' || forcage === '0') {
+    serviceNotificationsLinux = forcage === '1' ? 'disponible' : 'absent';
+    return;
+  }
+  require('child_process').execFile(
+    'gdbus',
+    [
+      'call',
+      '--session',
+      '--dest',
+      'org.freedesktop.DBus',
+      '--object-path',
+      '/org/freedesktop/DBus',
+      '--method',
+      'org.freedesktop.DBus.NameHasOwner',
+      'org.freedesktop.Notifications',
+    ],
+    { timeout: DELAI_SONDE_NOTIFICATIONS_MS },
+    (erreur, sortie) => {
+      // Toute erreur (gdbus absent, pas de bus de session, délai dépassé)
+      // compte comme « absent » : mieux vaut un repli qu'une app figée.
+      const etat = !erreur && /\btrue\b/.test(sortie) ? 'disponible' : 'absent';
+      if (etat !== serviceNotificationsLinux) {
+        logDebugNotif(
+          `[notifications] service de notifications D-Bus : ${etat}` +
+            (etat === 'absent' ? ' (repli : clignotement + message dans l\'app)' : '')
+        );
+      }
+      serviceNotificationsLinux = etat;
+    }
+  );
+}
+
+function surveillerServiceNotificationsLinux() {
+  if (process.platform !== 'linux') return;
+  sonderServiceNotificationsLinux();
+  // Un démon lancé plus tard (ou arrêté) est pris en compte.
+  setInterval(sonderServiceNotificationsLinux, INTERVALLE_SONDE_NOTIFICATIONS_MS);
+}
+
+/**
+ * Sans service de notifications : fait clignoter l'icône de l'app dans la
+ * barre des tâches (arrêté quand la fenêtre reprend le focus) et demande à
+ * la page d'afficher le message dans l'app.
+ */
+function notifierParRepli(type, conversationId, contenu) {
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isFocused()) {
+    mainWindow.flashFrame(true);
+  }
+  envoyerVersRenderer('notifications:repli', { type, conversationId, contenu });
+}
+
 function avertirSiWSL() {
   if (!estProbablementWSL()) return;
   logDebugNotif(
@@ -277,7 +401,11 @@ function showMessageNotification(message) {
   }
 
   const conversationId = cleanText(message?.conversationId, 120);
-  const body = cleanText(message?.contenu, 180);
+  // Aperçu masqué (préférence de l'utilisateur, voir NotifPrefs) : texte
+  // générique, rien du message lui-même sur un écran verrouillé.
+  const body = message?.apercuMasque
+    ? t(langueActuelle, 'notifications.hiddenPreview')
+    : cleanText(message?.contenu, 180);
   if (!conversationId || !body) {
     logDebugNotif(
       '[showMessageNotification] ignoré : message invalide (conversationId ou contenu manquant).'
@@ -303,6 +431,23 @@ function showMessageNotification(message) {
     return false;
   }
 
+  // `message.type` ('salon' ou 'prive') vient tel quel de l'événement
+  // d'origine (voir notifierMessageSysteme côté renderer.js/message-prive.js)
+  // : il indique au renderer sur quelle page/conversation naviguer au clic.
+  // Liste blanche plutôt que champ libre : un type inattendu désactive
+  // seulement la navigation.
+  const type =
+    message?.type === 'salon' || message?.type === 'prive'
+      ? message.type
+      : null;
+  if (serviceNotificationsLinux !== 'disponible') {
+    notifierParRepli(type, conversationId, body);
+    logDebugNotif(
+      `[showMessageNotification] repli (service de notifications ${serviceNotificationsLinux}) pour "${conversationId}".`
+    );
+    return true;
+  }
+
   // `silent` volontairement laissé à sa valeur par défaut (false) : c'est ce
   // qui fait jouer le son système de notification (celui de Windows en
   // particulier). Le renderer ne construit cette notification que pour les
@@ -310,23 +455,12 @@ function showMessageNotification(message) {
   // notif-prefs.js) — ne pas passer silent:true ici sans mettre ce
   // commentaire à jour, ça casserait cette exigence silencieusement.
   const notification = new Notification({
-    title: 'Nouveau message',
+    // Langue de l'app au moment de la notification (même source que le menu).
+    title: t(langueActuelle, 'notifications.newMessageTitle'),
     body,
     icon: APP_ICON_PATH,
   });
 
-  // `message.type` ('salon' ou 'prive') vient tel quel de l'événement
-  // d'origine (voir simulerMessagePrive/simulerMessageSalon plus bas, et
-  // notifierMessageSysteme côté renderer.js/message-prive.js qui relaie
-  // l'objet message complet sans le transformer) : on s'en sert pour dire
-  // au renderer sur quelle page/conversation naviguer au clic, en plus de
-  // remettre la fenêtre au premier plan. `type` volontairement optionnel
-  // (cleanText avec une liste blanche plutôt qu'un champ libre) : un champ
-  // inattendu ne doit pas planter le clic, juste désactiver la navigation.
-  const type =
-    message?.type === 'salon' || message?.type === 'prive'
-      ? message.type
-      : null;
   notification.on('click', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.show();
@@ -351,6 +485,31 @@ function showMessageNotification(message) {
   return true;
 }
 
+// Zoom adaptatif (voir createWindow) : 100 % jusqu'à la taille par défaut
+// de la fenêtre, puis proportionnel à la taille de la fenêtre, plafonné.
+// On prend le plus petit des deux rapports (largeur, hauteur) pour que la
+// mise en page tienne toujours, et on arrondit par pas de 5 % pour éviter
+// que le texte « tremble » pendant un redimensionnement.
+const ZOOM_ADAPTATIF_MAX = 1.35;
+
+function facteurZoomAdaptatif(largeur, hauteur) {
+  const rapport = Math.min(
+    largeur / DEFAULT_WINDOW_WIDTH,
+    hauteur / DEFAULT_WINDOW_HEIGHT
+  );
+  const borne = Math.min(Math.max(rapport, 1), ZOOM_ADAPTATIF_MAX);
+  return Math.round(borne * 20) / 20;
+}
+
+function appliquerZoomAdaptatif(win) {
+  if (win.isDestroyed()) return;
+  const [largeur, hauteur] = win.getContentSize();
+  const facteur = facteurZoomAdaptatif(largeur, hauteur);
+  if (win.webContents.getZoomFactor() !== facteur) {
+    win.webContents.setZoomFactor(facteur);
+  }
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: DEFAULT_WINDOW_WIDTH,
@@ -359,12 +518,17 @@ function createWindow() {
     minHeight: MIN_WINDOW_HEIGHT,
     center: true,
     show: false, // affichée seulement une fois prête (voir 'ready-to-show' plus bas)
-    backgroundColor: WINDOW_BACKGROUND_COLOR,
+    backgroundColor: couleurFondFenetre(),
     // Barre de menu masquée par défaut (Alt pour l'afficher sur
     // Windows/Linux) : notre menu applicatif (buildMenu) reste actif et
     // accessible, mais n'est pas imposé visuellement — élément Electron
     // "non désiré" en moins dans l'interface par défaut.
     autoHideMenuBar: true,
+    // macOS garde ses propres boutons (feux tricolores) ; ailleurs, fenêtre
+    // sans cadre et boutons dessinés par la page (voir preload.js).
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hidden' }
+      : { frame: false }),
     icon: APP_ICON_PATH,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -395,6 +559,8 @@ function createWindow() {
     logDebugNotif('[fenetre] restore');
   });
   win.on('focus', () => {
+    // Arrête le clignotement éventuel du repli de notification.
+    win.flashFrame(false);
     fenetreEstFocusee = true;
     logDebugNotif('[fenetre] focus');
     // Voir 'window:focus-changed' plus bas : le renderer a besoin de ce
@@ -422,6 +588,11 @@ function createWindow() {
   // ne se déclenche jamais sous cet environnement — seuls 'focus'/'blur'
   // (voir plus haut) réagissent, d'où l'abandon complet de la minimisation
   // comme signal de suppression des notifications (voir showMessageNotification).
+  // Icône du bouton agrandir/restaurer de la barre de titre (preload.js).
+  win.on('maximize', () => envoyerVersRenderer('fenetre:maximisee', true));
+  win.on('unmaximize', () =>
+    envoyerVersRenderer('fenetre:maximisee', fenetreEstAgrandie())
+  );
   win.on('hide', () => {
     logDebugNotif('[fenetre] hide');
   });
@@ -432,6 +603,17 @@ function createWindow() {
   // Désactive le zoom Chromium par défaut (Ctrl+molette, pincement) : pas
   // pertinent pour cette application de bureau et pas prévu dans la maquette.
   win.webContents.setVisualZoomLevelLimits(1, 1);
+
+  // Zoom adaptatif : l'interface grandit avec la fenêtre (agrandie, grand
+  // écran) au lieu de laisser de grands vides. Réappliqué à chaque
+  // chargement de page, le zoom Chromium n'étant pas conservé d'une page à
+  // l'autre de façon fiable.
+  let delaiZoom = null;
+  win.on('resize', () => {
+    clearTimeout(delaiZoom);
+    delaiZoom = setTimeout(() => appliquerZoomAdaptatif(win), 60);
+  });
+  win.webContents.on('did-finish-load', () => appliquerZoomAdaptatif(win));
 
   // DevTools jamais ouverts automatiquement en production.
   if (isDev) {
@@ -629,12 +811,8 @@ ipcMain.handle('navigation:tableau-de-bord', (event) => {
 // (APP_LOGIN_PATH), qui vit délibérément hors de cet arbre (voir isAppUrl()
 // plus haut pour pourquoi ce chemin précis est reconnu comme interne à
 // l'app).
-ipcMain.handle('navigation:connexion', (event) => {
-  const url = event.senderFrame?.url ?? '';
-  if (!isAppUrl(url)) {
-    return;
-  }
-  if (!mainWindow) {
+function afficherPageConnexion() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
   if (isDev) {
@@ -642,7 +820,20 @@ ipcMain.handle('navigation:connexion', (event) => {
   } else {
     mainWindow.loadFile(APP_LOGIN_PATH);
   }
+}
+
+ipcMain.handle('navigation:connexion', (event) => {
+  const url = event.senderFrame?.url ?? '';
+  if (!isAppUrl(url)) {
+    return;
+  }
+  afficherPageConnexion();
 });
+
+// Pourquoi l'app est revenue à l'écran de connexion sans action de
+// l'utilisateur (ex. 'session-expiree') : lu UNE fois par la page de
+// connexion, qui affiche alors un message explicatif.
+let motifRetourConnexion = null;
 
 function verifierProvenance(event) {
   if (!isAppUrl(event.senderFrame?.url ?? '')) {
@@ -657,6 +848,40 @@ function exposerCanal(nom, action) {
   });
 }
 
+// --- Boutons de la barre de titre (fenêtre sans cadre, voir preload.js) ------
+// Agrandir/restaurer est fait à la main (bornes = zone de travail de
+// l'écran) plutôt qu'avec maximize()/unmaximize() : sous WSLg, une fenêtre
+// sans cadre agrandie par le gestionnaire de fenêtres ne se restaure pas
+// correctement, et isMaximized()/'unmaximize' n'y sont pas fiables (même
+// limite que 'minimize', voir createWindow).
+let bornesAvantAgrandissement = null;
+
+function fenetreEstAgrandie() {
+  return bornesAvantAgrandissement !== null || !!mainWindow?.isMaximized();
+}
+
+function basculerAgrandissement() {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize();
+  } else if (bornesAvantAgrandissement) {
+    mainWindow.setBounds(bornesAvantAgrandissement);
+    bornesAvantAgrandissement = null;
+  } else {
+    bornesAvantAgrandissement = mainWindow.getBounds();
+    const { workArea } = screen.getDisplayMatching(bornesAvantAgrandissement);
+    mainWindow.setBounds(workArea);
+  }
+  const agrandie = fenetreEstAgrandie();
+  envoyerVersRenderer('fenetre:maximisee', agrandie);
+  return agrandie;
+}
+
+exposerCanal('fenetre:reduire', () => mainWindow?.minimize());
+exposerCanal('fenetre:agrandir', () => basculerAgrandissement());
+exposerCanal('fenetre:fermer', () => mainWindow?.close());
+exposerCanal('fenetre:est-maximisee', () => fenetreEstAgrandie());
+
 // --- Session (écran de connexion) -------------------------------------------
 // chatGateway est une INSTANCE UNIQUE, partagée par la page de connexion et
 // le dashboard (contrairement à une instance par renderer, qui perdrait
@@ -667,22 +892,44 @@ function exposerCanal(nom, action) {
 // Authentification par pseudo OU courriel + mot de passe (voir
 // AuthGateway.ts / RealGatewayRuntime.authentifier pour le contrat complet).
 exposerCanal('session:authentifier', ({ identifiant, motDePasse }) =>
-  chatGateway.authentifier({ identifiant, motDePasse })
+  chatGateway
+    .authentifier({ identifiant, motDePasse })
+    .then(apresOuvertureSessionAvecLangueChoisie(langueChoisieAvantConnexion))
 );
 // Écran d'inscription (courriel + mot de passe, pseudo par défaut généré
 // côté renderer — voir genererPseudoParDefaut — et transmis ici ; le pseudo
 // choisi ici n'est qu'un point de départ, modifiable ensuite sur l'écran
 // "Choisis ton pseudo" ou la page profil).
 exposerCanal('session:inscription', ({ courriel, motDePasse, pseudo }) =>
-  chatGateway.inscrire({ courriel, motDePasse, pseudo })
+  chatGateway
+    .inscrire({ courriel, motDePasse, pseudo })
+    .then(apresOuvertureSessionAvecLangueChoisie(langueChoisieAvantConnexion))
 );
 // Reprend une session déjà ouverte lors d'un lancement précédent (jeton
 // persisté sur disque), appelé par la page de connexion au démarrage pour
 // sauter directement au tableau de bord si possible.
-exposerCanal('session:restaurer', () => chatGateway.restaurerSession());
+exposerCanal('session:restaurer', () =>
+  chatGateway.restaurerSession().then(apresOuvertureSession)
+);
 // Déconnexion explicite (voir page profil) : ferme le socket, efface le
 // jeton en mémoire et sur disque.
-exposerCanal('session:deconnexion', () => chatGateway.deconnexion());
+/** Préférences propres au compte : on ne les laisse pas fuiter vers le
+ * compte suivant. Thème et langue restent tels quels (écran de connexion). */
+function oublierPreferencesDuCompte() {
+  modeNotificationActuel = MODE_NOTIFICATION_PAR_DEFAUT;
+  aliasActuel = null;
+  avatarActuel = null;
+}
+
+exposerCanal('session:deconnexion', async () => {
+  await chatGateway.deconnexion();
+  oublierPreferencesDuCompte();
+});
+exposerCanal('navigation:motif-retour-connexion', () => {
+  const motif = motifRetourConnexion;
+  motifRetourConnexion = null;
+  return motif;
+});
 // Utilisé par le dashboard au démarrage pour savoir qui vient de se
 // connecter, au lieu de coder un utilisateur en dur (voir renderer.js).
 exposerCanal('session:utilisateur-connecte', () =>
@@ -702,13 +949,32 @@ exposerCanal('profil:supprimer-compte', ({ motDePasseActuel }) =>
 );
 
 // --- Configuration utilisateur (alias, thème, langue, notifications) --------
+// Source de vérité : User-Config-Service. main.js en garde une copie
+// (themeActuel, langueActuelle, modeNotificationActuel, aliasActuel), chargée
+// à l'ouverture de session et diffusée à la fenêtre via 'preferences:change'
+// à chaque modification, pour que toutes les pages s'y alignent en direct.
+// --- Recherche d'utilisateurs (nouveau message privé) -------------------------
+exposerCanal('utilisateurs:suggestions-dm', () =>
+  chatGateway.obtenirSuggestionsDm()
+);
+exposerCanal('utilisateurs:rechercher', ({ texte }) =>
+  chatGateway.rechercherUtilisateurs(texte)
+);
+
 exposerCanal('config:obtenir', () => chatGateway.configObtenir());
-exposerCanal('config:modifier', (donnees) => chatGateway.configModifier(donnees));
+exposerCanal('config:modifier', async (donnees) => {
+  const config = await chatGateway.configModifier(donnees);
+  appliquerPreferencesLocales(config);
+  return config;
+});
+exposerCanal('preferences:obtenir', () => preferencesCourantes());
+exposerCanal('preferences:modifier', (donnees) =>
+  enregistrerPreferences(donnees)
+);
 
 // --- Réseau / présence -----------------------------------------------------
 exposerCanal('reseau:etat', () => chatGateway.obtenirEtatConnexion());
-exposerCanal('reseau:coupure', () => chatGateway.simulerCoupure());
-exposerCanal('reseau:reconnexion', () => chatGateway.simulerReconnexion());
+exposerCanal('reseau:reessayer', () => chatGateway.reconnecterMaintenant());
 exposerCanal('presence:obtenir', () => chatGateway.obtenirPresences());
 exposerCanal('presence:modifier', ({ statut }) =>
   chatGateway.modifierPresence({ statut })
@@ -716,9 +982,33 @@ exposerCanal('presence:modifier', ({ statut }) =>
 
 // Le runtime émet les transitions avant même que l'appel IPC de reconnexion
 // soit terminé, ce qui permet à l'UI d'afficher réellement « Reconnexion ».
+// Jeton expiré ou révoqué en cours d'utilisation (voir
+// RealGatewayRuntime.verifierSessionApres401) : la session est déjà fermée
+// côté gateway ; on ramène l'app à l'écran de connexion, qui explique
+// pourquoi (motifRetourConnexion).
+chatGateway.on('session-expiree', () => {
+  oublierPreferencesDuCompte();
+  motifRetourConnexion = 'session-expiree';
+  afficherPageConnexion();
+});
+
 chatGateway.on('etat-connexion', (etatConnexion) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('reseau:etat-change', etatConnexion);
+  }
+});
+// Avatar ou alias d'autres utilisateurs modifié (voir
+// chargerProfilsPublics) : les pages redessinent les photos concernées.
+chatGateway.on('profils-publics', (ids) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('utilisateurs:profils-change', ids);
+  }
+});
+// Changement dans un serveur (membres, salons, invitation, expulsion…),
+// signalé en temps réel : les pages rechargent leur état.
+chatGateway.on('serveur-change', (evenement) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('serveurs:change', evenement);
   }
 });
 chatGateway.on('presence', (presence) => {
@@ -761,8 +1051,11 @@ chatGateway.on('message-recu', (payload) => {
 exposerCanal('langue:obtenir', () => langueActuelle);
 exposerCanal('langue:definir', ({ langue }) => {
   if (LANGUES_SUPPORTEES.includes(langue)) {
-    langueActuelle = langue;
-    Menu.setApplicationMenu(buildMenu());
+    if (!chatGateway.obtenirUtilisateurConnecte()) {
+      langueChoisieAvantConnexion = langue;
+    }
+    appliquerPreferencesLocales({ langue });
+    persisterPreferenceEnArrierePlan({ langue });
   }
   return langueActuelle;
 });
@@ -775,21 +1068,189 @@ exposerCanal('i18n:langue-par-defaut', () => LANGUE_PAR_DEFAUT);
 
 // --- Thème (clair/sombre) -------------------------------------------------
 // Même principe que la langue ci-dessus : état unique côté main, partagé
-// entre la page de connexion et le dashboard/messages privés, réinitialisé
-// à chaque lancement de l'app (pas de persistance sur disque, pour rester
-// cohérent avec le choix déjà fait pour la langue).
-const THEME_PAR_DEFAUT = 'sombre';
-const THEMES_SUPPORTEES = ['sombre', 'clair'];
-let themeActuel = THEME_PAR_DEFAUT;
-
+// entre la page de connexion et le dashboard/messages privés. Avant
+// connexion, c'est un simple choix local ; une fois connecté, il est chargé
+// depuis le serveur et toute modification y est enregistrée (voir
+// "Préférences synchronisées" plus bas).
 exposerCanal('theme:obtenir', () => themeActuel);
 exposerCanal('theme:definir', ({ theme }) => {
   if (THEMES_SUPPORTEES.includes(theme)) {
-    themeActuel = theme;
+    appliquerPreferencesLocales({ theme });
+    persisterPreferenceEnArrierePlan({ theme });
   }
   return themeActuel;
 });
 exposerCanal('theme:par-defaut', () => THEME_PAR_DEFAUT);
+
+// --- Préférences synchronisées ------------------------------------------------
+function preferencesCourantes() {
+  return {
+    theme: themeActuel,
+    langue: langueActuelle,
+    modeNotification: modeNotificationActuel,
+    alias: aliasActuel,
+    avatar: avatarActuel,
+  };
+}
+
+function diffuserPreferences() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('preferences:change', preferencesCourantes());
+  }
+}
+
+/** Met à jour la copie locale (valeurs invalides ignorées) et prévient la
+ * fenêtre. `donnees` peut être partiel. */
+function appliquerPreferencesLocales(donnees) {
+  if (THEMES_SUPPORTEES.includes(donnees.theme)) {
+    themeActuel = donnees.theme;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setBackgroundColor(couleurFondFenetre());
+    }
+  }
+  if (
+    LANGUES_SUPPORTEES.includes(donnees.langue) &&
+    donnees.langue !== langueActuelle
+  ) {
+    langueActuelle = donnees.langue;
+    Menu.setApplicationMenu(buildMenu());
+  }
+  if (MODES_NOTIFICATION.includes(donnees.modeNotification)) {
+    modeNotificationActuel = donnees.modeNotification;
+  }
+  if ('alias' in donnees) aliasActuel = donnees.alias || null;
+  if ('avatar' in donnees) avatarActuel = donnees.avatar || null;
+  diffuserPreferences();
+  return preferencesCourantes();
+}
+
+async function synchroniserPreferencesDepuisServeur() {
+  try {
+    appliquerPreferencesLocales(await chatGateway.configObtenir());
+  } catch (erreur) {
+    console.error('[preferences] chargement depuis le serveur impossible :', erreur);
+  }
+}
+
+async function apresOuvertureSession(resultat) {
+  if (resultat) {
+    // Charger ses serveurs inscrit l'utilisateur au serveur par défaut
+    // « Chatvardage » (voir Room-Service, listerMesServeurs) : fait dès
+    // l'ouverture de session, donc dès l'inscription, sans attendre la page
+    // des salons (écran « Choisis ton pseudo », app quittée avant…). En
+    // arrière-plan : un échec ne doit pas bloquer la connexion, la page des
+    // salons refera l'appel.
+    chatGateway.chargerServeurs().catch((erreur) => {
+      console.error('[serveurs] inscription au serveur par défaut :', erreur);
+    });
+    await synchroniserPreferencesDepuisServeur();
+  }
+  return resultat;
+}
+
+/**
+ * Connexion/inscription explicites : si une langue a été choisie sur l'écran
+ * de connexion (`langue`, capturée AVANT l'appel, voir
+ * langueChoisieAvantConnexion), elle prime sur celle du profil et y est
+ * sauvegardée, au lieu d'être écrasée par synchroniserPreferencesDepuisServeur.
+ * Sans choix explicite (`langue` null), la langue du profil s'applique. La
+ * reprise de session (jeton persisté) garde, elle aussi, la langue du profil.
+ */
+function apresOuvertureSessionAvecLangueChoisie(langue) {
+  return async (resultat) => {
+    await apresOuvertureSession(resultat);
+    if (resultat) langueChoisieAvantConnexion = null;
+    if (resultat && LANGUES_SUPPORTEES.includes(langue)) {
+      try {
+        await enregistrerPreferences({ langue });
+      } catch (erreur) {
+        appliquerPreferencesLocales({ langue });
+        console.error('[preferences] enregistrement de la langue :', erreur);
+      }
+    }
+    return resultat;
+  };
+}
+
+/** Enregistre sur le serveur (si connecté) puis applique la réponse. */
+async function enregistrerPreferences(donnees) {
+  if (!chatGateway.obtenirUtilisateurConnecte()) {
+    return appliquerPreferencesLocales(donnees);
+  }
+  return appliquerPreferencesLocales(await chatGateway.configModifier(donnees));
+}
+
+/** Pour les sélecteurs rapides (thème/langue) : effet local immédiat,
+ * enregistrement serveur au mieux, sans bloquer l'UI. */
+function persisterPreferenceEnArrierePlan(donnees) {
+  if (!chatGateway.obtenirUtilisateurConnecte()) return;
+  chatGateway.configModifier(donnees).catch((erreur) => {
+    console.error('[preferences] enregistrement impossible :', erreur);
+  });
+}
+
+// --- Réseau du système d'exploitation ------------------------------------------
+// Deux signaux combinés, relayés au gateway (voir signalerReseauSysteme) :
+//  1. net.isOnline() : état des interfaces réseau de l'OS. Insuffisant seul :
+//     sous WSL (mode NAT), l'interface virtuelle eth0 reste "UP" même quand
+//     Windows perd le Wi-Fi, et une interface active ne garantit pas un
+//     accès réel au réseau.
+//  2. une sonde de connectivité (HEAD sur une URL "generate_204", même
+//     principe que Windows/Chrome/Android) : indispensable quand le serveur
+//     tourne en local (localhost:3000), puisque couper le réseau ne coupe
+//     alors PAS la connexion au serveur — sans cette sonde, rien ne
+//     changerait à l'écran. Désactivable avec CHATVARDAGE_CONNECTIVITY_URL=""
+//     (seul net.isOnline() est alors utilisé), ou redirigeable vers une
+//     autre URL avec cette même variable.
+const URL_SONDE_CONNECTIVITE =
+  process.env.CHATVARDAGE_CONNECTIVITY_URL ??
+  'https://www.gstatic.com/generate_204';
+const INTERVALLE_SONDE_RESEAU_MS = 3000;
+const DELAI_SONDE_RESEAU_MS = 3000;
+// Échecs consécutifs avant de déclarer "hors ligne" (évite qu'un seul
+// paquet perdu fasse clignoter l'indicateur) ; un seul succès suffit pour
+// repasser "en ligne".
+const ECHECS_AVANT_HORS_LIGNE = 2;
+
+async function reseauJoignable() {
+  if (!net.isOnline()) return false;
+  if (!URL_SONDE_CONNECTIVITE) return true;
+  try {
+    const reponse = await net.fetch(URL_SONDE_CONNECTIVITE, {
+      method: 'HEAD',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(DELAI_SONDE_RESEAU_MS),
+    });
+    return reponse.status < 500;
+  } catch {
+    return false;
+  }
+}
+
+function surveillerReseauSysteme() {
+  let dernierEtat = true;
+  let echecsConsecutifs = 0;
+
+  const sonder = async () => {
+    const joignable = await reseauJoignable();
+    echecsConsecutifs = joignable ? 0 : echecsConsecutifs + 1;
+    // Interfaces coupées : certain, pas besoin d'attendre un 2e échec.
+    const enLigne =
+      joignable ||
+      (net.isOnline() && echecsConsecutifs < ECHECS_AVANT_HORS_LIGNE);
+    if (enLigne !== dernierEtat) {
+      dernierEtat = enLigne;
+      console.log(`[reseau] système ${enLigne ? 'en ligne' : 'hors ligne'}`);
+      chatGateway.signalerReseauSysteme(enLigne);
+    }
+    // setTimeout (et non setInterval) : jamais deux sondes en parallèle si
+    // l'une met du temps à expirer.
+    setTimeout(sonder, INTERVALLE_SONDE_RESEAU_MS);
+  };
+  void sonder();
+
+  powerMonitor.on('resume', () => chatGateway.signalerReveil());
+}
 
 // --- Salons ------------------------------------------------------------
 ipcMain.handle(
@@ -805,6 +1266,11 @@ ipcMain.handle(
 
 ipcMain.handle('notification:message-received', (event, message) => {
   if (!isTrustedIpcEvent(event)) {
+    return { shown: false };
+  }
+  // Défense en profondeur : le renderer filtre déjà selon NotifPrefs, mais
+  // la préférence serveur fait foi.
+  if (modeNotificationActuel !== 'systeme') {
     return { shown: false };
   }
   return { shown: showMessageNotification(message) };
@@ -876,35 +1342,53 @@ function envoyerVersRenderer(canal, donnees) {
   }
 }
 
-exposerCanal('salons:etat', () => chatGateway.obtenirEtat());
+// --- Serveurs et salons (Room-Service) -----------------------------------
+// L'autorisation réelle est vérifiée par Room-Service à partir du JWT et du
+// rôle de l'utilisateur DANS le serveur ; l'UI ne fait que masquer les
+// actions indisponibles.
+exposerCanal('salons:etat', ({ serveurId, salonId } = {}) =>
+  chatGateway.obtenirEtat({ serveurId, salonId })
+);
 // Pagination "charger plus ancien" de l'historique d'un salon : salons:etat
 // ci-dessus ne renvoie déjà plus que la page de messages la plus récente.
 exposerCanal('salons:messages-avant', (donnees) =>
   chatGateway.obtenirMessagesSalonAvant(donnees)
 );
 exposerCanal('utilisateurs:lister', () => chatGateway.obtenirUtilisateurs());
+exposerCanal('serveurs:lister', () => chatGateway.obtenirServeurs());
+exposerCanal('serveurs:creer', (donnees) => chatGateway.creerServeur(donnees));
+exposerCanal('serveurs:modifier', (donnees) =>
+  chatGateway.modifierServeur(donnees)
+);
+exposerCanal('serveurs:supprimer', ({ serveurId }) =>
+  chatGateway.supprimerServeur(serveurId)
+);
+exposerCanal('serveurs:rejoindre', ({ serveurId }) =>
+  chatGateway.rejoindreServeur(serveurId)
+);
+exposerCanal('serveurs:quitter', ({ serveurId }) =>
+  chatGateway.quitterServeur(serveurId)
+);
+exposerCanal('serveurs:decouvrir', ({ texte }) =>
+  chatGateway.decouvrirServeurs(texte)
+);
+exposerCanal('serveurs:expulser', (donnees) =>
+  chatGateway.expulserMembre(donnees)
+);
+exposerCanal('serveurs:changer-role', (donnees) =>
+  chatGateway.changerRoleMembre(donnees)
+);
+exposerCanal('serveurs:inviter', (donnees) => chatGateway.inviter(donnees));
+exposerCanal('serveurs:accepter-invitation', (donnees) =>
+  chatGateway.accepterInvitation(donnees)
+);
+exposerCanal('serveurs:refuser-invitation', (donnees) =>
+  chatGateway.refuserInvitation(donnees)
+);
 exposerCanal('salons:creer', (donnees) => chatGateway.creerSalon(donnees));
-// Gestion d'un salon (renommer/changer visibilité, supprimer, quitter,
-// retirer un membre) — réservée aux modérateurs/admins côté serveur (voir
-// Room-Service) ; l'UI masque déjà ces actions pour les autres utilisateurs
-// (voir peutGererSalons), mais l'autorisation réelle vient du JWT, pas du
-// renderer.
 exposerCanal('salons:modifier', (donnees) => chatGateway.modifierSalon(donnees));
 exposerCanal('salons:supprimer', ({ salonId }) =>
   chatGateway.supprimerSalon(salonId)
-);
-exposerCanal('salons:quitter', ({ salonId }) =>
-  chatGateway.quitterSalonDistant(salonId)
-);
-exposerCanal('salons:retirer-membre', (donnees) =>
-  chatGateway.retirerMembreSalon(donnees)
-);
-exposerCanal('salons:inviter', (donnees) => chatGateway.inviter(donnees));
-exposerCanal('salons:accepter-invitation', (donnees) =>
-  chatGateway.accepterInvitation(donnees)
-);
-exposerCanal('salons:refuser-invitation', (donnees) =>
-  chatGateway.refuserInvitation(donnees)
 );
 exposerCanal('salons:envoyer-message', (donnees) =>
   chatGateway.envoyerMessage(donnees)
@@ -914,6 +1398,10 @@ exposerCanal('messages:modifier', (donnees) =>
 );
 exposerCanal('messages:supprimer', (donnees) =>
   chatGateway.supprimerMessage(donnees)
+);
+// Pastilles « non lu » : dernier message de chaque conversation seulement.
+exposerCanal('resumes-conversations-privees', () =>
+  chatGateway.obtenirResumesConversationsPrivees()
 );
 exposerCanal('obtenir-conversations-privees', () =>
   chatGateway.obtenirConversationsPrivees()
@@ -961,7 +1449,9 @@ ipcMain.handle('navigate', (event, page) => {
 // parallèle (deux fenêtres se disputeraient la même session/persistance
 // locale). Si une deuxième instance est lancée, on la ferme immédiatement
 // et on redonne le focus à la fenêtre existante plutôt que de laisser
-// cohabiter deux processus.
+// cohabiter deux processus. Le verrou est propre au dossier userData : une
+// instance lancée avec CHATVARDAGE_PROFIL (voir en haut du fichier) a le
+// sien et peut donc tourner en parallèle.
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {
@@ -978,9 +1468,11 @@ if (!gotSingleInstanceLock) {
 
   app.whenReady().then(() => {
     avertirSiWSL();
+    surveillerServiceNotificationsLinux();
     Menu.setApplicationMenu(buildMenu());
     configurerCsp();
     mainWindow = createWindow();
+    surveillerReseauSysteme();
     // Pas d'appel à demarrerSimulationMessages() ici : à ce stade, la
     // fenêtre affiche l'écran de connexion et personne n'est encore
     // connecté. Voir le handler 'navigation:tableau-de-bord' plus haut, qui

@@ -32,6 +32,10 @@ const ChatUiShared = window.ChatUiShared;
 if (!ChatUiShared) {
   throw new Error('chat-ui-shared.js doit être chargé avant message-prive.js');
 }
+const LogiqueInterface = window.LogiqueInterface;
+if (!LogiqueInterface) {
+  throw new Error('logique-interface.js doit être chargé avant message-prive.js');
+}
 
 // ThemeManager vient de theme-browser.js, même pattern que I18n ci-dessus.
 const ThemeManager =
@@ -119,8 +123,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   );
   const profilBtn = document.getElementById('open-profile');
   const logoutBtn = document.getElementById('logout-btn');
-  const langueSelect = document.getElementById('language-select');
-  const themeSelect = document.getElementById('theme-select');
   const openNewDmBtn = document.getElementById('open-new-dm');
   const dmDialog = document.getElementById('dm-dialog');
   const dmDialogContent = document.getElementById('dialog-content');
@@ -130,13 +132,12 @@ window.addEventListener('DOMContentLoaded', async () => {
   const isTypingNom = document.getElementById('is-typing-nom');
   const connectionStatus = document.getElementById('connection-status');
   const connectionLabel = document.getElementById('connection-label');
-  const simulateNetworkCut = document.getElementById('simulate-network-cut');
-  const simulateNetworkReconnect = document.getElementById(
-    'simulate-network-reconnect'
-  );
-  const currentUserPresence = document.getElementById('current-user-presence');
+  const connectionDetail = document.getElementById('connection-detail');
+  const connectionRetry = document.getElementById('connection-retry');
+  const currentUserAvatar = document.getElementById('current-user-avatar');
 
-  let etatReseau = { statut: 'deconnecte' };
+  // 'inconnu' tant que main.js n'a pas répondu, voir renderer.js.
+  let etatReseau = { statut: 'inconnu' };
   let presences = {};
 
   function afficherEtatReseau(nouvelEtat = etatReseau) {
@@ -146,11 +147,10 @@ window.addEventListener('DOMContentLoaded', async () => {
       elements: {
         statutConnexion: connectionStatus,
         libelleConnexion: connectionLabel,
+        detailConnexion: connectionDetail,
+        reessayer: connectionRetry,
         messageInput,
         submitButton: messageForm?.querySelector('button[type="submit"]'),
-        presenceCourante: currentUserPresence,
-        couperReseau: simulateNetworkCut,
-        reconnecterReseau: simulateNetworkReconnect,
       },
       t,
       composerAutorise: Boolean(
@@ -160,13 +160,17 @@ window.addEventListener('DOMContentLoaded', async () => {
         )
       ),
     });
+    // La pastille de l'avatar dépend aussi de l'état réseau.
+    afficherPresenceCourante();
   }
 
   function afficherPresenceCourante() {
-    ChatUiShared.afficherPresenceCourante({
-      element: currentUserPresence,
-      utilisateurId: state.currentUserId,
+    ChatUiShared.afficherAvatarCourant({
+      element: currentUserAvatar,
+      utilisateur: state.utilisateurActuel,
+      preferences: state.preferences,
       presences,
+      etatReseau,
       t,
     });
   }
@@ -185,62 +189,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     afficherPresenceCourante();
   }
 
-  // Dictionnaire, langue courante et langue par défaut : voir
-  // I18n.initialiserDepuisElectronAPI (i18n-browser.js) pour le détail
-  // (trois canaux IPC indépendants, lancés en parallèle).
-  if (langueSelect) {
-    langueSelect.value = await I18n.initialiserDepuisElectronAPI(
-      window.electronAPI
-    );
-  } else {
-    await I18n.initialiserDepuisElectronAPI(window.electronAPI);
-  }
+  // Dictionnaire, langue courante et thème : voir
+  // I18n.initialiserDepuisElectronAPI / ThemeManager.initialiserDepuisElectronAPI.
+  // Les deux se modifient désormais depuis la page profil uniquement (voir
+  // onPreferencesChange plus bas pour l'application en direct).
+  await I18n.initialiserDepuisElectronAPI(window.electronAPI);
   appliquerTraductionsStatiques();
-
-  // Même principe pour le thème (voir ThemeManager.initialiserDepuisElectronAPI
-  // dans theme-browser.js) : appliqué sur <html> avant le premier rendu
-  // visible de cette page.
-  if (themeSelect) {
-    themeSelect.value = await ThemeManager.initialiserDepuisElectronAPI(
-      window.electronAPI
-    );
-  } else {
-    await ThemeManager.initialiserDepuisElectronAPI(window.electronAPI);
-  }
-
-  if (themeSelect) {
-    themeSelect.addEventListener('change', async (event) => {
-      try {
-        const themeConfirme = await window.electronAPI.definirTheme(
-          event.target.value
-        );
-        ThemeManager.appliquerTheme(themeConfirme);
-      } catch {
-        // Repli silencieux : le thème affiché reste celui d'avant si le
-        // canal échoue.
-      }
-      themeSelect.value = ThemeManager.obtenirTheme();
-    });
-  }
-
-  if (langueSelect) {
-    langueSelect.addEventListener('change', async (event) => {
-      try {
-        I18n.definirLangueActuelle(
-          await window.electronAPI.definirLangue(event.target.value)
-        );
-      } catch {
-        // Repli silencieux : la langue affichée reste celle d'avant si le
-        // canal échoue.
-      }
-      langueSelect.value = I18n.obtenirLangue();
-      appliquerTraductionsStatiques();
-      afficherEtatReseau();
-      afficherPresenceCourante();
-      renderConversationList();
-      await renderActiveConversation();
-    });
-  }
+  await ThemeManager.initialiserDepuisElectronAPI(window.electronAPI);
 
   // window.NotifPrefs vient de notif-prefs.js, un script classique chargé
   // avant ce module (voir message-prive.html) — voir ce fichier pour le
@@ -273,6 +228,12 @@ window.addEventListener('DOMContentLoaded', async () => {
       };
     })();
   const serviceNotifications = window.notifications;
+
+  // Pas de service de notifications système (ex. WSL, voir notifierParRepli
+  // dans main.js) : le message s'affiche dans l'app à la place.
+  serviceNotifications?.onNotificationRepli?.((message) => {
+    notifier(t('notifications.fallbackToast', { texte: message.contenu }));
+  });
 
   // Miroir de fenetreEstFocusee côté main.js (voir 'window:is-focused' /
   // 'window:focus-changed' dans preload.js) : sert uniquement à décider si
@@ -346,6 +307,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     conversations: [],
     activeConversationId: null,
     currentFilter: 'all',
+    preferences: null,
     currentUserId: null,
     // Utilisateur connecté complet ({id, pseudo, courriel, role} | null, voir
     // obtenirUtilisateurConnecte dans preload.js) — state.currentUserId
@@ -364,8 +326,12 @@ window.addEventListener('DOMContentLoaded', async () => {
    */
   function afficherUtilisateurCourant() {
     if (currentUserPseudoEl) {
-      currentUserPseudoEl.textContent = state.utilisateurActuel?.pseudo ?? '';
+      // Alias prioritaire, voir afficherUtilisateurCourant dans renderer.js.
+      const pseudo = state.utilisateurActuel?.pseudo ?? '';
+      currentUserPseudoEl.textContent = state.preferences?.alias || pseudo;
+      currentUserPseudoEl.title = state.preferences?.alias ? `@${pseudo}` : '';
     }
+    afficherPresenceCourante();
     if (currentUserRoleBadgeEl) {
       const role = state.utilisateurActuel?.role;
       const cleRole =
@@ -376,6 +342,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             : null;
       currentUserRoleBadgeEl.hidden = !cleRole;
       currentUserRoleBadgeEl.textContent = cleRole ? t(cleRole) : '';
+      currentUserRoleBadgeEl.title = cleRole ? t(cleRole) : '';
     }
   }
 
@@ -386,6 +353,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Vraie déconnexion — voir le même bouton et le même raisonnement dans
   // renderer.js.
   logoutBtn?.addEventListener('click', async () => {
+    // Le rail du compte suivant ne doit pas afficher nos serveurs.
+    ChatUiShared.oublierRailEnCache();
     try {
       await window.electronAPI.deconnexionSession();
     } catch (erreur) {
@@ -481,7 +450,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   /**
    * Retente l'envoi d'un message resté "non livré". Vérifie explicitement
    * etatReseau (EtatConnexion) — jamais `presences` : simuler sa propre
-   * présence "hors-ligne" (voir brancherControlesReseauPresence) ne doit pas
+   * présence "hors-ligne" (page profil) ne doit pas
    * empêcher de réessayer, seule une vraie coupure réseau le doit.
    */
   async function reessayerMessageEnAttenteDm(message) {
@@ -508,8 +477,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     // le même bloc catch qu'un envoi raté, et serait alors traité comme tel
     // (notification "échec", message remis en attente) — alors que le
     // message est déjà bien parti côté serveur à ce moment-là.
+    let envoye;
     try {
-      await window.electronAPI.envoyerMessagePrive({
+      envoye = await window.electronAPI.envoyerMessagePrive({
         conversationId: message.conversationId,
         contenu: message.contenu,
         utilisateurId: message.auteurId,
@@ -528,7 +498,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     retirerMessageEnAttenteDm(message.conversationId, message.id);
     messagesEnAttenteEnCoursDm.delete(message.id);
     try {
-      await refreshConversations();
+      // Message renvoyé par le serveur : pas de rechargement complet.
+      await integrerMessagePrive(envoye);
     } catch (erreur) {
       // Le message est bien parti ; seul le rechargement de la liste des
       // conversations a échoué ensuite — à ne pas confondre avec un échec
@@ -554,44 +525,17 @@ window.addEventListener('DOMContentLoaded', async () => {
     void renderActiveConversation({ conserverPositionScroll: true });
   }
 
-  // Fusionne messages plus anciens déjà remontés et page récente en
-  // dédoublonnant par id puis en triant par date d'envoi — voir
-  // fusionnerHistorique dans renderer.js pour l'équivalent salon et le détail
-  // du pourquoi (chevauchement possible entre les deux listes).
-  function fusionnerHistoriqueDm(messagesAnciens, messagesRecents) {
-    const parId = new Map();
-    [...messagesAnciens, ...messagesRecents].forEach((message) => {
-      parId.set(message.id, message);
-    });
-    return Array.from(parId.values()).sort((a, b) => a.envoi - b.envoi);
-  }
-
-  // Fusionne `messagesTries` (déjà trié par `envoi`, typiquement le résultat
-  // de fusionnerHistoriqueDm) avec `messagesEnAttente` (0, 1 ou 2 brouillons
-  // non livrés en général) sans re-trier tout l'historique — voir
-  // fusionnerAvecMessagesEnAttente dans renderer.js pour l'équivalent salon
-  // et le détail du pourquoi (renderActiveConversation est rappelé très
-  // souvent pour des raisons sans rapport avec les brouillons, ex.
-  // indicateur de saisie).
-  function fusionnerAvecMessagesEnAttenteDm(messagesTries, messagesEnAttente) {
-    if (!messagesEnAttente.length) return messagesTries;
-    const brouillonsTries = [...messagesEnAttente].sort(
-      (a, b) => a.envoi - b.envoi
+  // Fusions d'historique et de brouillons (champ date 'envoi') : logique
+  // pure partagée avec la page des salons et testée à 100 % (voir
+  // logique-interface.js).
+  const fusionnerHistoriqueDm = (messagesAnciens, messagesRecents) =>
+    LogiqueInterface.fusionnerHistorique(messagesAnciens, messagesRecents, 'envoi');
+  const fusionnerAvecMessagesEnAttenteDm = (messagesTries, messagesEnAttente) =>
+    LogiqueInterface.fusionnerAvecMessagesEnAttente(
+      messagesTries,
+      messagesEnAttente,
+      'envoi'
     );
-    const resultat = [];
-    let i = 0;
-    let j = 0;
-    while (i < messagesTries.length && j < brouillonsTries.length) {
-      if (messagesTries[i].envoi <= brouillonsTries[j].envoi) {
-        resultat.push(messagesTries[i++]);
-      } else {
-        resultat.push(brouillonsTries[j++]);
-      }
-    }
-    while (i < messagesTries.length) resultat.push(messagesTries[i++]);
-    while (j < brouillonsTries.length) resultat.push(brouillonsTries[j++]);
-    return resultat;
-  }
 
   // Construit l'élément affiché en haut de la liste des messages pour
   // représenter l'état de l'historique — voir creerStatutHistorique dans
@@ -669,15 +613,26 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  /**
+   * Recharge TOUTES les conversations (une requête d'historique par
+   * interlocuteur, voir obtenirConversationsPrivees) puis les affiche.
+   * Réservé au chargement de la page et aux cas qu'un ajout local ne couvre
+   * pas (nouvel interlocuteur…) : un message reçu, envoyé, modifié ou
+   * supprimé passe par integrerMessagePrive / appliquerMessage* (plus bas).
+   */
   async function refreshConversations(options = {}) {
-    const conversations = await window.electronAPI.obtenirConversationsPrivees(
+    state.conversations = await window.electronAPI.obtenirConversationsPrivees(
       state.currentUserId
     );
-    state.conversations = [...conversations].sort((a, b) => {
-      const aTime = a.lastMessage?.envoi ?? a.messages?.[0]?.envoi ?? 0;
-      const bTime = b.lastMessage?.envoi ?? b.messages?.[0]?.envoi ?? 0;
-      return bTime - aTime;
-    });
+    await afficherConversations(options);
+  }
+
+  /** Trie les conversations (activité la plus récente en premier) et les
+   * réaffiche, SANS appel réseau. */
+  async function afficherConversations(options = {}) {
+    state.conversations = LogiqueInterface.trierConversations(
+      state.conversations
+    );
 
     if (!state.activeConversationId && state.conversations.length > 0) {
       state.activeConversationId = state.conversations[0].id;
@@ -723,6 +678,92 @@ window.addEventListener('DOMContentLoaded', async () => {
     actualiserIndicateurSaisie();
   }
 
+  function trouverConversation(conversationId) {
+    return state.conversations.find(
+      (conversation) => conversation.id === conversationId
+    );
+  }
+
+  /**
+   * Message privé reçu (temps réel) ou envoyé (réponse du serveur) : ajouté
+   * à sa conversation déjà chargée, sans recharger les autres (auparavant,
+   * chaque message reçu refaisait une requête d'historique par
+   * interlocuteur). Premier message d'un interlocuteur encore absent de la
+   * liste : rechargement complet, une seule fois.
+   */
+  async function integrerMessagePrive(message, options = {}) {
+    const conversation = trouverConversation(message?.conversationId);
+    if (!conversation) {
+      await refreshConversations(options);
+      return;
+    }
+    conversation.messages = LogiqueInterface.ajouterMessage(
+      conversation.messages,
+      message,
+      'envoi'
+    );
+    conversation.lastMessage =
+      conversation.messages[conversation.messages.length - 1];
+    await afficherConversations(options);
+  }
+
+  const remplacerMessage = LogiqueInterface.remplacerMessage;
+
+  /** Message privé modifié : mis à jour sur place. Les messages de salon
+   * (sans conversationId) ne concernent pas cette page. */
+  async function appliquerMessageModifie(message) {
+    const conversation = trouverConversation(message?.conversationId);
+    if (!conversation) return;
+    conversation.messages = remplacerMessage(conversation.messages, message);
+    if (conversation.lastMessage?.id === message.id) {
+      conversation.lastMessage = { ...conversation.lastMessage, ...message };
+    }
+    if (etatHistoriqueDm.conversationId === conversation.id) {
+      etatHistoriqueDm.messagesAnciens = remplacerMessage(
+        etatHistoriqueDm.messagesAnciens,
+        message
+      );
+    }
+    await afficherConversations({ garderScroll: true });
+  }
+
+  /** Message privé supprimé : retiré sur place (introuvable ici = message de
+   * salon, ignoré). */
+  async function appliquerMessageSupprime(messageId) {
+    const conversation = state.conversations.find(
+      (item) =>
+        item.lastMessage?.id === messageId ||
+        LogiqueInterface.contientMessage(item.messages, messageId) ||
+        (etatHistoriqueDm.conversationId === item.id &&
+          LogiqueInterface.contientMessage(
+            etatHistoriqueDm.messagesAnciens,
+            messageId
+          ))
+    );
+    if (!conversation) return;
+    conversation.messages = LogiqueInterface.retirerMessage(
+      conversation.messages,
+      messageId
+    );
+    if (etatHistoriqueDm.conversationId === conversation.id) {
+      etatHistoriqueDm.messagesAnciens = LogiqueInterface.retirerMessage(
+        etatHistoriqueDm.messagesAnciens,
+        messageId
+      );
+    }
+    if (conversation.lastMessage?.id === messageId) {
+      if (conversation.messages.length === 0) {
+        // Plus aucun message récent en mémoire : le nouveau « dernier
+        // message » est peut-être plus ancien que la page chargée.
+        await refreshConversations({ garderScroll: true });
+        return;
+      }
+      conversation.lastMessage =
+        conversation.messages[conversation.messages.length - 1];
+    }
+    await afficherConversations({ garderScroll: true });
+  }
+
   /**
    * Résout l'utilisateur réellement connecté (session JWT) — voir
    * initialiserUtilisateurCourant dans renderer.js pour l'équivalent salon et
@@ -738,8 +779,51 @@ window.addEventListener('DOMContentLoaded', async () => {
     state.utilisateurActuel = await window.electronAPI.obtenirUtilisateurConnecte();
     state.currentUserId = state.utilisateurActuel?.id ?? '';
     sessionStorage.setItem('currentUserId', state.currentUserId);
+    appliquerPreferences(await window.electronAPI.obtenirPreferences());
     afficherUtilisateurCourant();
   }
+
+  /** Voir appliquerPreferences dans renderer.js. */
+  function appliquerPreferences(nouvelles) {
+    if (!nouvelles) return;
+    state.preferences = nouvelles;
+    ThemeManager.appliquerTheme(nouvelles.theme);
+    if (nouvelles.langue) I18n.definirLangueActuelle(nouvelles.langue);
+    NotifPrefs.definirMode(state.currentUserId, nouvelles.modeNotification);
+  }
+
+  // Changement dans un de mes serveurs (temps réel) : le rail de cette page
+  // est mis à jour ; messages pour une expulsion ou une invitation.
+  let minuteurRail = null;
+  window.electronAPI.onServeurChange?.((evenement) => {
+    const nom =
+      serveursRail.find((serveur) => serveur.id === evenement.serveurId)
+        ?.nom ?? '';
+    const pourMoi = evenement.cibleId === state.currentUserId;
+    if (pourMoi && evenement.raison === 'expulse') {
+      notifier(t('servers.kickedFrom', { name: nom }), true);
+    } else if (pourMoi && evenement.raison === 'invitation') {
+      notifier(t('servers.newInvitation'));
+    }
+    window.clearTimeout(minuteurRail);
+    minuteurRail = window.setTimeout(() => actualiserBadgeSalons(), 150);
+  });
+
+  // Photo d'un autre utilisateur modifiée : les conversations privées
+  // portent l'avatar de l'interlocuteur (otherUser.avatar), on les recharge.
+  window.electronAPI.onProfilsPublicsChange?.(async () => {
+    await refreshConversations({ conserverPositionScroll: true });
+  });
+
+  window.electronAPI.onPreferencesChange(async (nouvelles) => {
+    appliquerPreferences(nouvelles);
+    appliquerTraductionsStatiques();
+    afficherUtilisateurCourant();
+    afficherEtatReseau();
+    afficherPresenceCourante();
+    renderConversationList();
+    await renderActiveConversation();
+  });
 
   function renderConversationList() {
     if (!listElement) {
@@ -769,6 +853,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (!otherUser?.present) {
         avatar.classList.add('offline');
       }
+      ChatUiShared.remplirAvatar(avatar, otherUser?.avatar);
 
       const nonLu =
         afficherRonds &&
@@ -792,7 +877,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
       const username = document.createElement('div');
       username.classList.add('username');
-      username.textContent = otherUser?.pseudo ?? t('dm.defaultUser');
+      username.textContent = ChatUiShared.nomAffiche(otherUser) || t('dm.defaultUser');
 
       const lastMessageEl = document.createElement('div');
       lastMessageEl.classList.add('last-message');
@@ -823,12 +908,28 @@ window.addEventListener('DOMContentLoaded', async () => {
     };
   }
 
+  /** En-tête quand aucune conversation n'est ouverte. */
+  function afficherAucuneConversation() {
+    // Ni photo ni pastille de présence : il n'y a personne en face.
+    ChatUiShared.remplirAvatar(topbarAvatar, null);
+    topbarAvatar?.classList.add('sans-presence');
+    if (topbarName) topbarName.textContent = t('dm.selectConversation');
+    if (topbarStatus) {
+      topbarStatus.textContent = t('dm.noActiveConversation');
+      topbarStatus.classList.remove('online', 'offline');
+    }
+  }
+
   async function renderActiveConversation(options = {}) {
-    const { conserverPositionScroll = false } = options;
+    // Mêmes options que afficherMessages() (renderer.js) : contenu inséré en
+    // haut (conserverPositionScroll) ou ajouté en bas sans suivre
+    // (garderScroll) ; sinon défilement tout en bas.
+    const { conserverPositionScroll = false, garderScroll = false } = options;
     if (!state.activeConversationId) {
       if (messageList) {
         messageList.innerHTML = '';
       }
+      afficherAucuneConversation();
       definirConversationActivePourNotifs(null);
       reinitialiserHistoriqueDm();
       // composerAutorise (voir afficherEtatReseau) est calculé à partir de
@@ -853,6 +954,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (messageList) {
         messageList.innerHTML = '';
       }
+      afficherAucuneConversation();
       definirConversationActivePourNotifs(null);
       reinitialiserHistoriqueDm();
       // Voir le commentaire équivalent plus haut : activeConversationId
@@ -942,7 +1044,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const otherUser = conversation.otherUser;
 
     if (topbarName) {
-      topbarName.textContent = otherUser?.pseudo ?? t('dm.defaultUser');
+      topbarName.textContent = ChatUiShared.nomAffiche(otherUser) || t('dm.defaultUser');
     }
     if (topbarStatus) {
       topbarStatus.textContent = otherUser?.present
@@ -953,6 +1055,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     if (topbarAvatar) {
       topbarAvatar.classList.toggle('offline', !otherUser?.present);
+      topbarAvatar.classList.remove('sans-presence');
+      ChatUiShared.remplirAvatar(topbarAvatar, otherUser?.avatar);
     }
     if (typingIndicator && isTypingNom) {
       // Dans un DM, une seule autre personne peut potentiellement écrire
@@ -960,7 +1064,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       // l'ouverture de la conversation, plutôt que recalculé à chaque
       // battement de actualiserIndicateurSaisie() (qui ne gère, lui, que le
       // show/hide selon l'état de saisie réel — voir plus bas).
-      isTypingNom.textContent = otherUser?.pseudo ?? t('dm.defaultUser');
+      isTypingNom.textContent = ChatUiShared.nomAffiche(otherUser) || t('dm.defaultUser');
     }
 
     // Mémorise la position de défilement AVANT de reconstruire la liste :
@@ -1003,7 +1107,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       const isOwn = message.auteurId === state.currentUserId;
       const author = isOwn
         ? t('dm.me')
-        : (otherUser?.pseudo ?? t('dm.defaultUser'));
+        : (ChatUiShared.nomAffiche(otherUser) || t('dm.defaultUser'));
       const timeLabel = new Date(message.envoi).toLocaleTimeString([], {
         hour: '2-digit',
         minute: '2-digit',
@@ -1019,9 +1123,10 @@ window.addEventListener('DOMContentLoaded', async () => {
 
       const avatar = document.createElement('div');
       avatar.classList.add('avatar');
-      if (!otherUser?.present && !isOwn) {
-        avatar.classList.add('offline');
-      }
+      ChatUiShared.remplirAvatar(
+        avatar,
+        isOwn ? state.preferences?.avatar : otherUser?.avatar
+      );
 
       const body = document.createElement('div');
       body.classList.add('message-body');
@@ -1058,7 +1163,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       messageList.appendChild(row);
     });
 
-    if (conserverPositionScroll) {
+    if (garderScroll) {
+      messageList.scrollTop = scrollAvant;
+    } else if (conserverPositionScroll) {
       // Charger plus ancien insère du contenu EN HAUT de la liste : voir le
       // commentaire équivalent dans afficherMessages() (renderer.js) pour le
       // pourquoi de ce recalcul.
@@ -1159,70 +1266,49 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  function renderNewDmChoices() {
-    if (!dmDialogContent) {
-      return;
-    }
-
-    dmDialogContent.innerHTML = '';
-
-    const candidats = state.utilisateurs.filter(
-      (user) => user.id !== state.currentUserId
-    );
-
-    if (candidats.length === 0) {
-      const empty = document.createElement('p');
-      empty.classList.add('empty-state');
-      empty.textContent = t('dm.noOtherUsers');
-      dmDialogContent.appendChild(empty);
-      return;
-    }
-
-    const liste = document.createElement('div');
-    liste.classList.add('choice-list');
-
-    candidats.forEach((user) => {
-      const dejaOuverte = state.conversations.some(
-        (conversation) => conversation.otherUser?.id === user.id
-      );
-
-      const bouton = document.createElement('button');
-      bouton.type = 'button';
-      bouton.classList.add('user-choice');
-
-      const nom = document.createElement('span');
-      nom.textContent = user.pseudo;
-
-      const action = document.createElement('span');
-      action.textContent = dejaOuverte
-        ? t('dm.openExisting')
-        : t('dm.newLabel');
-
-      bouton.append(nom, action);
-
-      bouton.addEventListener('click', async () => {
-        try {
-          const conversation =
-            await window.electronAPI.demarrerConversationPrivee({
-              utilisateurId: state.currentUserId,
-              autreUtilisateurId: user.id,
-            });
-          dmDialog?.close();
-          state.activeConversationId = conversation.id;
-          state.currentFilter = 'all';
-          filterButtons.forEach((item) => {
-            item.classList.toggle('active', item.dataset.filter === 'all');
-          });
-          await refreshConversations();
-        } catch (erreur) {
-          notifier(messageErreur(erreur), true);
-        }
+  // --- Nouveau message privé : suggestions + recherche --------------------
+  // Sans rien taper : membres de ses salons et interlocuteurs connus
+  // (obtenirSuggestionsDm). En tapant : recherche par début de pseudo, pour
+  // écrire à quelqu'un avec qui on ne partage aucun salon. Voir
+  // ChatUiShared.creerSelecteurUtilisateurs (partagé avec l'invitation dans
+  // un salon, renderer.js).
+  async function ouvrirConversationAvec(user) {
+    try {
+      const conversation = await window.electronAPI.demarrerConversationPrivee({
+        utilisateurId: state.currentUserId,
+        autreUtilisateurId: user.id,
       });
+      dmDialog?.close();
+      state.activeConversationId = conversation.id;
+      state.currentFilter = 'all';
+      filterButtons.forEach((item) => {
+        item.classList.toggle('active', item.dataset.filter === 'all');
+      });
+      await refreshConversations();
+    } catch (erreur) {
+      notifier(messageErreur(erreur), true);
+    }
+  }
 
-      liste.appendChild(bouton);
-    });
-
-    dmDialogContent.appendChild(liste);
+  function renderNewDmChoices() {
+    if (!dmDialogContent) return;
+    dmDialogContent.replaceChildren(
+      ...ChatUiShared.creerSelecteurUtilisateurs({
+        t,
+        messageErreur,
+        obtenirSuggestions: () => window.electronAPI.obtenirSuggestionsDm(),
+        rechercher: (texte) => window.electronAPI.rechercherUtilisateurs(texte),
+        decrireAction: (user) => ({
+          libelle: state.conversations.some(
+            (conversation) => conversation.otherUser?.id === user.id
+          )
+            ? t('dm.openExisting')
+            : t('dm.newLabel'),
+        }),
+        surChoix: ouvrirConversationAvec,
+        messageAucuneSuggestion: t('dm.noSuggestions'),
+      })
+    );
   }
 
   if (openNewDmBtn && dmDialog) {
@@ -1276,9 +1362,8 @@ window.addEventListener('DOMContentLoaded', async () => {
       // messagesEnAttenteDm) : le message est affiché tout de suite, marqué
       // "non livré", sans jamais être transmis au gateway. Se mettre
       // soi-même "hors-ligne" via le bouton de présence
-      // (brancherControlesReseauPresence) n'a donc aucun effet ici, seule
-      // une vraie coupure réseau simulée (#simulate-network-cut, qui change
-      // etatReseau) en a.
+      // (page profil) n'a donc aucun effet ici, seule
+      // une vraie coupure réseau (qui change etatReseau) en a.
       if (etatReseau.statut !== 'connecte') {
         ajouterMessageEnAttenteDm(
           conversationId,
@@ -1316,8 +1401,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       // tomberait dans le même bloc catch qu'un envoi raté — le message
       // (déjà bien parti côté serveur) serait alors à tort remis en
       // attente en double, avec une notification d'échec trompeuse.
+      let envoye;
       try {
-        await window.electronAPI.envoyerMessagePrive({
+        envoye = await window.electronAPI.envoyerMessagePrive({
           conversationId,
           contenu: content,
           utilisateurId: auteurId,
@@ -1341,7 +1427,8 @@ window.addEventListener('DOMContentLoaded', async () => {
         return;
       }
       try {
-        await refreshConversations();
+        // Message renvoyé par le serveur : pas de rechargement complet.
+        await integrerMessagePrive(envoye);
       } catch (erreur) {
         // Le message est bien parti ; seul le rechargement de la liste des
         // conversations a échoué ensuite — à ne pas confondre avec un échec
@@ -1400,11 +1487,62 @@ window.addEventListener('DOMContentLoaded', async () => {
   // appelant qui a besoin à la fois de actualiserBadgeSalons() ET de
   // mettreAJourBadgeApplication() de ne faire qu'un seul appel IPC pour les
   // deux (voir leur paramètre optionnel `salonsPreChauffes` plus bas).
+  // Mêmes clés que renderer.js : serveur affiché sur la page des salons, et
+  // serveurs ayant reçu un message non lu (voir leur déclaration là-bas).
+  const CLEF_SERVEUR_ACTIF = 'chatvardage:serveur-actif';
+  const CLEF_SERVEURS_NON_LUS = 'chatvardage:serveurs-non-lus';
+
+  function lireStockage(stockage, clef) {
+    try {
+      return stockage.getItem(clef);
+    } catch {
+      return null;
+    }
+  }
+
+  function ecrireStockage(stockage, clef, valeur) {
+    try {
+      stockage.setItem(clef, valeur);
+    } catch {
+      // Best-effort.
+    }
+  }
+
+  function serveursNonLus() {
+    try {
+      return new Set(
+        JSON.parse(lireStockage(sessionStorage, CLEF_SERVEURS_NON_LUS) ?? '[]')
+      );
+    } catch {
+      return new Set();
+    }
+  }
+
+  // Salons du serveur affiché sur la page des salons (pour la pastille de
+  // son icône et le badge de l'application).
+  let serveursRail = [];
+  // Derniers salons chargés (serveur « actif » du rail), tenus à jour par
+  // les messages reçus en temps réel : évite de recharger tout l'état des
+  // salons (serveurs, invitations, historique de chaque salon) à chaque
+  // message reçu, juste pour les pastilles.
+  let salonsEnCache = [];
   async function obtenirSalonsActuels() {
-    const etatSalons = await window.electronAPI.obtenirEtatSalons(
-      state.currentUserId
-    );
-    return etatSalons?.salons ?? [];
+    const etatSalons = await window.electronAPI.obtenirEtatSalons({
+      serveurId: lireStockage(localStorage, CLEF_SERVEUR_ACTIF),
+    });
+    serveursRail = etatSalons?.serveurs ?? [];
+    salonsEnCache = etatSalons?.salons ?? [];
+    return salonsEnCache;
+  }
+
+  /** Message de salon reçu : ajouté au salon en cache s'il y est (sinon, il
+   * appartient à un autre serveur, dont la pastille est déjà posée). */
+  function integrerMessageSalonEnCache(salonId, message) {
+    const salon = salonsEnCache.find((item) => item.id === salonId);
+    if (salon && !salon.messages.some((existant) => existant.id === message.id)) {
+      salon.messages = [...salon.messages, message];
+    }
+    return salonsEnCache;
   }
 
   // --- Badge "non lu" sur le rail (icônes qui ramènent à l'accueil) -------
@@ -1413,26 +1551,44 @@ window.addEventListener('DOMContentLoaded', async () => {
   // ne se met pas à jour n'est pas une raison de perturber le reste de
   // l'app.
   async function actualiserBadgeSalons(salonsPreChauffes) {
-    const dots = document.querySelectorAll('#server-rail .notif-dot');
-    if (!dots.length) return;
-    if (!NotifPrefs.afficheRonds(state.currentUserId)) {
-      dots.forEach((dot) => (dot.hidden = true));
-      return;
-    }
+    let salons = salonsPreChauffes;
     try {
-      const salons = salonsPreChauffes ?? (await obtenirSalonsActuels());
-      const nonLu = salons.some((salon) =>
+      salons = salons ?? (await obtenirSalonsActuels());
+    } catch {
+      return; // Rail best-effort, voir commentaire ci-dessus.
+    }
+    const afficherRonds = NotifPrefs.afficheRonds(state.currentUserId);
+    const pastilles = afficherRonds ? serveursNonLus() : new Set();
+    const serveurActifId = lireStockage(localStorage, CLEF_SERVEUR_ACTIF);
+    const actif =
+      serveursRail.find((serveur) => serveur.id === serveurActifId) ??
+      serveursRail[0];
+    if (
+      afficherRonds &&
+      actif &&
+      salons.some((salon) =>
         NotifPrefs.estNonLu(
           state.currentUserId,
           salon.id,
           NotifPrefs.dernierMessageSalon(salon)
         )
-      );
-      dots.forEach((dot) => (dot.hidden = !nonLu));
-    } catch {
-      // Badge best-effort, voir commentaire ci-dessus.
+      )
+    ) {
+      pastilles.add(actif.id);
     }
+    ChatUiShared.afficherRailServeurs({
+      conteneur: document.getElementById('server-rail'),
+      avant: document.getElementById('open-create-channel-rail'),
+      serveurs: serveursRail,
+      serveurActifId: null, // aucun serveur « actif » sur cette page
+      nonLus: pastilles,
+      surChoix: (serveur) => {
+        ecrireStockage(localStorage, CLEF_SERVEUR_ACTIF, serveur.id);
+        window.electronAPI.navigate('index.html');
+      },
+    });
   }
+
 
   /**
    * Recalcule le nombre total de conversations non lues (salons + messages
@@ -1485,9 +1641,20 @@ window.addEventListener('DOMContentLoaded', async () => {
     notifMenu.querySelectorAll('input[name="notif-mode"]').forEach((radio) => {
       radio.checked = radio.value === modeActuel;
     });
+    const caseApercu = notifMenu.querySelector('#notif-apercu');
+    if (caseApercu) {
+      caseApercu.checked = NotifPrefs.afficheApercu(state.currentUserId);
+    }
     notifMenu.hidden = false;
     notifBtn?.setAttribute('aria-expanded', 'true');
   }
+
+  // Contenu des messages dans les notifications système (écran verrouillé).
+  notifMenu
+    ?.querySelector('#notif-apercu')
+    ?.addEventListener('change', (event) => {
+      NotifPrefs.definirApercu(state.currentUserId, event.target.checked);
+    });
 
   notifBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -1502,15 +1669,28 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   notifMenu?.querySelectorAll('input[name="notif-mode"]').forEach((radio) => {
     radio.addEventListener('change', async () => {
+      const precedent = NotifPrefs.obtenirMode(state.currentUserId);
       NotifPrefs.definirMode(state.currentUserId, radio.value);
       fermerMenuNotif();
-      renderConversationList();
-      // Un seul appel obtenirEtatSalons(), partagé entre les deux mises à
-      // jour ci-dessous, plutôt qu'un appel indépendant dans chacune.
-      const salons = await obtenirSalonsActuels().catch(() => []);
-      actualiserBadgeSalons(salons);
-      mettreAJourBadgeApplication(salons);
-      notifier(t('notifications.preferenceUpdated'));
+      const rafraichir = async () => {
+        renderConversationList();
+        // Un seul appel obtenirEtatSalons(), partagé entre les deux mises à
+        // jour ci-dessous, plutôt qu'un appel indépendant dans chacune.
+        const salons = await obtenirSalonsActuels().catch(() => []);
+        actualiserBadgeSalons(salons);
+        mettreAJourBadgeApplication(salons);
+      };
+      await rafraichir();
+      try {
+        await window.electronAPI.modifierPreferences({
+          modeNotification: radio.value,
+        });
+        notifier(t('notifications.preferenceUpdated'));
+      } catch (erreur) {
+        NotifPrefs.definirMode(state.currentUserId, precedent);
+        await rafraichir();
+        notifier(messageErreur(erreur), true);
+      }
     });
   });
 
@@ -1540,36 +1720,60 @@ window.addEventListener('DOMContentLoaded', async () => {
           ? payload.salonId
           : payload.message.conversationId,
       };
+      // Message de salon : pastille sur l'icône de son serveur (rail).
+      if (
+        estSalon &&
+        payload.serveurId &&
+        payload.message.auteurId !== state.currentUserId &&
+        NotifPrefs.afficheRonds(state.currentUserId)
+      ) {
+        const pastilles = serveursNonLus();
+        pastilles.add(payload.serveurId);
+        ecrireStockage(
+          sessionStorage,
+          CLEF_SERVEURS_NON_LUS,
+          JSON.stringify([...pastilles])
+        );
+      }
       NotifPrefs.traiterMessageSimule(messageNormalise, {
         utilisateurId: state.currentUserId,
         surSalon: async () => {
-          // Un seul appel obtenirEtatSalons(), partagé entre les deux mises
-          // à jour ci-dessous (voir le paramètre salonsPreChauffes de
-          // mettreAJourBadgeApplication).
-          const salons = await obtenirSalonsActuels().catch(() => []);
+          // Aucun appel réseau : le cache des salons suffit aux pastilles
+          // (voir integrerMessageSalonEnCache).
+          const salons = integrerMessageSalonEnCache(
+            payload.salonId,
+            payload.message
+          );
           await actualiserBadgeSalons(salons);
           mettreAJourBadgeApplication(salons);
         },
         // Si c'est la conversation actuellement affichée, refreshConversations()
         // la réaffiche avec le nouveau message ; sinon seuls la liste et le
-        // badge sont mis à jour (voir son corps) — correctness over
-        // elegance, comme demandé : pas d'ajout incrémental au DOM ici.
-        surPrive: () => refreshConversations(),
+        // badge sont mis à jour (voir son corps). La vue ne descend sur le
+        // nouveau message que s'il est dans la conversation affichée et
+        // qu'on est l'auteur ou déjà en bas (voir renderer.js,
+        // integrerMessageSalonRecu, même règle).
+        surPrive: () => {
+          const suivre = LogiqueInterface.doitSuivreNouveauMessage({
+            dansConversationAffichee:
+              payload.message.conversationId === state.activeConversationId,
+            estAuteur: payload.message.auteurId === state.currentUserId,
+            presDuBas: LogiqueInterface.estPresDuBas(messageList),
+          });
+          return integrerMessagePrive(
+            payload.message,
+            suivre ? {} : { garderScroll: true }
+          );
+        },
         notifierMessageSysteme,
       });
     });
   }
 
-  ChatUiShared.brancherControlesReseauPresence({
+  ChatUiShared.brancherBoutonReessayer({
     api: window.electronAPI,
-    elements: {
-      couperReseau: simulateNetworkCut,
-      reconnecterReseau: simulateNetworkReconnect,
-      presenceCourante: currentUserPresence,
-    },
+    element: connectionRetry,
     getEtatReseau: () => etatReseau,
-    getUtilisateurId: () => state.currentUserId,
-    getPresences: () => presences,
     notifierErreur: (erreur) => notifier(messageErreur(erreur), true),
   });
 
@@ -1630,29 +1834,54 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  window.electronAPI.onMessageModifieChange(async () => {
-    await refreshConversations({ conserverPositionScroll: true });
+  // Mis à jour sur place, sans recharger toutes les conversations (voir
+  // appliquerMessageModifie / appliquerMessageSupprime).
+  window.electronAPI.onMessageModifieChange(async (message) => {
+    await appliquerMessageModifie(message);
   });
 
   window.electronAPI.onMessageSupprimeChange(async (message) => {
     ChatUiShared.oublierEtatActionMessage(message?.messageId);
-    await refreshConversations({ conserverPositionScroll: true });
+    await appliquerMessageSupprime(message?.messageId);
   });
 
-  await initialiserUtilisateurCourant();
-  await chargerEtatReseauEtPresences();
-  await refreshConversations();
+  // Rail affiché tout de suite depuis le cache (voir chat-ui-shared.js),
+  // avant tout appel réseau : pas de « saut » du rail entre deux pages.
+  ChatUiShared.afficherRailDepuisCache({
+    conteneur: document.getElementById('server-rail'),
+    avant: document.getElementById('open-create-channel-rail'),
+    serveurActifId: null,
+    nonLus: serveursNonLus(),
+    surChoix: (serveur) => {
+      ecrireStockage(localStorage, CLEF_SERVEUR_ACTIF, serveur.id);
+      window.electronAPI.navigate('index.html');
+    },
+  });
+  try {
+    await initialiserUtilisateurCourant();
+    await chargerEtatReseauEtPresences();
+    await refreshConversations();
+  } finally {
+    // Premier rendu terminé : le contenu apparaît en fondu (voir
+    // ThemeManager.pagePrete). Le rail, lui, est déjà affiché depuis le cache.
+    ThemeManager.pagePrete?.();
+  }
   await actualiserBadgeSalons();
 });
 
-// Toute icône de la barre latérale (logo + icônes de serveur) ramène au
-// serveur : il n'y a qu'un seul espace de travail dans cette app, donc
-// n'importe quelle icône de #server-rail sert d'affordance de retour,
-// qu'on soit ou non sur la page des messages privés.
-const railButtons = document.querySelectorAll('#server-rail button');
-
-railButtons.forEach((btn) => {
-  btn.addEventListener('click', () => {
+// Logo : retour à la page des salons (dernier serveur affiché). Les icônes
+// de serveurs sont branchées par actualiserBadgeSalons().
+document.getElementById('home-btn')?.addEventListener('click', () => {
+  window.electronAPI.navigate('index.html');
+});
+// « + » : ouvre la fenêtre « Ajouter un serveur » sur la page des salons.
+document
+  .getElementById('open-create-channel-rail')
+  ?.addEventListener('click', () => {
+    try {
+      sessionStorage.setItem('chatvardage:ouvrir-ajout-serveur', '1');
+    } catch {
+      // Sans stockage, on arrive simplement sur la page des salons.
+    }
     window.electronAPI.navigate('index.html');
   });
-});

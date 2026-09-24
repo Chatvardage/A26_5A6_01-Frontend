@@ -1,198 +1,188 @@
-ChatVardage <br />
-&emsp;| <br />
-&emsp;├── frontend/ <br />
-&emsp;│&emsp;│<br />
-&emsp;│&emsp;└── src/<br />
-&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;├── presentation/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Affichage et interaction avec l'utilisateur.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Cette couche ne contient pas la logique métier.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;├── pages/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Pages complètes de l'application.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Exemple : LoginPage, ChatPage, ServerPage.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;├── components/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Composants React réutilisables.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Exemple : MessageList, MessageInput, ChannelList.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;└── layouts/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# Structures générales des pages.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# Exemple : AppLayout, ChatLayout, AuthLayout.<br />
-&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;├── application/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Logique applicative du frontend.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Orchestre les actions de l'interface.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;├── hooks/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Hooks React contenant la logique de présentation.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Exemple : useMessages(), useChannels(), useAuth().<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;├── stores/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # État global ou partagé de l'application.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Exemple : utilisateur connecté, serveur sélectionné,<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # channel actuel, messages en mémoire.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;└── view-models/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# Transforme les données du domaine/API en données<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# adaptées aux composants React.<br />
-&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;├── domain/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Modèle métier utilisé par le frontend.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Ne dépend ni de React ni du Gateway.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;├── entities/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Entités métier du frontend.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Exemple : User, Server, Channel, Message.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;└── models/<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# Types et modèles utilisés par le frontend.<br />
-&emsp;│&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# Exemple : UserModel, MessageModel, ChannelModel.<br />
-&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;└── infrastructure/<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│ # Communication avec les systèmes externes.<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│ # HTTP, WebSocket, Gateway, stockage local, etc.<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;├── gateways/<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│&emsp;│ # Point d'accès aux communications avec le backend.<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│&emsp;└── GatewayClient.ts<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# Contrat/client utilisé par le frontend pour<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# communiquer avec le Gateway.<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;└── services/<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;# Services techniques du frontend.<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;# Exemple : AuthService, StorageService, NotificationService.<br />
-&emsp;│<br />
-&emsp;├── backend/<br />
-&emsp;│&emsp;│<br />
-&emsp;│&emsp;├── src/<br />
-&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;├── interface/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Point d'entrée du backend.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Reçoit les requêtes provenant de l'extérieur.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;├── http/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;│ # Communication HTTP/REST.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;├── controllers/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;│ # Reçoit une requête HTTP et appelle le<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;│ # Use Case approprié.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;│ # Exemple : MessageController.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;└── routes/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Déclare les routes HTTP.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Exemple : POST /channels/:id/messages.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;└── websocket/<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Gestion des connexions et événements WebSocket.<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Exemple : connexion d'un utilisateur,<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# nouveau message, typing, déconnexion.<br />
-&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;├── application/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Logique applicative du backend.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Définit ce que l'application peut faire.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;├── use-cases/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Cas d'utilisation de l'application.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Exemple :<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # SendMessage<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # GetMessages<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # CreateChannel<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # DeleteMessage<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # JoinServer<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;└── dto/<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Data Transfer Objects.<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Définit les données échangées entre les couches.<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Exemple : SendMessageDto, CreateChannelDto.<br />
-&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;├── domain/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # CŒUR MÉTIER DE L'APPLICATION.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Cette couche ne dépend pas de HTTP, WebSocket,<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # base de données ou framework.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;├── entities/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Entités métier.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Exemple : User, Server, Channel, Message.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;├── value-objects/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Objets représentant une valeur métier avec<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # ses propres règles de validation.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Exemple : UserId, ChannelId, MessageContent.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;├── events/<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Événements métier.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # Exemple : MessageCreated, MessageDeleted,<br />
-&emsp;│&emsp;│&emsp;│&emsp;│ # UserJoinedChannel.<br />
-&emsp;│&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;│&emsp;└── ports/<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Interfaces nécessaires au domaine/application.<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Elles décrivent CE DONT le métier a besoin,<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# sans définir COMMENT c'est implémenté.<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# Exemple : MessageRepository, Gateway,<br />
-&emsp;│&emsp;│&emsp;│&emsp;&emsp;&emsp;# EventPublisher.<br />
-&emsp;│&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;└── infrastructure/<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│ # Implémentation technique des interfaces du domaine.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│ # Cette couche contient les détails techniques.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;├── persistence/<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│ # Implémentations de la persistance.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│ # Exemple : FileMessageRepository,<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│ # PostgresMessageRepository, etc.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;├── gateways/<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Implémentations des communications Gateway.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;├── MockGateway.ts<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # Gateway temporaire utilisé pendant<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;│ # le développement et les tests.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;│<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;└── WebSocketGateway.ts<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# Gateway réel utilisé pour communiquer<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│&emsp;&emsp;&emsp;# avec les clients via WebSocket.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;├── messaging/<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│ # Communication asynchrone entre composants/services.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│ # Exemple : Redis, RabbitMQ, Kafka, etc.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;└── config/<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;# Configuration technique de l'application.<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;# Exemple : variables d'environnement,<br />
-&emsp;│&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;# configuration DB, ports, Gateway, etc.<br />
-&emsp;│&emsp;│<br />
-&emsp;│&emsp;└── stockage/<br />
-&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;│ # DONNÉES PHYSIQUES générées par l'application.<br />
-&emsp;│&emsp;&emsp;&emsp;│ # Ce dossier ne contient pas de logique métier.<br />
-&emsp;│&emsp;&emsp;&emsp;│<br />
-&emsp;│&emsp;&emsp;&emsp;└── messages/<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;# Stockage temporaire des messages pendant<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;# le développement.<br />
-&emsp;│&emsp;&emsp;&emsp;&emsp;&emsp;# Exemple : fichiers JSON contenant les messages.<br />
-&emsp;│<br />
-&emsp;└── shared/<br />
-&emsp;&emsp;&emsp;│<br />
-&emsp;&emsp;&emsp;│ # Éléments communs au frontend et au backend.<br />
-&emsp;&emsp;&emsp;│ # Permet d'éviter de dupliquer certains contrats/types.<br />
-&emsp;&emsp;&emsp;│<br />
-&emsp;&emsp;&emsp;├── types/<br />
-&emsp;&emsp;&emsp;│ # Types TypeScript communs.<br />
-&emsp;&emsp;&emsp;│ # Exemple : UserId, MessageId, ChannelId.<br />
-&emsp;&emsp;&emsp;│<br />
-&emsp;&emsp;&emsp;└── contracts/<br />
-&emsp;&emsp;&emsp;&emsp;&emsp;# Contrats de communication frontend/backend.<br />
-&emsp;&emsp;&emsp;&emsp;&emsp;# Exemple : SendMessageRequest,<br />
-&emsp;&emsp;&emsp;&emsp;&emsp;# MessageResponse, WebSocketEvent.<br />
+# Architecture du Frontend ChatVardage
+
+Application desktop Electron. Ce dépôt ne contient que le client : le
+backend (Gateway + microservices) vit dans les autres dépôts `A26_5A6_01-*`
+(voir `A26_5A6_01-Infra`). Le contrat HTTP/Socket.IO consommé est décrit
+dans `MOCKGATEWAY.md`.
+
+## Vue d'ensemble
+
+```text
+Pages (renderer, sans Node.js)
+  connexion/ (React + Vite)     index.html / message-prive.html / profil.html (JS vanilla)
+          │                                   │
+          └──────── window.electronAPI / window.notifications ────────┘
+                                   │  (preload.js, contextBridge)
+                                   ▼
+                    IPC Electron (canaux explicites, provenance vérifiée)
+                                   │
+                                   ▼
+main.js ── état unique du processus : session, préférences, fenêtre
+   │
+   ▼
+RealGatewayRuntime.js ── HTTP + Socket.IO ──► Serveur-API (Gateway, port 3000)
+                                                ├─ Authentification
+                                                ├─ Room-Service (serveurs, salons)
+                                                ├─ Message-Service (messages, temps réel)
+                                                └─ User-Config-Service (préférences, présence)
+```
+
+Un seul processus (`main.js`) détient l'état métier et une **seule**
+instance de `RealGatewayRuntime`, partagée par toutes les pages : naviguer
+d'une page à l'autre ne perd ni la session ni les préférences.
+
+## Arborescence
+
+```text
+main.js                      Processus principal Electron
+  - fenêtre unique (verrou d'instance), sans cadre hors macOS,
+    agrandir/restaurer géré par l'app, zoom adaptatif
+  - tous les canaux IPC (exposerCanal + vérification de provenance)
+  - CSP de la page de connexion, menu natif traduit
+  - copie locale des préférences (thème, langue, notifications, alias,
+    avatar), synchronisée avec User-Config-Service et diffusée aux pages
+    ('preferences:change')
+  - notifications système, badge, sonde de connectivité réseau
+
+preload.js                   Seul pont vers les pages (contextBridge)
+  - window.electronAPI       session, serveurs/salons, messages, profil,
+                             préférences, i18n, réseau, présence
+  - window.notifications     notifications système, badge, focus fenêtre
+  - barre de titre           injecte .app-titlebar (logo, nom, boutons
+                             réduire/agrandir/fermer → canaux 'fenetre:*')
+
+scripts/start.js             Lance Vite + Electron (dev) ou Electron seul
+                             après build (prod)
+
+assets/                      Icônes de l'app (icon.png, icon.ico)
+
+src/
+  domain/entities/           Modèle métier, sans dépendance à l'UI ni au
+                             réseau (TypeScript, testé) : Utilisateur,
+                             Serveur (rôles et permissions d'affichage),
+                             Salon, Message, ConversationPrivee, Presence,
+                             EtatConnexion, EtatSaisie
+
+  infrastructure/
+    config/ConfigurationApi.js   URL du Gateway (CHATVARDAGE_API_URL,
+                                 CHATVARDAGE_SOCKET_URL)
+    gateways/
+      ChatGateway.ts, AuthGateway.ts   Contrats consommés par l'UI
+      RealGatewayRuntime.js            Implémentation utilisée par main.js :
+                                       appels HTTP, Socket.IO, reconnexion,
+                                       jeton persisté. Lève des CODES
+                                       d'erreur (ERR_*), jamais du texte
+    persistence/                 Accès typé au localStorage (préférences
+                                 d'interface locales à une page)
+
+  i18n/
+    translations.json        Seule source des textes (fr + en), y compris
+                             les salons par défaut et le message de
+                             bienvenue (channels.defaultAnnouncements,
+                             channels.defaultGeneral, channels.welcomeMessage)
+    i18n.js                  t() pour main.js (CommonJS)
+    i18n-web.ts              t() pour la page React (ESM)
+
+  presentation/pages/
+    connexion/               Page React (build Vite → dist/login/)
+      main.tsx               Composition : restauration de session, langue,
+                             application du dernier thème connu
+      LoginPage.tsx          Connexion (sélecteur de langue, pas de thème)
+      InscriptionPage.tsx    Inscription
+      PseudoChoicePage.tsx   « Choisis ton pseudo » après l'inscription
+      connexion.css          Styles + barre de titre (.app-titlebar)
+    index.html + javascript/salons/*.js + ../../../renderer.js
+                             Serveurs et salons. Scripts classiques chargés
+                             dans l'ordre (même portée globale) :
+                               etat.js        DOM, état, stockage, réseau
+                               historique.js  historique, messages non livrés
+                               affichage.js   rendu salons/messages/actions
+                               dialogues.js   créer, inviter, membres, menus
+                               session.js     envoi, profil, initialiser()
+                               temps-reel.js  notifications, messages reçus/
+                                              modifiés/supprimés, saisie
+                             renderer.js, chargé en dernier, lance la page.
+    message-prive.html + javascript/message-prive.js
+                             Messages privés
+    profil.html + javascript/profil.js
+                             Profil : identité, compte, préférences (seul
+                             endroit où changer le thème), suppression
+    javascript/              Scripts classiques partagés (chargés avant la
+                             page, exposent un global) :
+      logique-interface.js   window.LogiqueInterface : logique PURE des deux
+                             pages de chat (fusion/ajout/remplacement de
+                             messages, règle de défilement, tris, contenu
+                             du serveur par défaut), testée à 100 %
+      i18n-browser.js        window.I18n
+      theme-browser.js       window.ThemeManager (data-theme sur <html>)
+      chat-ui-shared.js      window.ChatUiShared : réseau, présence,
+                             avatars, actions de message, rôles
+      notif-prefs.js         window.NotifPrefs : non-lus, mode de notif.
+    css/
+      styles.css             Styles communs (variables de thème, barre de
+                             titre, messages, dialogues, panneau des
+                             membres, toasts)
+      message-prive.css      Spécifique aux messages privés
+      profil.css             Spécifique au profil
+```
+
+## Flux importants
+
+**Ouverture de session.** La page de connexion appelle
+`session:authentifier` ou `session:inscription`. `main.js` charge les
+serveurs, récupère les préférences depuis User-Config-Service, puis y
+enregistre la langue si elle a été explicitement changée sur l'écran de
+connexion (`langueChoisieAvantConnexion`,
+`apresOuvertureSessionAvecLangueChoisie`). La reprise automatique d'une
+session (`session:restaurer`) garde la langue du profil.
+
+**Préférences.** Thème et langue sont modifiés depuis la page profil
+(`preferences:modifier`, `theme:definir`, `langue:definir`). `main.js` met
+à jour sa copie, enregistre sur le serveur et diffuse
+`preferences:change` à la page affichée.
+
+**Traductions.** Les pages vanilla reçoivent tout le dictionnaire une fois
+(`i18n:dictionnaires`). Les textes sont traduits à l'affichage, jamais
+stockés déjà traduits. Les données saisies par les utilisateurs (noms de
+serveurs et de salons, messages) ne sont pas traduites, sauf le contenu
+créé par migration du serveur par défaut, reconnu à ses identifiants figés
+tant qu'il n'a pas été renommé ou modifié.
+
+**Fenêtre.** Hors macOS, `frame: false`. `preload.js` ajoute la barre de
+titre à chaque page ; sa place (`--titlebar-height`) est réservée en CSS
+dès le premier affichage (bordure haute du `body`), pour que la page ne
+se décale pas quand la barre apparaît. Les boutons appellent
+`fenetre:reduire`, `fenetre:agrandir` et `fenetre:fermer` ; `main.js`
+renvoie `fenetre:maximisee` pour l'icône agrandir/restaurer. À chaque
+redimensionnement, `appliquerZoomAdaptatif` ajuste le zoom (100 % à
+135 %).
+
+**Session expirée.** Sur un 401 pendant une session ouverte,
+`RealGatewayRuntime` revérifie le jeton (`GET /api/auth/me`) — un 401 peut
+aussi vouloir dire « mot de passe actuel incorrect ». Si le jeton est
+refusé, la session est fermée et `session-expiree` est émis : `main.js`
+ramène la fenêtre à l'écran de connexion, qui l'explique
+(`navigation:motif-retour-connexion`).
+
+**Temps réel sans rechargement.** Un message reçu, modifié ou supprimé (salon
+ou privé) est appliqué à l'état déjà affiché ; les listes ne défilent vers
+le bas que si on suit la conversation. Le sondage de présence (20 s) ne
+réinterroge pas les autres utilisateurs tant que le temps réel est actif.
+
+## Tests
+
+- `src/**/*.test.ts` (Vitest, jsdom) ; couverture 100 % exigée sur
+  `src/**/*.ts`, `RealGatewayRuntime.js` et `logique-interface.js`.
+- `salons/salons.chargement.test.ts` et `message-prive.chargement.test.ts` :
+  les pages de chat chargées avec tous leurs scripts dans l'ordre réel et
+  une fausse API Electron (contrat du découpage, messages reçus/modifiés/
+  supprimés, rechargements évités, droits d'invitation).
+
+## Sécurité
+
+`contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`,
+`webviewTag: false`. Jeton de session chiffré par le système
+(`safeStorage`) dans un fichier `0600`. Chaque canal IPC est déclaré explicitement dans
+`preload.js` et `main.js`, qui vérifie la provenance de l'appel. Les
+messages sont affichés par `textContent` / création DOM, jamais par
+injection HTML.

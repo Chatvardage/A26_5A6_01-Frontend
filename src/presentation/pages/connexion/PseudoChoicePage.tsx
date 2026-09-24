@@ -10,8 +10,6 @@ interface PseudoChoicePageProps {
   pseudoInitial: string;
   langue: string;
   changerLangue: (langue: string) => void;
-  theme: string;
-  changerTheme: (theme: string) => void;
   /** Appelé une fois cet écran terminé (pseudo changé OU "plus tard") — le
    * parent (voir main.tsx) navigue alors vers le tableau de bord, exactement
    * comme après une connexion normale. */
@@ -52,8 +50,6 @@ function nettoyerPrefixeIpc(err: unknown): string {
   );
 }
 
-/** Même esprit que THEMES_SUPPORTEES dans LoginPage.tsx/InscriptionPage.tsx. */
-const THEMES_SUPPORTEES = ['sombre', 'clair'] as const;
 
 /**
  * Écran "Choisis ton pseudo", affiché juste après une inscription réussie
@@ -66,8 +62,6 @@ export function PseudoChoicePage({
   pseudoInitial,
   langue,
   changerLangue,
-  theme,
-  changerTheme,
   onTermine,
 }: PseudoChoicePageProps) {
   const [pseudo, setPseudo] = useState(pseudoInitial);
@@ -137,23 +131,6 @@ export function PseudoChoicePage({
         ))}
       </div>
 
-      <div
-        className="theme-switch"
-        role="group"
-        aria-label={t(langue, 'theme.label')}
-      >
-        {THEMES_SUPPORTEES.map((valeur) => (
-          <button
-            key={valeur}
-            type="button"
-            className={`theme-btn ${valeur === theme ? 'active' : ''}`}
-            onClick={() => changerTheme(valeur)}
-            aria-pressed={valeur === theme}
-          >
-            {t(langue, `theme.${valeur === 'sombre' ? 'dark' : 'light'}`)}
-          </button>
-        ))}
-      </div>
 
       <div className="login-brand">ChatVardage</div>
       <form className="login-card" onSubmit={handleSubmit} noValidate>

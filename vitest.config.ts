@@ -9,7 +9,14 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
-      include: ['src/**/*.ts'],
+      // RealGatewayRuntime.js est le vrai client réseau (processus main) :
+      // mesuré lui aussi, même s'il n'est pas en TypeScript.
+      include: [
+        'src/**/*.ts',
+        'src/infrastructure/gateways/RealGatewayRuntime.js',
+        // Logique pure des pages de chat (voir son en-tête).
+        'src/presentation/pages/javascript/logique-interface.js',
+      ],
       exclude: [
         'src/**/*.test.ts',
         'src/**/*.d.ts',
@@ -17,10 +24,10 @@ export default defineConfig({
         'src/infrastructure/gateways/ChatGateway.ts',
       ],
       thresholds: {
-        statements: 95,
-        branches: 95,
-        functions: 95,
-        lines: 95,
+        statements: 100,
+        branches: 100,
+        functions: 100,
+        lines: 100,
       },
     },
   },
