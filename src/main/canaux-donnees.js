@@ -69,6 +69,14 @@ exposerCanal('serveurs:changer-role', (donnees) =>
   chatGateway.changerRoleMembre(donnees)
 );
 exposerCanal('serveurs:inviter', (donnees) => chatGateway.inviter(donnees));
+// Membres par pages (voir obtenirMembresServeur) et « qui est déjà membre »
+// pour la fenêtre Inviter.
+exposerCanal('serveurs:membres', (donnees) =>
+  chatGateway.obtenirMembresServeur(donnees)
+);
+exposerCanal('serveurs:membres-parmi', (donnees) =>
+  chatGateway.membresParmi(donnees)
+);
 exposerCanal('serveurs:accepter-invitation', (donnees) =>
   chatGateway.accepterInvitation(donnees)
 );

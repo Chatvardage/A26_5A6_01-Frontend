@@ -17,6 +17,10 @@ function creerDmId(utilisateurAId, utilisateurBId) {
 const DELAI_RECONNEXION_INITIAL_MS = 1000;
 const DELAI_RECONNEXION_MAX_MS = 15000;
 const TAILLE_PAGE_MESSAGES = 15;
+// Membres d'un serveur par page (panneau des membres, voir
+// obtenirMembresServeur) et par serveur dans les suggestions de DM.
+const TAILLE_PAGE_MEMBRES = 50;
+const MEMBRES_SUGGERES_PAR_SERVEUR = 20;
 const INTERVALLE_POLL_PRESENCE_MS = 20000;
 // Limite serveur de GET /api/config-utilisateur/publiques.
 const NOMBRE_MAX_IDS_PUBLICS = 100;
@@ -85,7 +89,9 @@ function chargerJetonPersiste() {
     if (typeof donnees.jetonChiffre === 'string' && donnees.jetonChiffre) {
       const coffre = coffreJeton();
       if (!coffre) return null;
-      const jeton = coffre.decryptString(Buffer.from(donnees.jetonChiffre, 'base64'));
+      const jeton = coffre.decryptString(
+        Buffer.from(donnees.jetonChiffre, 'base64')
+      );
       return jeton || null;
     }
     if (typeof donnees.jeton === 'string' && donnees.jeton) {
@@ -454,7 +460,8 @@ class RealGatewayRuntime {
         };
         if (
           precedent &&
-          (precedent.alias !== suivant.alias || precedent.avatar !== suivant.avatar)
+          (precedent.alias !== suivant.alias ||
+            precedent.avatar !== suivant.avatar)
         ) {
           profilsModifies.push(id);
         }
@@ -475,7 +482,8 @@ class RealGatewayRuntime {
         }
       }
     }
-    if (profilsModifies.length) this.emettre('profils-publics', profilsModifies);
+    if (profilsModifies.length)
+      this.emettre('profils-publics', profilsModifies);
   }
 
   /**
@@ -502,17 +510,24 @@ class RealGatewayRuntime {
   }
 
   /**
-   * Suggestions de personnes à qui écrire, sans rien taper : membres de
-   * tous ses serveurs (`GET /api/servers`, sans charger les messages) et
-   * interlocuteurs de DM déjà connus. Ne dépend donc plus
-   * d'une visite préalable de la page des salons.
+   * Suggestions de personnes à qui écrire, sans rien taper : interlocuteurs
+   * de DM déjà connus et premiers membres de chacun de ses serveurs (pas
+   * tous : tout le monde est membre du serveur par défaut). Pour les autres,
+   * la recherche par pseudo (rechercherUtilisateurs).
    */
   async obtenirSuggestionsDm() {
     const ids = new Set(this.partenairesDmConnus);
     try {
       const serveurs = await this.chargerServeurs();
-      for (const serveur of serveurs) {
-        for (const membre of serveur.membres) ids.add(membre.utilisateurId);
+      const pages = await Promise.all(
+        serveurs.map((serveur) =>
+          this.appelHttp(
+            `/api/servers/${encodeURIComponent(serveur.id)}/members?limite=${MEMBRES_SUGGERES_PAR_SERVEUR}`
+          ).catch(() => null)
+        )
+      );
+      for (const page of pages) {
+        for (const membre of page?.membres ?? []) ids.add(membre.utilisateurId);
       }
     } catch {
       // Best-effort : on garde au moins les interlocuteurs connus.
@@ -526,7 +541,9 @@ class RealGatewayRuntime {
    * pour écrire à quelqu'un avec qui on ne partage aucun salon.
    */
   async rechercherUtilisateurs(texte) {
-    const q = String(texte ?? '').trim().slice(0, 20);
+    const q = String(texte ?? '')
+      .trim()
+      .slice(0, 20);
     if (!q) return [];
     const resultats = await this.appelHttp(
       `/api/users/search?q=${encodeURIComponent(q)}&limit=20`
@@ -546,7 +563,6 @@ class RealGatewayRuntime {
       avatar: config.avatar ?? null,
     });
   }
-
 
   // --- Session / authentification --------------------------------------------
 
@@ -650,7 +666,11 @@ class RealGatewayRuntime {
       this.jeton = null;
       // Ne purger le jeton que s'il est réellement refusé : un lancement
       // hors ligne ne doit pas déconnecter définitivement l'utilisateur.
-      if (erreur?.statut === 401 || erreur?.statut === 403 || erreur?.statut === 404) {
+      if (
+        erreur?.statut === 401 ||
+        erreur?.statut === 403 ||
+        erreur?.statut === 404
+      ) {
         this.sauvegarderJetonPersiste(null);
       }
       return null;
@@ -815,7 +835,8 @@ class RealGatewayRuntime {
       alias: brut.alias ?? null,
       theme: brut.theme,
       langue: brut.langue,
-      statutPresence: brut.statutPresence === 'enLigne' ? 'en-ligne' : 'hors-ligne',
+      statutPresence:
+        brut.statutPresence === 'enLigne' ? 'en-ligne' : 'hors-ligne',
       vuLaDerniereFois: brut.vuLaDerniereFois ?? null,
       modeNotification: brut.modeNotification,
       avatar: brut.avatar ?? null,
@@ -837,7 +858,8 @@ class RealGatewayRuntime {
     if (alias !== undefined) corps.alias = alias;
     if (theme !== undefined) corps.theme = theme;
     if (langue !== undefined) corps.langue = langue;
-    if (modeNotification !== undefined) corps.modeNotification = modeNotification;
+    if (modeNotification !== undefined)
+      corps.modeNotification = modeNotification;
     const config = this.mapperConfig(
       await this.appelHttp('/api/config-utilisateur', {
         methode: 'PATCH',
@@ -879,7 +901,8 @@ class RealGatewayRuntime {
     const id = evt?.userId;
     if (typeof id !== 'string' || id === this.utilisateurConnecte?.id) return;
     // Uniquement les utilisateurs qu'on affiche déjà quelque part.
-    if (!this.utilisateursConnus.has(id) && !this.profilsPublics.has(id)) return;
+    if (!this.utilisateursConnus.has(id) && !this.profilsPublics.has(id))
+      return;
     void this.rafraichirProfil(id);
   }
 
@@ -950,20 +973,30 @@ class RealGatewayRuntime {
       marquerPret();
     });
 
-    socket.on('private-message.created', (m) => this.traiterMessageDmEntrant(m));
-    socket.on('private-message.updated', (m) => this.traiterMessageDmModifie(m));
+    socket.on('private-message.created', (m) =>
+      this.traiterMessageDmEntrant(m)
+    );
+    socket.on('private-message.updated', (m) =>
+      this.traiterMessageDmModifie(m)
+    );
     socket.on('private-message.deleted', (m) =>
       this.traiterMessageDmSupprime(m)
     );
-    socket.on('room-message.created', (m) => this.traiterMessageSalonEntrant(m));
-    socket.on('room-message.updated', (m) => this.traiterMessageSalonModifie(m));
+    socket.on('room-message.created', (m) =>
+      this.traiterMessageSalonEntrant(m)
+    );
+    socket.on('room-message.updated', (m) =>
+      this.traiterMessageSalonModifie(m)
+    );
     socket.on('room-message.deleted', (m) =>
       this.traiterMessageSalonSupprime(m)
     );
     socket.on('typing', (evt) => this.traiterSaisieEntrante(evt));
     // Présence en temps réel (voir Message-Service, 'presence.changed').
     socket.on('presence.changed', (evt) => this.traiterPresenceEntrante(evt));
-    socket.on('presence.snapshot', (evt) => this.traiterInstantanePresence(evt));
+    socket.on('presence.snapshot', (evt) =>
+      this.traiterInstantanePresence(evt)
+    );
     socket.on('profil.changed', (evt) => this.traiterProfilEntrant(evt));
     socket.on('serveur.change', (evt) => this.traiterServeurEntrant(evt));
     // Accès à un salon perdu (expulsion, salon réservé…) : Message-Service a
@@ -1027,7 +1060,9 @@ class RealGatewayRuntime {
   traiterMessageDmEntrant(brut) {
     const message = this.mapperMessageDm(brut);
     this.indexMessages.set(message.id, { type: 'dm' });
-    this.partenairesDmConnus.add(this.autreParticipantDm(message.conversationId));
+    this.partenairesDmConnus.add(
+      this.autreParticipantDm(message.conversationId)
+    );
     this.emettre('message-recu', { conversationType: 'dm', message });
   }
 
@@ -1090,14 +1125,12 @@ class RealGatewayRuntime {
   // --- Serveurs et salons (Room-Service, façon Discord) ----------------------
 
   /**
-   * Salon d'un serveur, dans la forme attendue par renderer.js. `membreIds`
-   * = membres du serveur qui voient ce salon (liste des membres, invitation) ;
+   * Salon d'un serveur, dans la forme attendue par la page des salons.
    * `visibilite: 'prive'` pour un salon réservé aux modérateurs (affiché
    * avec un cadenas).
    */
-  mapperSalon(brut, serveur) {
+  mapperSalon(brut) {
     const reserve = brut.acces === 'moderateurs';
-    const membres = serveur?.membres ?? [];
     return {
       type: 'salon',
       id: brut.id,
@@ -1109,10 +1142,6 @@ class RealGatewayRuntime {
       peutEcrire: brut.peutEcrire,
       visibilite: reserve ? 'prive' : 'public',
       creeParId: brut.creePar ?? null,
-      membreIds: membres
-        .filter((membre) => !reserve || membre.role !== 'membre')
-        .map((membre) => membre.utilisateurId),
-      membresInvites: serveur?.invitations ?? [],
     };
   }
 
@@ -1172,6 +1201,9 @@ class RealGatewayRuntime {
     messages.forEach((m) =>
       this.indexMessages.set(m.id, { type: 'salon', roomId: salonId })
     );
+    // Noms et photos des auteurs (la liste des membres n'est plus chargée
+    // avec le serveur, voir obtenirMembresServeur).
+    await this.resoudrePseudos(messages.map((m) => m.auteurId));
     return { messages, finHistorique: bruts.length < limite };
   }
 
@@ -1215,15 +1247,14 @@ class RealGatewayRuntime {
     const salons = actif
       ? await Promise.all(
           actif.salons.map((brut) =>
-            this.hydraterSalonAvecMessages(this.mapperSalon(brut, actif))
+            this.hydraterSalonAvecMessages(this.mapperSalon(brut))
           )
         )
       : [];
 
-    await this.resoudrePseudos([
-      ...(actif?.membres ?? []).map((membre) => membre.utilisateurId),
-      ...invitationsBrutes.map((invitation) => invitation.invitePar),
-    ]);
+    await this.resoudrePseudos(
+      invitationsBrutes.map((invitation) => invitation.invitePar)
+    );
 
     return {
       utilisateurs: this.obtenirUtilisateurs(),
@@ -1232,7 +1263,6 @@ class RealGatewayRuntime {
         ? {
             ...this.resumeServeur(actif),
             proprietaireId: actif.proprietaireId,
-            membres: actif.membres,
             invitations: actif.invitations,
           }
         : null,
@@ -1245,6 +1275,41 @@ class RealGatewayRuntime {
         invitePar: invitation.invitePar,
       })),
     };
+  }
+
+  /**
+   * Une page de membres d'un serveur (Room-Service), propriétaire en tête,
+   * avec pseudo, alias et photo déjà résolus (`utilisateurs`). `suivant` :
+   * décalage de la page suivante, ou null.
+   */
+  async obtenirMembresServeur({
+    serveurId,
+    decalage = 0,
+    limite = TAILLE_PAGE_MEMBRES,
+  } = {}) {
+    const params = new URLSearchParams({
+      decalage: String(decalage),
+      limite: String(limite),
+    });
+    const page = await this.appelHttp(
+      `/api/servers/${encodeURIComponent(serveurId)}/members?${params.toString()}`
+    );
+    const ids = new Set(page.membres.map((membre) => membre.utilisateurId));
+    await this.resoudrePseudos([...ids]);
+    return {
+      ...page,
+      utilisateurs: this.obtenirUtilisateurs().filter((u) => ids.has(u.id)),
+    };
+  }
+
+  /** Lesquels de `ids` sont déjà membres du serveur (fenêtre « Inviter »). */
+  async membresParmi({ serveurId, ids }) {
+    const uniques = [...new Set(ids ?? [])].filter(Boolean).slice(0, 100);
+    if (uniques.length === 0) return [];
+    const page = await this.appelHttp(
+      `/api/servers/${encodeURIComponent(serveurId)}/members?ids=${uniques.map(encodeURIComponent).join(',')}`
+    );
+    return page.membres.map((membre) => membre.utilisateurId);
   }
 
   /** Rejoint la room Socket.IO d'un salon (l'appartenance est au serveur). */
@@ -1297,7 +1362,9 @@ class RealGatewayRuntime {
 
   /** Serveurs publics dont je ne suis pas membre (recherche par nom). */
   async decouvrirServeurs(texte) {
-    const q = String(texte ?? '').trim().slice(0, 80);
+    const q = String(texte ?? '')
+      .trim()
+      .slice(0, 80);
     return this.appelHttp(
       `/api/servers/decouvrir${q ? `?q=${encodeURIComponent(q)}` : ''}`
     );
@@ -1348,7 +1415,7 @@ class RealGatewayRuntime {
     );
     this.salonVersServeur.set(brut.id, serveurId);
     this.assurerAdhesionSocketSeulement(brut.id);
-    return this.mapperSalon(brut, this.serveurs.get(serveurId));
+    return this.mapperSalon(brut);
   }
 
   async modifierSalon({ salonId, nom, acces, ecriture }) {
@@ -1360,7 +1427,7 @@ class RealGatewayRuntime {
       `/api/channels/${encodeURIComponent(salonId)}`,
       { methode: 'PATCH', corps }
     );
-    return this.mapperSalon(brut, this.serveurs.get(brut.serveurId));
+    return this.mapperSalon(brut);
   }
 
   async supprimerSalon(salonId) {
@@ -1407,7 +1474,10 @@ class RealGatewayRuntime {
     return a === moi ? b : a;
   }
 
-  async obtenirMessagesPriveesAvantParUtilisateur(autreUtilisateurId, { avantId, taille } = {}) {
+  async obtenirMessagesPriveesAvantParUtilisateur(
+    autreUtilisateurId,
+    { avantId, taille } = {}
+  ) {
     const limite = taille || TAILLE_PAGE_MESSAGES;
     const params = new URLSearchParams({ limit: String(limite) });
     if (avantId) params.set('cursor', avantId);
@@ -1429,12 +1499,16 @@ class RealGatewayRuntime {
   async construireConversationPrivee(autreUtilisateurId, dernierMessageConnu) {
     try {
       const { messages, finHistorique } =
-        await this.obtenirMessagesPriveesAvantParUtilisateur(autreUtilisateurId);
+        await this.obtenirMessagesPriveesAvantParUtilisateur(
+          autreUtilisateurId
+        );
       await this.resoudrePseudos([autreUtilisateurId]);
       const autre = this.utilisateursConnus.get(autreUtilisateurId);
       const dernier =
         messages[messages.length - 1] ??
-        (dernierMessageConnu ? this.mapperMessageDm(dernierMessageConnu) : null);
+        (dernierMessageConnu
+          ? this.mapperMessageDm(dernierMessageConnu)
+          : null);
       return {
         id: creerDmId(this.utilisateurConnecte.id, autreUtilisateurId),
         participantIds: [this.utilisateurConnecte.id, autreUtilisateurId],
@@ -1483,7 +1557,9 @@ class RealGatewayRuntime {
     );
     return conversations
       .filter(Boolean)
-      .sort((a, b) => (b.lastMessage?.envoi ?? 0) - (a.lastMessage?.envoi ?? 0));
+      .sort(
+        (a, b) => (b.lastMessage?.envoi ?? 0) - (a.lastMessage?.envoi ?? 0)
+      );
   }
 
   /**
@@ -1785,7 +1861,11 @@ class RealGatewayRuntime {
     });
     this.minuteurReconnexion = setTimeout(() => {
       this.minuteurReconnexion = null;
-      if (!this.sessionActive() || this.fermetureVoulue || this.horsLigneSysteme)
+      if (
+        !this.sessionActive() ||
+        this.fermetureVoulue ||
+        this.horsLigneSysteme
+      )
         return;
       this.reconnexions += 1;
       this.definirEtatConnexion('reconnexion', {
@@ -1803,7 +1883,9 @@ class RealGatewayRuntime {
     this.delaiReconnexionActuelMs = DELAI_RECONNEXION_INITIAL_MS;
     this.fermetureVoulue = false;
     if (this.horsLigneSysteme) {
-      return this.definirEtatConnexion('deconnecte', { cause: CAUSE_HORS_LIGNE });
+      return this.definirEtatConnexion('deconnecte', {
+        cause: CAUSE_HORS_LIGNE,
+      });
     }
     this.definirEtatConnexion('reconnexion', {
       cause: this.etatConnexion.cause ?? CAUSE_SERVEUR_INJOIGNABLE,
@@ -1884,7 +1966,11 @@ class RealGatewayRuntime {
     const targetId = estDm
       ? this.autreParticipantDm(conversationId)
       : conversationId;
-    this.socket.emit('typing', { scope, targetId, isTyping: Boolean(est_saisie) });
+    this.socket.emit('typing', {
+      scope,
+      targetId,
+      isTyping: Boolean(est_saisie),
+    });
     return {
       conversationId,
       utilisateurId: this.utilisateurConnecte?.id,
@@ -1901,4 +1987,9 @@ class RealGatewayRuntime {
   }
 }
 
-module.exports = { RealGatewayRuntime, creerDmId, chargerJetonPersiste, sauvegarderJetonPersiste };
+module.exports = {
+  RealGatewayRuntime,
+  creerDmId,
+  chargerJetonPersiste,
+  sauvegarderJetonPersiste,
+};

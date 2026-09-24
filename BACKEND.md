@@ -52,11 +52,16 @@ respectifs pour le détail par service.
 | POST | `/api/auth/register` | `{ pseudo, courriel, mot_de_passe }` → `{ jeton, utilisateur }` |
 | GET/PATCH/DELETE | `/api/auth/me` | Profil courant (lecture/modification/suppression du compte) |
 | GET | `/api/users/lookup?ids=` | Résolution de pseudo pour d'autres utilisateurs (id → pseudo uniquement) |
-| GET/POST | `/api/rooms`, `/api/rooms/:id` | Lister/créer un salon |
-| PATCH/DELETE | `/api/rooms/:id` | Renommer/changer visibilité, supprimer (modérateur/admin) |
-| POST | `/api/rooms/:id/join`, `/leave` | Rejoindre/quitter un salon |
-| POST | `/api/rooms/:id/invitations`, `/accept`, `/refuse` | Invitations |
-| DELETE | `/api/rooms/:id/members/:userId` | Retirer un membre (modérateur/admin) |
+| GET | `/api/users/search?q=` | Recherche par début de pseudo (nouveau DM, invitation) |
+| GET/POST | `/api/servers` | Mes serveurs (sans la liste des membres) / créer un serveur |
+| GET | `/api/servers/decouvrir?q=`, `/api/servers/invitations/me` | Serveurs publics à rejoindre, mes invitations |
+| PATCH/DELETE | `/api/servers/:id` | Modifier (nom, icône, visibilité) / supprimer |
+| POST | `/api/servers/:id/join`, `/leave` | Rejoindre / quitter un serveur |
+| GET | `/api/servers/:id/members?decalage=&limite=` | Membres par pages (panneau des membres) |
+| GET | `/api/servers/:id/members?ids=` | Lesquels sont déjà membres (fenêtre « Inviter ») |
+| PATCH/DELETE | `/api/servers/:id/members/:userId` | Changer le rôle / expulser |
+| POST | `/api/servers/:id/invitations`, `/invitations/accept`, `/invitations/refuse` | Invitations |
+| POST/PATCH/DELETE | `/api/servers/:id/channels`, `/api/channels/:id` | Créer / modifier / supprimer un salon |
 | POST/GET | `/api/messages/rooms/:roomId`, `/history` | Messages de salon |
 | PATCH/DELETE | `/api/messages/rooms/:roomId/:id` | Modifier/supprimer un message de salon |
 | POST/GET | `/api/messages`, `/api/messages/history/:otherUserId` | Messages privés (DM) |

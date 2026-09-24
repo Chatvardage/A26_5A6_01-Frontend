@@ -282,6 +282,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('serveurs:changer-role', donnees),
   inviterAuServeur: (donnees) =>
     ipcRenderer.invoke('serveurs:inviter', donnees),
+  // Membres d'un serveur par pages ({ serveurId, decalage? }), et lesquels
+  // de `ids` sont déjà membres ({ serveurId, ids }).
+  obtenirMembresServeur: (donnees) =>
+    ipcRenderer.invoke('serveurs:membres', donnees),
+  membresParmi: (donnees) =>
+    ipcRenderer.invoke('serveurs:membres-parmi', donnees),
   accepterInvitation: (donnees) =>
     ipcRenderer.invoke('serveurs:accepter-invitation', donnees),
   refuserInvitation: (donnees) =>

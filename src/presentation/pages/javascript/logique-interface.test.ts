@@ -134,28 +134,6 @@ describe('logique-interface', () => {
       // Pas de modification de la liste d'origine.
       expect(conversations[0].id).toBe('sans');
     });
-
-    it('trie les membres par rôle puis par nom', () => {
-      const rang = (role: string) =>
-        ({ membre: 1, moderateur: 2, proprietaire: 3 })[role] ?? 0;
-      const noms: Record<string, string> = {
-        a: 'zoé',
-        b: 'bob',
-        c: 'alice',
-        d: 'ève',
-      };
-      const membres = [
-        { utilisateurId: 'a', role: 'membre' },
-        { utilisateurId: 'b', role: 'moderateur' },
-        { utilisateurId: 'c', role: 'membre' },
-        { utilisateurId: 'd', role: 'proprietaire' },
-      ];
-      expect(
-        L.trierMembres(membres, rang, (id: string) => noms[id]).map(
-          (m: { utilisateurId: string }) => m.utilisateurId
-        )
-      ).toEqual(['d', 'b', 'c', 'a']);
-    });
   });
 
   describe('contenu du serveur par défaut', () => {

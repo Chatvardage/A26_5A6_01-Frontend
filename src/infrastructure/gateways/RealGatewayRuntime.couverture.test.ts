@@ -784,7 +784,6 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
         parDefaut: false,
         monRole: 'proprietaire',
         nombreMembres: 1,
-        membres: [{ utilisateurId: 'moi', role: 'proprietaire' }],
         invitations: [],
         salons: [{ id: 's1', serveurId: 'srv', nom: 'général', acces: 'tous' }],
       };
@@ -831,7 +830,13 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
         avantId: 'r0',
       });
       expect(page.messages[0].id).toBe('r1');
-      expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain('cursor=r0');
+      expect(
+        fetchMock.mock.calls.some(([url]) => String(url).includes('cursor=r0'))
+      ).toBe(true);
+      // Les auteurs des messages chargés sont résolus (nom, photo).
+      expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain(
+        '/api/users/lookup?ids=moi'
+      );
 
       await runtime.modifierServeur({ serveurId: 'srv', icone: null });
       await runtime.modifierServeur({

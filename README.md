@@ -92,8 +92,10 @@ Structure détaillée du code : voir `Architecture.md`.
   présence n'est affichée que dans l'en-tête d'une conversation privée, pas
   sur les avatars des messages.
 - **Panneau « Membres de … »** : une carte par membre (avatar avec pastille
-  de présence, nom, présence et badge de rôle, actions à droite), triés
-  propriétaire → modérateurs → membres.
+  de présence, nom, présence et badge de rôle, actions à droite), chargés
+  par pages de 50 (« Afficher plus de membres ») dans l'ordre propriétaire →
+  modérateurs → membres. La liste complète n'est plus chargée avec le
+  serveur : tout le monde est membre du serveur par défaut.
 - **Messages temporaires** (`#toast` : confirmations, « nouveau message »
   quand la notification système est indisponible) : en haut, centrés sous
   la barre de titre, pour ne pas masquer la zone de saisie.
@@ -336,8 +338,9 @@ Autres mesures :
   conversation affichée et qu'on en est l'auteur ou qu'on était déjà en bas.
 - Aucun répertoire/annuaire global d'utilisateurs n'existe côté backend pour
   un compte non-admin ; la liste de candidats à l'invitation ne montre donc
-  que les utilisateurs déjà "connus" (membres de salons visibles,
-  participants de DM déjà ouverts, résolus via `GET /api/users/lookup`).
+  sans rien taper que des suggestions (participants de DM déjà ouverts et
+  premiers membres de chacun de ses serveurs) ; les autres se trouvent par
+  la recherche par pseudo (`GET /api/users/search`).
 - La signature/code signing des builds n'est pas configurée.
 - La fenêtre sans cadre ne propose pas le menu système natif (clic droit
   sur la barre de titre) ; les raccourcis clavier du système restent actifs.

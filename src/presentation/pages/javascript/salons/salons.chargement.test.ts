@@ -59,10 +59,6 @@ function etatInitial(monRole = 'membre') {
       monRole,
       nombreMembres: 2,
       proprietaireId: 'bob',
-      membres: [
-        { utilisateurId: 'bob', role: 'proprietaire' },
-        { utilisateurId: 'moi', role: monRole },
-      ],
       invitations: [],
       salonIds: ['general', 'autre'],
     },
@@ -95,7 +91,10 @@ type Rappel = (donnees?: unknown) => unknown;
 // Pages ouvertes par les tests, fermées après chacun (minuteurs de la page).
 const pagesOuvertes: JSDOM[] = [];
 
-async function chargerPage({ monRole = 'membre' } = {}) {
+async function chargerPage({
+  monRole = 'membre',
+  autresReponses = {} as Record<string, unknown>,
+} = {}) {
   const erreurs: unknown[] = [];
   const consoleVirtuelle = new VirtualConsole();
   consoleVirtuelle.on('jsdomError', (erreur) => erreurs.push(erreur));
@@ -136,6 +135,7 @@ async function chargerPage({ monRole = 'membre' } = {}) {
     obtenirResumesConversationsPrivees: [],
     obtenirEtatsSaisie: [],
     obtenirEtatSalons: etatInitial(monRole),
+    ...autresReponses,
   };
   const appels: Record<string, number> = {};
   const api = new Proxy(
@@ -148,9 +148,15 @@ async function chargerPage({ monRole = 'membre' } = {}) {
             return () => {};
           };
         }
-        return () => {
+        return (...args: unknown[]) => {
           appels[nom] = (appels[nom] ?? 0) + 1;
-          return Promise.resolve(structuredClone(reponses[nom]));
+          const reponse = reponses[nom];
+          // Réponse calculée à partir des arguments (ex. pagination).
+          return Promise.resolve(
+            typeof reponse === 'function'
+              ? reponse(...args)
+              : structuredClone(reponse)
+          );
         };
       },
     }
@@ -260,6 +266,60 @@ describe('page des salons (scripts découpés)', () => {
       message: message('m3', 'inconnu', 'coucou', 3),
     });
     expect(appels.obtenirEtatSalons).toBe(avant + 1);
+  });
+
+  it('panneau des membres : chargé par pages, « Afficher plus »', async () => {
+    const pages: Record<number, unknown> = {
+      0: {
+        membres: [
+          { utilisateurId: 'bob', role: 'proprietaire' },
+          { utilisateurId: 'moi', role: 'membre' },
+        ],
+        total: 3,
+        suivant: 2,
+        utilisateurs: [
+          { id: 'bob', pseudo: 'bob', alias: 'Bobby', avatar: null },
+          { id: 'moi', pseudo: 'moi', alias: null, avatar: null },
+        ],
+      },
+      2: {
+        membres: [{ utilisateurId: 'zoe', role: 'membre' }],
+        total: 3,
+        suivant: null,
+        utilisateurs: [],
+      },
+    };
+    const demandes: unknown[] = [];
+    const { document, window, erreurs } = await chargerPage({
+      autresReponses: {
+        obtenirMembresServeur: (donnees: { decalage: number }) => {
+          demandes.push(donnees);
+          return pages[donnees.decalage];
+        },
+      },
+    });
+    window.HTMLDialogElement.prototype.showModal ??= function () {};
+
+    document.querySelector<HTMLElement>('#open-members')?.click();
+    const noms = () =>
+      [...document.querySelectorAll('.member-row .member-name')].map(
+        (element) => element.textContent
+      );
+    await vi.waitFor(() => expect(noms()).toEqual(['Bobby', 'moi (Moi)']));
+    const plus = [...document.querySelectorAll('#dialog-content button')].find(
+      (bouton) => bouton.textContent === 'Afficher plus de membres'
+    ) as HTMLButtonElement;
+    expect(plus.hidden).toBe(false);
+
+    plus.click();
+    // Membre inconnu (non résolu) : repli sur « utilisateur inconnu ».
+    await vi.waitFor(() => expect(noms()).toHaveLength(3));
+    expect(plus.hidden).toBe(true);
+    expect(demandes).toEqual([
+      { serveurId: 'srv', decalage: 0 },
+      { serveurId: 'srv', decalage: 2 },
+    ]);
+    expect(erreurs).toEqual([]);
   });
 
   it('invitation masquée pour un simple membre, visible pour un modérateur', async () => {

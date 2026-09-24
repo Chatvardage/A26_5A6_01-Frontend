@@ -231,7 +231,22 @@ el.creerRail.addEventListener('click', () => {
 el.inviter.addEventListener('click', () => {
   const serveur = etat.serveurActif;
   if (!serveur) return;
-  const membreIds = new Set(serveur.membres.map((m) => m.utilisateurId));
+  // Qui est déjà membre, pour les personnes affichées seulement (la liste
+  // complète des membres n'est plus chargée, voir membresParmi).
+  const membreIds = new Set();
+  const avecAppartenance = async (utilisateurs) => {
+    try {
+      const membres = await window.electronAPI.membresParmi({
+        serveurId: serveur.id,
+        ids: utilisateurs.map((user) => user.id),
+      });
+      for (const id of membres) membreIds.add(id);
+    } catch {
+      // Best-effort : sans réponse, l'invitation d'un membre est refusée
+      // par le serveur.
+    }
+    return utilisateurs;
+  };
   const statutDans = (user) =>
     membreIds.has(user.id)
       ? 'membre'
@@ -246,8 +261,10 @@ el.inviter.addEventListener('click', () => {
   const selecteur = ChatUiShared.creerSelecteurUtilisateurs({
     t,
     messageErreur,
-    obtenirSuggestions: () => window.electronAPI.obtenirSuggestionsDm(),
-    rechercher: (texte) => window.electronAPI.rechercherUtilisateurs(texte),
+    obtenirSuggestions: async () =>
+      avecAppartenance(await window.electronAPI.obtenirSuggestionsDm()),
+    rechercher: async (texte) =>
+      avecAppartenance(await window.electronAPI.rechercherUtilisateurs(texte)),
     garderSuggestion: (user) => !statutDans(user),
     decrireAction: (user) => {
       const statut = statutDans(user);
@@ -350,15 +367,39 @@ el.membres.addEventListener('click', () => {
   if (!serveur) return;
   const monRole = roleActuel();
 
+  // Membres chargés par pages (Room-Service) : propriétaire en tête, puis
+  // modérateurs, puis membres. Plus de liste complète avec le serveur.
   const liste = creerEl('div', { classe: 'member-list' });
-  // Propriétaire, puis modérateurs, puis membres ; alphabétique ensuite.
-  const membresTries = LogiqueInterface.trierMembres(
-    serveur.membres,
-    ChatUiShared.rangRole,
-    (id) => ChatUiShared.nomAffiche(utilisateur(id) ?? {})
+  const plus = creerBouton(
+    t('servers.showMoreMembers'),
+    'secondary-button full-width',
+    () => chargerPage(Number(plus.dataset.decalage))
   );
-  membresTries.forEach(({ utilisateurId, role }) => {
-    const membre = utilisateur(utilisateurId) ?? {
+  plus.hidden = true;
+  const connus = new Map();
+
+  async function chargerPage(decalage) {
+    plus.disabled = true;
+    try {
+      const page = await window.electronAPI.obtenirMembresServeur({
+        serveurId: serveur.id,
+        decalage,
+      });
+      for (const u of page.utilisateurs) connus.set(u.id, u);
+      for (const { utilisateurId, role } of page.membres) {
+        liste.appendChild(ligneMembre(utilisateurId, role));
+      }
+      plus.hidden = page.suivant === null;
+      plus.dataset.decalage = String(page.suivant ?? 0);
+    } catch (erreur) {
+      notifier(messageErreur(erreur), true);
+    } finally {
+      plus.disabled = false;
+    }
+  }
+
+  function ligneMembre(utilisateurId, role) {
+    const membre = connus.get(utilisateurId) ?? {
       id: utilisateurId,
       pseudo: t('channels.unknownUser'),
     };
@@ -397,7 +438,10 @@ el.membres.addEventListener('click', () => {
       enfants: [
         creerEl('span', {
           classe: 'member-name',
-          texte: utilisateurId === utilisateurActuelId ? `${nom} (${t('dm.me')})` : nom,
+          texte:
+            utilisateurId === utilisateurActuelId
+              ? `${nom} (${t('dm.me')})`
+              : nom,
           attrs: membre.alias ? { title: `@${membre.pseudo}` } : {},
         }),
         creerEl('div', { classe: 'member-details', enfants: details }),
@@ -454,10 +498,11 @@ el.membres.addEventListener('click', () => {
         creerEl('div', { classe: 'member-actions', enfants: actions })
       );
     }
-    liste.appendChild(creerEl('div', { classe: 'member-row', enfants }));
-  });
+    return creerEl('div', { classe: 'member-row', enfants });
+  }
 
-  ouvrirDialogue(t('servers.membersOf', { name: serveur.nom }), liste);
+  ouvrirDialogue(t('servers.membersOf', { name: serveur.nom }), [liste, plus]);
+  void chargerPage(0);
 });
 
 // --- Paramètres du salon (modérateur du serveur minimum) ---------------------
@@ -596,4 +641,3 @@ el.menuServeur?.addEventListener('click', () => {
   }
   ouvrirDialogue(serveur.nom, contenu);
 });
-

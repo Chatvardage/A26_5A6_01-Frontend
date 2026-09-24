@@ -201,14 +201,6 @@ describe('RealGatewayRuntime', () => {
   });
 
   describe('mapperSalon', () => {
-    const serveur = {
-      membres: [
-        { utilisateurId: 'owner', role: 'proprietaire' },
-        { utilisateurId: 'modo', role: 'moderateur' },
-        { utilisateurId: 'bob', role: 'membre' },
-      ],
-      invitations: ['invite'],
-    };
     const brut = {
       id: 'c1',
       serveurId: 'srv',
@@ -220,32 +212,28 @@ describe('RealGatewayRuntime', () => {
       creePar: 'owner',
     };
 
-    it('salon ouvert : tous les membres du serveur, écriture selon Room-Service', () => {
+    it('salon ouvert : écriture selon Room-Service, sans liste de membres', () => {
       const { runtime } = creerRuntime();
-      expect(runtime.mapperSalon(brut, serveur)).toMatchObject({
+      const salon = runtime.mapperSalon(brut);
+      expect(salon).toMatchObject({
         id: 'c1',
         serveurId: 'srv',
         visibilite: 'public',
         peutEcrire: false,
         creeParId: 'owner',
-        membreIds: ['owner', 'modo', 'bob'],
-        membresInvites: ['invite'],
       });
+      expect(salon).not.toHaveProperty('membreIds');
     });
 
-    it('salon réservé aux modérateurs : cadenas et membres filtrés', () => {
+    it('salon réservé aux modérateurs : cadenas', () => {
       const { runtime } = creerRuntime();
       expect(
-        runtime.mapperSalon({ ...brut, acces: 'moderateurs' }, serveur)
-      ).toMatchObject({ visibilite: 'prive', membreIds: ['owner', 'modo'] });
-    });
-
-    it('serveur inconnu : listes vides', () => {
-      const { runtime } = creerRuntime();
-      expect(runtime.mapperSalon(brut, undefined)).toMatchObject({
-        membreIds: [],
-        membresInvites: [],
-      });
+        runtime.mapperSalon({
+          ...brut,
+          acces: 'moderateurs',
+          creePar: undefined,
+        })
+      ).toMatchObject({ visibilite: 'prive', creeParId: null });
     });
   });
 
@@ -836,18 +824,16 @@ describe('RealGatewayRuntime', () => {
     it("envoie l'avatar et le renvoie mappé", async () => {
       const { runtime } = creerRuntime();
       const avatar = 'data:image/webp;base64,AAAA';
-      const fetchMock = vi
-        .fn()
-        .mockResolvedValue(
-          reponseJson({
-            theme: 'sombre',
-            langue: 'fr',
-            statutPresence: 'enLigne',
-            modeNotification: 'systeme',
-            alias: null,
-            avatar,
-          })
-        );
+      const fetchMock = vi.fn().mockResolvedValue(
+        reponseJson({
+          theme: 'sombre',
+          langue: 'fr',
+          statutPresence: 'enLigne',
+          modeNotification: 'systeme',
+          alias: null,
+          avatar,
+        })
+      );
       vi.stubGlobal('fetch', fetchMock);
       const config = await runtime.configModifier({ avatar });
       expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ avatar });
@@ -878,18 +864,16 @@ describe('RealGatewayRuntime', () => {
 
     it('charge avatar et présence effective, et émet les changements', async () => {
       const runtime = runtimeConnecte();
-      const fetchMock = vi
-        .fn()
-        .mockResolvedValue(
-          reponseJson([
-            {
-              idUtilisateur: 'u2',
-              alias: 'Bob',
-              avatar: 'data:image/png;base64,AA',
-              actif: true,
-            },
-          ])
-        );
+      const fetchMock = vi.fn().mockResolvedValue(
+        reponseJson([
+          {
+            idUtilisateur: 'u2',
+            alias: 'Bob',
+            avatar: 'data:image/png;base64,AA',
+            actif: true,
+          },
+        ])
+      );
       vi.stubGlobal('fetch', fetchMock);
       const presences: unknown[] = [];
       runtime.on('presence', (p: unknown) => presences.push(p));
@@ -943,18 +927,16 @@ describe('RealGatewayRuntime', () => {
       runtime.profilsPublics.set('u2', { alias: null, avatar: null });
       vi.stubGlobal(
         'fetch',
-        vi
-          .fn()
-          .mockResolvedValue(
-            reponseJson([
-              {
-                idUtilisateur: 'u2',
-                alias: null,
-                avatar: 'data:image/png;base64,BB',
-                actif: false,
-              },
-            ])
-          )
+        vi.fn().mockResolvedValue(
+          reponseJson([
+            {
+              idUtilisateur: 'u2',
+              alias: null,
+              avatar: 'data:image/png;base64,BB',
+              actif: false,
+            },
+          ])
+        )
       );
       const modifies: unknown[] = [];
       runtime.on('profils-publics', (ids: unknown) => modifies.push(ids));
@@ -975,20 +957,18 @@ describe('RealGatewayRuntime', () => {
     it('le poll renvoie un signe de vie si notre statut est en ligne', async () => {
       vi.useFakeTimers();
       const runtime = runtimeConnecte();
-      const fetchMock = vi
-        .fn()
-        .mockImplementation((url: string) =>
-          Promise.resolve(
-            reponseJson(
-              url.endsWith('/api/config-utilisateur')
-                ? {
-                    statutPresence: 'enLigne',
-                    vuLaDerniereFois: '2026-01-01T00:00:00.000Z',
-                  }
-                : {}
-            )
+      const fetchMock = vi.fn().mockImplementation((url: string) =>
+        Promise.resolve(
+          reponseJson(
+            url.endsWith('/api/config-utilisateur')
+              ? {
+                  statutPresence: 'enLigne',
+                  vuLaDerniereFois: '2026-01-01T00:00:00.000Z',
+                }
+              : {}
           )
-        );
+        )
+      );
       vi.stubGlobal('fetch', fetchMock);
       runtime.demarrerPollPresence();
       await vi.advanceTimersByTimeAsync(0);
@@ -1004,14 +984,12 @@ describe('RealGatewayRuntime', () => {
     it("le poll n'envoie rien si on a choisi hors ligne", async () => {
       vi.useFakeTimers();
       const runtime = runtimeConnecte();
-      const fetchMock = vi
-        .fn()
-        .mockResolvedValue(
-          reponseJson({
-            statutPresence: 'horsLigne',
-            vuLaDerniereFois: '2026-01-01T00:00:00.000Z',
-          })
-        );
+      const fetchMock = vi.fn().mockResolvedValue(
+        reponseJson({
+          statutPresence: 'horsLigne',
+          vuLaDerniereFois: '2026-01-01T00:00:00.000Z',
+        })
+      );
       vi.stubGlobal('fetch', fetchMock);
       runtime.demarrerPollPresence();
       await vi.advanceTimersByTimeAsync(0);
@@ -1040,34 +1018,42 @@ describe('RealGatewayRuntime', () => {
       });
     }
 
-    it('suggère les membres de tous mes serveurs et les interlocuteurs connus, sans soi-même', async () => {
+    it('suggère les premiers membres de mes serveurs et les interlocuteurs connus, sans soi-même', async () => {
       const runtime = runtimeConnecte();
       runtime.partenairesDmConnus.add('u4');
-      const serveur = (id: string, membres: string[]) => ({
-        id,
-        salons: [],
+      const page = (membres: string[]) => ({
         membres: membres.map((utilisateurId) => ({
           utilisateurId,
           role: 'membre',
         })),
+        total: membres.length,
+        suivant: null,
       });
-      vi.stubGlobal(
-        'fetch',
-        routes({
-          '/api/servers': [
-            serveur('s1', ['u1', 'u2']),
-            serveur('s2', ['u3', 'u2']),
-          ],
-          '/api/users/lookup': [
-            { id: 'u2', pseudo: 'zed' },
-            { id: 'u3', pseudo: 'bob' },
-            { id: 'u4', pseudo: 'carl' },
-          ],
-          '/api/config-utilisateur/publiques': [
-            { idUtilisateur: 'u2', alias: 'Alice', avatar: null, actif: true },
-          ],
-        })
+      const table = routes({
+        '/api/servers': [
+          { id: 's1', salons: [] },
+          { id: 's2', salons: [] },
+          { id: 's3', salons: [] },
+          { id: 's4', salons: [] },
+        ],
+        '/api/servers/s1/members': page(['u1', 'u2']),
+        '/api/servers/s2/members': page(['u3', 'u2']),
+        // s3 : réponse sans membres ; s4 : panne réseau (ignorée).
+        '/api/users/lookup': [
+          { id: 'u2', pseudo: 'zed' },
+          { id: 'u3', pseudo: 'bob' },
+          { id: 'u4', pseudo: 'carl' },
+        ],
+        '/api/config-utilisateur/publiques': [
+          { idUtilisateur: 'u2', alias: 'Alice', avatar: null, actif: true },
+        ],
+      });
+      const fetchMock = vi.fn((url: string) =>
+        url.includes('/api/servers/s4/members')
+          ? Promise.reject(new Error('réseau'))
+          : table(url)
       );
+      vi.stubGlobal('fetch', fetchMock);
 
       const suggestions = await runtime.obtenirSuggestionsDm();
 
@@ -1081,6 +1067,102 @@ describe('RealGatewayRuntime', () => {
         pseudo: 'zed',
         alias: 'Alice',
         present: true,
+      });
+      // Seulement les premiers membres de chaque serveur.
+      expect(
+        fetchMock.mock.calls.some(([url]) =>
+          String(url).endsWith('/api/servers/s1/members?limite=20')
+        )
+      ).toBe(true);
+    });
+
+    it('membres d’un serveur par pages, avec les utilisateurs résolus', async () => {
+      const runtime = runtimeConnecte();
+      const fetchMock = routes({
+        '/api/servers/srv/members': {
+          membres: [
+            { utilisateurId: 'u1', role: 'proprietaire' },
+            { utilisateurId: 'u2', role: 'membre' },
+          ],
+          total: 3,
+          suivant: 2,
+        },
+        '/api/users/lookup': [
+          { id: 'u1', pseudo: 'ana' },
+          { id: 'u2', pseudo: 'ben' },
+        ],
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const page = await runtime.obtenirMembresServeur({ serveurId: 'srv' });
+
+      expect(page).toMatchObject({ total: 3, suivant: 2 });
+      expect(page.utilisateurs.map((u: { id: string }) => u.id).sort()).toEqual(
+        ['u1', 'u2']
+      );
+      expect(String(fetchMock.mock.calls[0][0])).toContain(
+        '/api/servers/srv/members?decalage=0&limite=50'
+      );
+
+      await runtime.obtenirMembresServeur({
+        serveurId: 'srv',
+        decalage: 2,
+        limite: 10,
+      });
+      expect(
+        fetchMock.mock.calls.some(([url]) =>
+          String(url).includes('decalage=2&limite=10')
+        )
+      ).toBe(true);
+    });
+
+    it('membresParmi : lesquels sont déjà membres (100 ids au plus)', async () => {
+      const runtime = runtimeConnecte();
+      const fetchMock = routes({
+        '/api/servers/srv/members': {
+          membres: [{ utilisateurId: 'u2', role: 'membre' }],
+          total: 1,
+          suivant: null,
+        },
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      expect(await runtime.membresParmi({ serveurId: 'srv', ids: [] })).toEqual(
+        []
+      );
+      expect(await runtime.membresParmi({ serveurId: 'srv' })).toEqual([]);
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      const ids = [
+        'u1',
+        'u2',
+        'u2',
+        '',
+        ...Array.from({ length: 150 }, (_, i) => `x${i}`),
+      ];
+      expect(await runtime.membresParmi({ serveurId: 'srv', ids })).toEqual([
+        'u2',
+      ]);
+      const url = String(fetchMock.mock.calls[0][0]);
+      expect(url).toContain('/api/servers/srv/members?ids=u1,u2,x0');
+      expect(url.split('?ids=')[1].split(',')).toHaveLength(100);
+    });
+
+    it('obtenirMembresServeur sans argument : valeurs par défaut', async () => {
+      const runtime = runtimeConnecte();
+      vi.stubGlobal(
+        'fetch',
+        routes({
+          '/api/servers/undefined/members': {
+            membres: [],
+            total: 0,
+            suivant: null,
+          },
+        })
+      );
+      await expect(runtime.obtenirMembresServeur()).resolves.toMatchObject({
+        membres: [],
+        utilisateurs: [],
       });
     });
 
@@ -1341,17 +1423,15 @@ describe('RealGatewayRuntime', () => {
       const { runtime, socket } = runtimeConnecte();
       vi.stubGlobal(
         'fetch',
-        vi
-          .fn()
-          .mockResolvedValue(
-            reponseJson({
-              theme: 'sombre',
-              alias: 'A',
-              avatar: null,
-              id: 'moi',
-              pseudo: 'neuf',
-            })
-          )
+        vi.fn().mockResolvedValue(
+          reponseJson({
+            theme: 'sombre',
+            alias: 'A',
+            avatar: null,
+            id: 'moi',
+            pseudo: 'neuf',
+          })
+        )
       );
       await runtime.configModifier({ theme: 'clair' });
       expect(socket.emit).not.toHaveBeenCalledWith('profil.update');
@@ -1368,24 +1448,22 @@ describe('RealGatewayRuntime', () => {
       runtime.enregistrerUtilisateurConnu({ id: 'u2', pseudo: 'ancien' });
       vi.stubGlobal(
         'fetch',
-        vi
-          .fn()
-          .mockImplementation((url: string) =>
-            Promise.resolve(
-              reponseJson(
-                url.includes('/api/users/lookup')
-                  ? [{ id: 'u2', pseudo: 'nouveau' }]
-                  : [
-                      {
-                        idUtilisateur: 'u2',
-                        alias: null,
-                        avatar: null,
-                        actif: false,
-                      },
-                    ]
-              )
+        vi.fn().mockImplementation((url: string) =>
+          Promise.resolve(
+            reponseJson(
+              url.includes('/api/users/lookup')
+                ? [{ id: 'u2', pseudo: 'nouveau' }]
+                : [
+                    {
+                      idUtilisateur: 'u2',
+                      alias: null,
+                      avatar: null,
+                      actif: false,
+                    },
+                  ]
             )
           )
+        )
       );
       const modifies: unknown[] = [];
       runtime.on('profils-publics', (ids: unknown) => modifies.push(ids));

@@ -114,18 +114,6 @@
     return [...conversations].sort((a, b) => date(b) - date(a));
   }
 
-  /**
-   * Membres d'un serveur : propriétaire, puis modérateurs, puis membres ;
-   * alphabétique (nom affiché) à rang égal.
-   */
-  function trierMembres(membres, rangRole, nomDe) {
-    return [...membres].sort(
-      (a, b) =>
-        rangRole(b.role) - rangRole(a.role) ||
-        nomDe(a.utilisateurId).localeCompare(nomDe(b.utilisateurId))
-    );
-  }
-
   // --- Contenu du serveur par défaut --------------------------------------
   // Créé par migration avec des identifiants figés (Room-Service
   // 20260924100000_serveurs, Message-Service 20260924110000_message_bienvenue)
@@ -170,7 +158,6 @@
     estPresDuBas,
     doitSuivreNouveauMessage,
     trierConversations,
-    trierMembres,
     SALONS_PAR_DEFAUT,
     MESSAGE_BIENVENUE_ID,
     cleNomSalon,
