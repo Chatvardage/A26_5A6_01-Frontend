@@ -14,6 +14,7 @@ export default defineConfig({
       include: [
         'src/**/*.ts',
         'src/infrastructure/gateways/RealGatewayRuntime.js',
+        'src/infrastructure/gateways/runtime/*.js',
         // Logique pure des pages de chat (voir son en-tête).
         'src/presentation/pages/javascript/logique-interface.js',
         // Provenance des URL et des appels IPC du processus main.

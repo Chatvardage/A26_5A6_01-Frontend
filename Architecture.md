@@ -87,7 +87,16 @@ src/
       RealGatewayRuntime.js            Implémentation utilisée par main.js :
                                        appels HTTP, Socket.IO, reconnexion,
                                        jeton persisté. Lève des CODES
-                                       d'erreur (ERR_*), jamais du texte
+                                       d'erreur (ERR_*), jamais du texte.
+                                       Ne garde que le constructeur, les
+                                       événements et l'appel HTTP ; les
+                                       méthodes sont dans runtime/
+      runtime/                         Méthodes de RealGatewayRuntime par
+                                       domaine, ajoutées à son prototype :
+                                       utilisateurs, session, configuration,
+                                       temps-reel, serveurs, messages,
+                                       presence, reseau ; constantes.js et
+                                       jeton.js (persistance chiffrée)
 
   i18n/
     translations.json        Seule source des textes (fr + en), y compris

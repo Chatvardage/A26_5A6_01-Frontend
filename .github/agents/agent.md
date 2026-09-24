@@ -51,7 +51,7 @@ npm install
 npm run start:dev     # mode dev : Vite + Electron orchestrés par scripts/start.js
 npm start              # mode prod : build automatique (prestart) puis Electron seul
 npm test               # vitest run
-npm run test:coverage  # avec couverture : 100 % exigé sur src/**/*.ts et RealGatewayRuntime.js (voir vitest.config.ts)
+npm run test:coverage  # avec couverture : 100 % exigé sur src/**/*.ts, RealGatewayRuntime.js et runtime/ (voir vitest.config.ts)
 npm run lint            # eslint . --ext .js,.jsx,.ts,.tsx
 npx tsc --noEmit        # compilation TypeScript sans émission
 npm run build           # build de la page de connexion (dist/login/)
@@ -104,6 +104,11 @@ src/infrastructure/gateways/
                               dépendance TS. Lève des CODES d'erreur
                               stables (ex. "ERR_PSEUDO_PRIS|alice"), JAMAIS
                               de texte traduit — voir i18n plus bas.
+  runtime/*.js                 Ses méthodes, un fichier par domaine
+                              (session, serveurs, messages, présence,
+                              réseau…), ajoutées à son prototype par
+                              Object.assign : `this` y est l'instance.
+                              Nouvelle méthode → le fichier du domaine.
 
 src/i18n/
   translations.json           SEULE source de vérité pour tous les textes

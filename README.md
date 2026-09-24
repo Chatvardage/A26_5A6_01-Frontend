@@ -154,7 +154,7 @@ npm run test:coverage
 ```
 
 `test:coverage` exige **100 %** (instructions, branches, fonctions, lignes)
-sur `src/**/*.ts`, `RealGatewayRuntime.js` (le vrai client réseau) et
+sur `src/**/*.ts`, `RealGatewayRuntime.js` et `runtime/` (le vrai client réseau) et
 `logique-interface.js` (logique pure des pages de chat) et
 `src/main/securite.js` (provenance des URL et des appels IPC) — voir
 `vitest.config.ts`. Les pages de chat sont en plus testées de bout en bout
