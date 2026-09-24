@@ -1419,6 +1419,42 @@ describe('RealGatewayRuntime', () => {
       ]);
     });
 
+    it('serveur par défaut : ignore un changement de membre qui ne nous vise pas', () => {
+      const { runtime, socket } = runtimeConnecte();
+      runtime.serveurs.set('defaut', { id: 'defaut', parDefaut: true });
+      runtime.serveurs.set('projet', { id: 'projet', parDefaut: false });
+      const recus: unknown[] = [];
+      runtime.on('serveur-change', (e: unknown) => recus.push(e));
+      const moi = runtime.utilisateurConnecte.id;
+
+      socket._declencher('serveur.change', {
+        serveurId: 'defaut',
+        raison: 'membres',
+        cibleId: 'autre',
+      });
+      socket._declencher('serveur.change', {
+        serveurId: 'defaut',
+        raison: 'membres',
+        cibleId: moi,
+      });
+      socket._declencher('serveur.change', {
+        serveurId: 'projet',
+        raison: 'membres',
+        cibleId: 'autre',
+      });
+      socket._declencher('serveur.change', {
+        serveurId: 'defaut',
+        raison: 'salons',
+        cibleId: null,
+      });
+
+      expect(recus).toEqual([
+        { serveurId: 'defaut', raison: 'membres', cibleId: moi },
+        { serveurId: 'projet', raison: 'membres', cibleId: 'autre' },
+        { serveurId: 'defaut', raison: 'salons', cibleId: null },
+      ]);
+    });
+
     it("annonce 'profil.update' après un changement d'alias, d'avatar ou de pseudo (pas de thème)", async () => {
       const { runtime, socket } = runtimeConnecte();
       vi.stubGlobal(

@@ -91,6 +91,17 @@ module.exports = {
     if (typeof evt?.serveurId !== 'string' || typeof evt.raison !== 'string') {
       return;
     }
+    // Serveur par défaut : tout le monde en est membre. Un changement de
+    // membre qui ne nous vise pas (rôle d'un autre…) ne change rien à notre
+    // page : on ne la recharge pas, sinon chaque changement ferait recharger
+    // la page de tous les clients connectés.
+    if (
+      evt.raison === 'membres' &&
+      evt.cibleId !== this.utilisateurConnecte?.id &&
+      this.serveurs.get(evt.serveurId)?.parDefaut
+    ) {
+      return;
+    }
     this.emettre('serveur-change', {
       serveurId: evt.serveurId,
       raison: evt.raison,
