@@ -387,6 +387,26 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
       expect(runtime.obtenirUtilisateurConnecte()).not.toBeNull();
     });
 
+    it('suppression du compte en échec, session fermée entre-temps : la présence ne reprend pas', async () => {
+      const { runtime } = runtimeConnecte();
+      const demarrer = vi
+        .spyOn(runtime, 'demarrerPollPresence')
+        .mockImplementation(() => undefined);
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => {
+          // Déconnexion (autre onglet, session expirée) pendant l'appel.
+          runtime.jeton = null;
+          throw new Error('réseau coupé');
+        })
+      );
+
+      await expect(runtime.profilSupprimerCompte('actuel')).rejects.toThrow(
+        'ERR_RESEAU_INDISPONIBLE'
+      );
+      expect(demarrer).not.toHaveBeenCalled();
+    });
+
     it('mot de passe changé mais reconnexion impossible : code dédié', async () => {
       const { runtime } = runtimeConnecte();
       vi.stubGlobal(
