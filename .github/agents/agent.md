@@ -143,8 +143,15 @@ src/presentation/pages/
                                 Logique pure des pages de chat, testée à
                                 100 % : y mettre toute règle testable
                                 (fusion, défilement, tris…).
-  message-prive.html + javascript/message-prive.js
-                                Page des messages privés (DM).
+  message-prive.html + javascript/messages-prives/*.js
+                     + javascript/message-prive.js
+                                Page des messages privés (DM), découpée
+                                comme les salons : les scripts de
+                                messages-prives/ ne font que DÉCLARER ;
+                                seul message-prive.js, chargé en dernier,
+                                démarre la page (DOMContentLoaded). Rien ne
+                                doit s'exécuter au chargement (voir
+                                message-prive.chargement.test.ts).
   javascript/notif-prefs.js    Préférences de notification, partagées
                                 entre les deux pages JS vanilla via
                                 window.NotifPrefs (même pattern que

@@ -6,25 +6,55 @@ const path = require('path');
 // fichier y utilise ce qu'un autre déclare : on déclare donc à ESLint, comme
 // globales, les noms de haut niveau de ces fichiers — calculés ici plutôt
 // que listés à la main, pour que no-undef reste actif (fautes de frappe).
-const DOSSIER_SALONS = path.join(
-  __dirname,
-  'src/presentation/pages/javascript/salons'
-);
-const FICHIERS_SALONS = [
-  ...fs
-    .readdirSync(DOSSIER_SALONS)
-    .filter((nom) => nom.endsWith('.js'))
-    .map((nom) => path.join(DOSSIER_SALONS, nom)),
-  path.join(__dirname, 'renderer.js'),
-];
+// Même principe pour la page des messages privés (messages-prives/*.js +
+// message-prive.js).
+const PAGES_JS = 'src/presentation/pages/javascript';
 const DECLARATION_HAUT_NIVEAU =
   /^(?:async\s+function|function|const|let|var|class)\s+([A-Za-z_$][\w$]*)/gm;
-const globalesSalons = {};
-for (const fichier of FICHIERS_SALONS) {
-  const contenu = fs.readFileSync(fichier, 'utf8');
-  for (const [, nom] of contenu.matchAll(DECLARATION_HAUT_NIVEAU)) {
-    globalesSalons[nom] = 'writable';
+
+function fichiersDuDossier(dossier, pointDEntree) {
+  const chemin = path.join(__dirname, PAGES_JS, dossier);
+  return [
+    ...fs
+      .readdirSync(chemin)
+      .filter((nom) => nom.endsWith('.js'))
+      .map((nom) => path.join(chemin, nom)),
+    path.join(__dirname, pointDEntree),
+  ];
+}
+
+function globalesPartagees(fichiers) {
+  const globales = {};
+  for (const fichier of fichiers) {
+    const contenu = fs.readFileSync(fichier, 'utf8');
+    for (const [, nom] of contenu.matchAll(DECLARATION_HAUT_NIVEAU)) {
+      globales[nom] = 'writable';
+    }
   }
+  return globales;
+}
+
+// Scripts de navigateur qui partagent une portée globale : sans env node
+// (qui active globalReturn et ferait du niveau supérieur une portée de
+// fonction, pas la portée globale partagée entre les fichiers).
+function pagePartagee(motifs, fichiers) {
+  return {
+    files: motifs,
+    env: { browser: true, node: false },
+    parserOptions: {
+      sourceType: 'script',
+      ecmaFeatures: { globalReturn: false },
+    },
+    globals: globalesPartagees(fichiers),
+    rules: {
+      // Déclarés ici ET vus comme globales partagées : pas une
+      // redéclaration.
+      'no-redeclare': ['error', { builtinGlobals: false }],
+      // Une déclaration de haut niveau peut ne servir qu'aux autres
+      // fichiers de la page.
+      'no-unused-vars': ['error', { vars: 'local' }],
+    },
+  };
 }
 
 module.exports = {
@@ -45,22 +75,13 @@ module.exports = {
       ],
       rules: {},
     },
-    {
-      files: ['src/presentation/pages/javascript/salons/*.js', 'renderer.js'],
-      // Scripts de navigateur : sans env node (qui active globalReturn et
-      // ferait du niveau supérieur une portée de fonction, pas la portée
-      // globale partagée entre les fichiers).
-      env: { browser: true, node: false },
-      parserOptions: { sourceType: 'script', ecmaFeatures: { globalReturn: false } },
-      globals: globalesSalons,
-      rules: {
-        // Déclarés ici ET vus comme globales partagées : pas une
-        // redéclaration.
-        'no-redeclare': ['error', { builtinGlobals: false }],
-        // Une déclaration de haut niveau peut ne servir qu'aux autres
-        // fichiers de la page.
-        'no-unused-vars': ['error', { vars: 'local' }],
-      },
-    },
+    pagePartagee(
+      [`${PAGES_JS}/salons/*.js`, 'renderer.js'],
+      fichiersDuDossier('salons', 'renderer.js')
+    ),
+    pagePartagee(
+      [`${PAGES_JS}/messages-prives/*.js`, `${PAGES_JS}/message-prive.js`],
+      fichiersDuDossier('messages-prives', `${PAGES_JS}/message-prive.js`)
+    ),
   ],
 };

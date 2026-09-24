@@ -14,16 +14,13 @@ const traductions = JSON.parse(
   readFileSync(path.join(RACINE, 'src/i18n/translations.json'), 'utf8')
 );
 
+// Scripts de la page, dans l'ordre réel de message-prive.html (lu dans le
+// fichier : un script ajouté à la page est donc aussi chargé ici).
 const SCRIPTS = [
-  'javascript/theme-browser.js',
-  'javascript/notif-prefs.js',
-  'javascript/i18n-browser.js',
-  'javascript/chat-ui-shared.js',
-  'javascript/logique-interface.js',
-  // Chargé en type="module" dans la page ; il n'a ni import ni export, il
-  // s'exécute donc à l'identique comme script classique.
-  'javascript/message-prive.js',
-];
+  ...readFileSync(path.join(PAGES, 'message-prive.html'), 'utf8').matchAll(
+    /<script src="([^"]+)"><\/script>/g
+  ),
+].map(([, src]) => src);
 
 const dm = (id: string, auteurId: string, contenu: string, envoi: number) => ({
   id,
@@ -53,7 +50,7 @@ const conversations = () => [
 type Rappel = (donnees?: unknown) => unknown;
 const pagesOuvertes: JSDOM[] = [];
 
-async function chargerPage() {
+async function chargerPage({ demarrer = true } = {}) {
   const erreurs: unknown[] = [];
   const consoleVirtuelle = new VirtualConsole();
   consoleVirtuelle.on('jsdomError', (erreur) => erreurs.push(erreur));
@@ -122,15 +119,20 @@ async function chargerPage() {
     },
   });
 
-  for (const script of SCRIPTS) {
+  // Sans démarrage : tous les scripts sauf le point d'entrée.
+  const scripts = demarrer
+    ? SCRIPTS
+    : SCRIPTS.filter((script) => script !== 'javascript/message-prive.js');
+  for (const script of scripts) {
     const element = window.document.createElement('script');
     element.textContent = readFileSync(path.join(PAGES, script), 'utf8');
     window.document.body.appendChild(element);
   }
+  const document = window.document;
+  if (!demarrer) return { window, document, rappels, appels, erreurs };
   // La page démarre sur DOMContentLoaded, déjà passé à l'injection.
   window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
 
-  const document = window.document;
   await vi.waitFor(() =>
     expect(
       document.querySelectorAll('#message-list .message-row .text')
@@ -147,6 +149,15 @@ const textes = (document: Document) =>
 describe('page des messages privés', () => {
   afterEach(() => {
     for (const page of pagesOuvertes.splice(0)) page.window.close();
+  });
+
+  it('ne lance rien pendant le chargement des scripts (contrat du découpage)', async () => {
+    // messages-prives/*.js ne font que déclarer (aucun appel, aucun
+    // abonnement) : seul message-prive.js démarre la page.
+    const { rappels, appels, erreurs } = await chargerPage({ demarrer: false });
+    expect(erreurs).toEqual([]);
+    expect(appels).toEqual({});
+    expect(rappels).toEqual({});
   });
 
   it('se charge sans erreur et affiche la conversation', async () => {

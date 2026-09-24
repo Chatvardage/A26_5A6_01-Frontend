@@ -116,8 +116,21 @@ src/
                                temps-reel.js  notifications, messages reçus/
                                               modifiés/supprimés, saisie
                              renderer.js, chargé en dernier, lance la page.
-    message-prive.html + javascript/message-prive.js
-                             Messages privés
+    message-prive.html + javascript/messages-prives/*.js
+                       + javascript/message-prive.js
+                             Messages privés. Même principe que les salons
+                             (scripts classiques, même portée globale) :
+                               etat.js           dépendances, DOM, réseau,
+                                                 présence, notifications
+                               historique.js     non livrés, pagination
+                               conversations.js  liste, saisie, messages
+                                                 reçus, préférences
+                               affichage.js      rendu liste/conversation
+                               saisie.js         nouveau DM, filtres, envoi
+                               rail.js           rail, pastilles, badge,
+                                                 menu des notifications
+                             message-prive.js, chargé en dernier, lance la
+                             page au DOMContentLoaded.
     profil.html + javascript/profil.js
                              Profil : identité, compte, préférences (seul
                              endroit où changer le thème), suppression
