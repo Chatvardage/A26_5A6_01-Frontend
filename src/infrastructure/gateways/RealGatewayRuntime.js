@@ -111,8 +111,8 @@ class RealGatewayRuntime {
 
     // Partenaires de conversation privée connus localement cette session,
     // en complément de GET /api/messages/conversations (voir
-    // obtenirConversationsPrivees) : sert de repli si cet endpoint échoue, et
-    // garantit qu'une conversation tout juste démarrée apparaisse
+    // obtenirConversationsPrivees) : garantit qu'une conversation tout juste
+    // démarrée apparaisse
     // immédiatement sans attendre un rafraîchissement serveur.
     this.partenairesDmConnus = new Set();
 

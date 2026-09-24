@@ -62,10 +62,36 @@ async function actualiserIndicateurSaisie() {
  * supprimé passe par integrerMessagePrive / appliquerMessage* (plus bas).
  */
 async function refreshConversations(options = {}) {
-  state.conversations = await window.electronAPI.obtenirConversationsPrivees(
-    state.currentUserId
-  );
+  try {
+    state.conversations = await window.electronAPI.obtenirConversationsPrivees(
+      state.currentUserId
+    );
+  } catch (erreur) {
+    // Liste précédente gardée (vide au premier chargement), erreur signalée
+    // et nouvel essai automatique : avant, un échec passager affichait une
+    // liste vide sans rien dire.
+    notifier(messageErreur(erreur), true);
+    planifierNouvelEssaiConversations();
+    return;
+  }
+  // Pseudo d'un interlocuteur pas encore résolu : redemandé plus tard, sans
+  // message (le nom brut est affiché en attendant).
+  if (state.conversations.some((c) => c.otherUser?.pseudoInconnu)) {
+    planifierNouvelEssaiConversations();
+  }
   await afficherConversations(options);
+}
+
+// Nouvel essai de refreshConversations après un échec (un seul en attente).
+const DELAI_NOUVEL_ESSAI_CONVERSATIONS_MS = 5000;
+let minuteurNouvelEssaiConversations = null;
+
+function planifierNouvelEssaiConversations() {
+  if (minuteurNouvelEssaiConversations) return;
+  minuteurNouvelEssaiConversations = window.setTimeout(() => {
+    minuteurNouvelEssaiConversations = null;
+    void refreshConversations({ conserverPositionScroll: true });
+  }, DELAI_NOUVEL_ESSAI_CONVERSATIONS_MS);
 }
 
 /** Trie les conversations (activité la plus récente en premier) et les

@@ -63,51 +63,48 @@ module.exports = {
   },
 
   async construireConversationPrivee(autreUtilisateurId, dernierMessageConnu) {
-    try {
-      const { messages, finHistorique } =
-        await this.obtenirMessagesPriveesAvantParUtilisateur(
-          autreUtilisateurId
-        );
-      await this.resoudrePseudos([autreUtilisateurId]);
-      const autre = this.utilisateursConnus.get(autreUtilisateurId);
-      const dernier =
-        messages[messages.length - 1] ??
-        (dernierMessageConnu
-          ? this.mapperMessageDm(dernierMessageConnu)
-          : null);
-      return {
-        id: creerDmId(this.utilisateurConnecte.id, autreUtilisateurId),
-        participantIds: [this.utilisateurConnecte.id, autreUtilisateurId],
-        otherUser: {
-          id: autreUtilisateurId,
-          pseudo: autre?.pseudo ?? autreUtilisateurId,
-          present: this.presences[autreUtilisateurId] === 'en-ligne',
-          alias: this.profilsPublics.get(autreUtilisateurId)?.alias ?? null,
-          avatar: this.profilsPublics.get(autreUtilisateurId)?.avatar ?? null,
-        },
-        messages,
-        finHistorique,
-        lastMessage: dernier,
-      };
-    } catch {
-      return null;
-    }
+    // Historique illisible (panne passagère) : la conversation reste
+    // listée avec son dernier message connu, son historique sera chargé
+    // à l'ouverture (finHistorique false) au lieu de disparaître.
+    const { messages, finHistorique } =
+      await this.obtenirMessagesPriveesAvantParUtilisateur(
+        autreUtilisateurId
+      ).catch(() => ({ messages: [], finHistorique: false }));
+    await this.resoudrePseudos([autreUtilisateurId]);
+    const autre = this.utilisateursConnus.get(autreUtilisateurId);
+    const dernier =
+      messages[messages.length - 1] ??
+      (dernierMessageConnu ? this.mapperMessageDm(dernierMessageConnu) : null);
+    return {
+      id: creerDmId(this.utilisateurConnecte.id, autreUtilisateurId),
+      participantIds: [this.utilisateurConnecte.id, autreUtilisateurId],
+      otherUser: {
+        id: autreUtilisateurId,
+        pseudo: autre?.pseudo ?? autreUtilisateurId,
+        // Pseudo pas encore résolu (panne passagère) : la page redemandera.
+        pseudoInconnu: !autre,
+        present: this.presences[autreUtilisateurId] === 'en-ligne',
+        alias: this.profilsPublics.get(autreUtilisateurId)?.alias ?? null,
+        avatar: this.profilsPublics.get(autreUtilisateurId)?.avatar ?? null,
+      },
+      messages,
+      finHistorique,
+      lastMessage: dernier,
+    };
   },
 
   /**
    * Liste les conversations privées de l'utilisateur courant. Combine
    * `GET /api/messages/conversations` (source principale, voir
    * Message-Service) et les partenaires connus localement cette session
-   * (`partenairesDmConnus`, repli si l'appel échoue ou pour une conversation
-   * tout juste démarrée avant tout message).
+   * (`partenairesDmConnus` : conversation tout juste démarrée, avant tout
+   * message). Lève une erreur si la liste du serveur est illisible.
    */
   async obtenirConversationsPrivees() {
-    let resume = [];
-    try {
-      resume = await this.appelHttp('/api/messages/conversations');
-    } catch {
-      resume = [];
-    }
+    // Échec remonté à la page (qui garde sa liste et réessaie) : une liste
+    // vide ou partielle affichée sans rien dire faisait croire à l'absence
+    // de conversations.
+    const resume = await this.appelHttp('/api/messages/conversations');
     const partenaireIds = new Map();
     for (const item of resume) {
       partenaireIds.set(item.otherUserId, item.lastMessage);
@@ -121,11 +118,9 @@ module.exports = {
         this.construireConversationPrivee(id, dernier)
       )
     );
-    return conversations
-      .filter(Boolean)
-      .sort(
-        (a, b) => (b.lastMessage?.envoi ?? 0) - (a.lastMessage?.envoi ?? 0)
-      );
+    return conversations.sort(
+      (a, b) => (b.lastMessage?.envoi ?? 0) - (a.lastMessage?.envoi ?? 0)
+    );
   },
 
   /**

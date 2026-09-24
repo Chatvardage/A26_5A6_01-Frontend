@@ -175,6 +175,10 @@
       "ERR_RESEAU_INDISPONIBLE": "Impossible de joindre le serveur pour le moment. Réessayez plus tard.",
       "ERR_HTTP_409": "Ce pseudo est déjà pris, choisissez-en un autre.",
       "ERR_HTTP_429": "Trop de messages ou de tentatives en peu de temps. Patiente quelques secondes, puis réessaie.",
+      "ERR_HTTP_500": "Le serveur ne répond pas pour le moment. Réessaie dans quelques instants.",
+      "ERR_HTTP_502": "Le serveur ne répond pas pour le moment. Réessaie dans quelques instants.",
+      "ERR_HTTP_503": "Le serveur ne répond pas pour le moment. Réessaie dans quelques instants.",
+      "ERR_HTTP_504": "Le serveur ne répond pas pour le moment. Réessaie dans quelques instants.",
       "ERR_RECONNEXION_REQUISE": "Mot de passe modifié. Reconnecte-toi avec ton nouveau mot de passe."
     },
     "network": {
@@ -491,6 +495,10 @@
       "ERR_RESEAU_INDISPONIBLE": "Couldn't reach the server right now. Please try again later.",
       "ERR_HTTP_409": "This username is already taken, choose another one.",
       "ERR_HTTP_429": "Too many messages or attempts in a short time. Wait a few seconds, then try again.",
+      "ERR_HTTP_500": "The server isn't responding right now. Try again in a moment.",
+      "ERR_HTTP_502": "The server isn't responding right now. Try again in a moment.",
+      "ERR_HTTP_503": "The server isn't responding right now. Try again in a moment.",
+      "ERR_HTTP_504": "The server isn't responding right now. Try again in a moment.",
       "ERR_RECONNEXION_REQUISE": "Password changed. Please sign in again with your new password."
     },
     "network": {

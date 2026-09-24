@@ -50,7 +50,11 @@ const conversations = () => [
 type Rappel = (donnees?: unknown) => unknown;
 const pagesOuvertes: JSDOM[] = [];
 
-async function chargerPage({ demarrer = true } = {}) {
+async function chargerPage({
+  demarrer = true,
+  attendreMessages = true,
+  autresReponses = {} as Record<string, unknown>,
+} = {}) {
   const erreurs: unknown[] = [];
   const consoleVirtuelle = new VirtualConsole();
   consoleVirtuelle.on('jsdomError', (erreur) => erreurs.push(erreur));
@@ -91,6 +95,7 @@ async function chargerPage({ demarrer = true } = {}) {
     obtenirEtatSalons: { serveurs: [], salons: [] },
     obtenirConversationsPrivees: conversations(),
     envoyerMessagePrive: dm('m9', 'moi', 'envoyé', 9),
+    ...autresReponses,
   };
   const api = new Proxy(
     {},
@@ -102,9 +107,14 @@ async function chargerPage({ demarrer = true } = {}) {
             return () => {};
           };
         }
-        return () => {
+        return (...args: unknown[]) => {
           appels[nom] = (appels[nom] ?? 0) + 1;
-          return Promise.resolve(structuredClone(reponses[nom]));
+          const reponse = reponses[nom];
+          // Réponse calculée (peut échouer) : voir les tests d'erreur.
+          if (typeof reponse === 'function') {
+            return Promise.resolve().then(() => reponse(...args));
+          }
+          return Promise.resolve(structuredClone(reponse));
         };
       },
     }
@@ -133,6 +143,7 @@ async function chargerPage({ demarrer = true } = {}) {
   // La page démarre sur DOMContentLoaded, déjà passé à l'injection.
   window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
 
+  if (!attendreMessages) return { window, document, rappels, appels, erreurs };
   await vi.waitFor(() =>
     expect(
       document.querySelectorAll('#message-list .message-row .text')
@@ -231,4 +242,66 @@ describe('page des messages privés', () => {
     expect(appels.envoyerMessagePrive).toBe(1);
     expect(appels.obtenirConversationsPrivees).toBe(avant);
   });
+
+  it('liste des conversations en échec : erreur affichée, puis nouvel essai automatique', async () => {
+    let essais = 0;
+    const { document, erreurs } = await chargerPage({
+      attendreMessages: false,
+      autresReponses: {
+        obtenirConversationsPrivees: () => {
+          essais += 1;
+          // Forme réelle d'une erreur IPC d'Electron côté page.
+          if (essais === 1) {
+            throw "Error invoking remote method 'obtenir-conversations-privees': Error: ERR_RESEAU_INDISPONIBLE";
+          }
+          return conversations();
+        },
+      },
+    });
+
+    await vi.waitFor(() =>
+      expect(
+        document.querySelector('#toast')?.classList.contains('error')
+      ).toBe(true)
+    );
+    expect(document.querySelector('#toast')?.textContent).toContain(
+      'Impossible de joindre le serveur'
+    );
+    // Nouvel essai ~5 s plus tard : la conversation apparaît.
+    await vi.waitFor(
+      () =>
+        expect(
+          document.querySelector(
+            '.conversation[data-conversation-id="bob:moi"]'
+          )
+        ).not.toBeNull(),
+      { timeout: 8000 }
+    );
+    expect(essais).toBe(2);
+    expect(erreurs).toEqual([]);
+  }, 15000);
+
+  it('pseudo pas encore résolu : redemandé plus tard, sans message d’erreur', async () => {
+    let essais = 0;
+    const { document } = await chargerPage({
+      autresReponses: {
+        obtenirConversationsPrivees: () => {
+          essais += 1;
+          const liste = conversations();
+          if (essais === 1) {
+            (liste[0] as { otherUser: Record<string, unknown> }).otherUser = {
+              ...liste[0].otherUser,
+              pseudo: 'id-brut',
+              pseudoInconnu: true,
+            };
+          }
+          return liste;
+        },
+      },
+    });
+    await vi.waitFor(() => expect(essais).toBe(2), { timeout: 8000 });
+    expect(
+      document.querySelector('#toast')?.classList.contains('error')
+    ).not.toBe(true);
+  }, 15000);
 });

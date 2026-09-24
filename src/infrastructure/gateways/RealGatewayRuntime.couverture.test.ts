@@ -618,29 +618,46 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
       expect(runtime.indexMessages.get('m2')).toEqual({ type: 'dm' });
     });
 
-    it('conversations : repli local si la liste serveur échoue, conversation illisible ignorée', async () => {
+    it('conversations : erreur remontée si la liste serveur échoue', async () => {
       const { runtime } = runtimeConnecte();
       runtime.partenairesDmConnus.add('u2');
-      runtime.partenairesDmConnus.add('casse');
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => reponseJson({ erreur: 'x' }, 500))
+      );
+      await expect(runtime.obtenirConversationsPrivees()).rejects.toThrow(
+        'ERR_HTTP_500'
+      );
+    });
+
+    it('conversation dont l’historique échoue : gardée, avec son dernier message', async () => {
+      const { runtime } = runtimeConnecte();
       vi.stubGlobal(
         'fetch',
         vi.fn(async (url: string) => {
-          if (url.includes('/conversations'))
-            return reponseJson({ erreur: 'x' }, 500);
-          if (url.includes('history/casse'))
-            return reponseJson({ erreur: 'x' }, 500);
-          if (url.includes('/history/')) {
+          if (url.includes('/conversations')) {
             return reponseJson([
-              messageBrut({ id: 'a', createdAt: '2026-01-01T00:00:00.000Z' }),
+              {
+                otherUserId: 'casse',
+                lastMessage: messageBrut({ id: 'dernier', senderId: 'casse' }),
+              },
             ]);
           }
+          if (url.includes('/history/'))
+            return reponseJson({ erreur: 'x' }, 500);
+          if (url.includes('/api/users/lookup'))
+            return reponseJson({ erreur: 'x' }, 500);
           return reponseJson([]);
         })
       );
-      const conversations = await runtime.obtenirConversationsPrivees();
-      expect(conversations.map((c: { id: string }) => c.id)).toEqual([
-        'moi:u2',
-      ]);
+      const [conversation] = await runtime.obtenirConversationsPrivees();
+      expect(conversation).toMatchObject({
+        messages: [],
+        finHistorique: false,
+        lastMessage: { id: 'dernier' },
+        // Pseudo non résolu : signalé pour que la page redemande.
+        otherUser: { id: 'casse', pseudo: 'casse', pseudoInconnu: true },
+      });
     });
 
     it('trie les conversations par dernier message, sans message en dernier', async () => {
@@ -1106,11 +1123,7 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
       const { runtime } = runtimeConnecte();
       vi.stubGlobal(
         'fetch',
-        vi.fn(async (url: string) =>
-          url.includes('/conversations')
-            ? reponseJson({}, 500)
-            : reponseJson([])
-        )
+        vi.fn(async () => reponseJson([]))
       );
       runtime.partenairesDmConnus.add('a');
       runtime.partenairesDmConnus.add('b');
