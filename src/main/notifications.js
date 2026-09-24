@@ -1,6 +1,6 @@
 // Processus main d'Electron, découpé en modules (voir main.js et
 // Architecture.md). Notifications système et badge.
-const { app, ipcMain, nativeImage, Notification } = require('electron');
+const { app, nativeImage, Notification } = require('electron');
 const { t } = require('../i18n/i18n.js');
 const {
   etat,
@@ -8,7 +8,7 @@ const {
   cleanText,
   envoyerVersRenderer,
 } = require('./contexte');
-const { isTrustedIpcEvent } = require('./securite');
+const { exposerCanal } = require('./securite');
 const { APP_ICON_PATH } = require('./fenetre');
 
 // --- Diagnostic WSL ----------------------------------------------------
@@ -243,28 +243,27 @@ function showMessageNotification(message) {
 }
 
 // --- Salons ------------------------------------------------------------
-ipcMain.handle(
+exposerCanal(
   'notification:set-active-conversation',
-  (event, conversationId) => {
-    if (!isTrustedIpcEvent(event)) {
-      return false;
-    }
+  (conversationId) => {
     etat.activeConversationId = cleanText(conversationId, 120) || null;
     return true;
-  }
+  },
+  { siRefuse: false }
 );
 
-ipcMain.handle('notification:message-received', (event, message) => {
-  if (!isTrustedIpcEvent(event)) {
-    return { shown: false };
-  }
-  // Défense en profondeur : le renderer filtre déjà selon NotifPrefs, mais
-  // la préférence serveur fait foi.
-  if (etat.modeNotificationActuel !== 'systeme') {
-    return { shown: false };
-  }
-  return { shown: showMessageNotification(message) };
-});
+exposerCanal(
+  'notification:message-received',
+  (message) => {
+    // Défense en profondeur : le renderer filtre déjà selon NotifPrefs, mais
+    // la préférence serveur fait foi.
+    if (etat.modeNotificationActuel !== 'systeme') {
+      return { shown: false };
+    }
+    return { shown: showMessageNotification(message) };
+  },
+  { siRefuse: { shown: false } }
+);
 
 // Permet au renderer de connaître l'état de focus actuel dès son
 // initialisation (avant qu'un premier événement 'focus'/'blur' n'ait pu être
@@ -272,11 +271,8 @@ ipcMain.handle('notification:message-received', (event, message) => {
 // conversation affichée au chargement de la page ne soit marquée "lue" que
 // si la fenêtre a bien le focus à ce moment-là (voir le commentaire sur
 // 'window:focus-changed' dans createWindow()).
-ipcMain.handle('window:is-focused', (event) => {
-  if (!isTrustedIpcEvent(event)) {
-    return true;
-  }
-  return etat.fenetreEstFocusee;
+exposerCanal('window:is-focused', () => etat.fenetreEstFocusee, {
+  siRefuse: true,
 });
 
 /**
@@ -322,13 +318,14 @@ function mettreAJourBadgeApplication(count, iconDataUrl) {
   }
 }
 
-ipcMain.handle('notifications:set-badge-count', (event, donnees) => {
-  if (!isTrustedIpcEvent(event)) {
-    return false;
-  }
-  mettreAJourBadgeApplication(donnees?.count, donnees?.iconDataUrl);
-  return true;
-});
+exposerCanal(
+  'notifications:set-badge-count',
+  (donnees) => {
+    mettreAJourBadgeApplication(donnees?.count, donnees?.iconDataUrl);
+    return true;
+  },
+  { siRefuse: false }
+);
 
 module.exports = {
   estProbablementWSL,

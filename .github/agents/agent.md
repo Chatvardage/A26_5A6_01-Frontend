@@ -212,7 +212,10 @@ zones doit vérifier activement qu'il n'en réintroduit pas une.
    navigation (identité de l'utilisateur connecté, langue...), utiliser
    un état côté processus main exposé via IPC (voir
    `session:utilisateur-connecte`, `langue:obtenir`), pas seulement
-   `sessionStorage`.
+   `sessionStorage`. Pour ce qu'une page doit ouvrir en arrivant
+   (notification cliquée, « + » du rail) : `definirCibleNavigation` avant
+   de naviguer, `prendreCibleNavigation([types])` à l'arrivée (canaux
+   `navigation:*-cible`, src/main/fenetre.js).
 
 6. **Fichiers de config qui reviennent en arrière** : `package.json`
    (version de `vitest`/`@vitest/coverage-v8` — doit matcher la version de

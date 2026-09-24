@@ -246,7 +246,6 @@ async function initialiserUtilisateurCourant() {
   state.utilisateurActuel =
     await window.electronAPI.obtenirUtilisateurConnecte();
   state.currentUserId = state.utilisateurActuel?.id ?? '';
-  sessionStorage.setItem('currentUserId', state.currentUserId);
   appliquerPreferences(await window.electronAPI.obtenirPreferences());
   afficherUtilisateurCourant();
 }

@@ -168,6 +168,9 @@ async function chargerPage({
       setActiveConversation: () => Promise.resolve(true),
       setBadgeCount: () => Promise.resolve(true),
       messageReceived: vi.fn(() => Promise.resolve({ shown: true })),
+      onNavigateToConversation: (rappel: Rappel) => {
+        rappels.onNavigateToConversation = rappel;
+      },
     },
   });
 
@@ -211,6 +214,96 @@ describe('page des salons (scripts découpés)', () => {
     expect(
       document.querySelector('.server-icon[data-serveur-id="srv"]')
     ).not.toBeNull();
+  });
+
+  it('clic sur une notification : salon de ce serveur ouvert sur place, autre serveur rechargé', async () => {
+    const demandes: unknown[] = [];
+    const { rappels } = await chargerPage({
+      autresReponses: {
+        obtenirEtatSalons: (options: unknown) => {
+          demandes.push(options);
+          return etatInitial();
+        },
+      },
+    });
+    const avant = demandes.length;
+
+    await rappels.onNavigateToConversation({
+      type: 'salon',
+      conversationId: 'autre',
+    });
+    expect(demandes).toHaveLength(avant);
+
+    // Salon d'un autre serveur : rechargé avec ce salon, pour que le
+    // runtime choisisse le serveur qui le contient.
+    await rappels.onNavigateToConversation({
+      type: 'salon',
+      conversationId: 'salon-ailleurs',
+    });
+    await vi.waitFor(() => expect(demandes).toHaveLength(avant + 1));
+    expect(demandes.at(-1)).toMatchObject({ salonId: 'salon-ailleurs' });
+  });
+
+  it('clic sur une notification privée : cible gardée par le processus main, puis navigation', async () => {
+    const cibles: unknown[] = [];
+    const pages: unknown[] = [];
+    const { rappels } = await chargerPage({
+      autresReponses: {
+        definirCibleNavigation: (cible: unknown) => {
+          cibles.push(cible);
+          return true;
+        },
+        navigate: (page: unknown) => {
+          pages.push(page);
+        },
+      },
+    });
+
+    await rappels.onNavigateToConversation({
+      type: 'prive',
+      conversationId: 'dm:moi:bob',
+    });
+
+    expect(cibles).toEqual([{ type: 'prive', id: 'dm:moi:bob' }]);
+    expect(pages).toEqual(['message-prive.html']);
+  });
+
+  it('ouvre le salon laissé comme cible de navigation par l’autre page', async () => {
+    const demandes: unknown[] = [];
+    const typesDemandes: unknown[] = [];
+    await chargerPage({
+      autresReponses: {
+        prendreCibleNavigation: (types: unknown) => {
+          typesDemandes.push(types);
+          return { type: 'salon', id: 'autre' };
+        },
+        obtenirEtatSalons: (options: unknown) => {
+          demandes.push(options);
+          // Le message est dans « autre » (le salon ouvert) : aucun non-lu
+          // ailleurs, donc pas de badge dessiné (canvas absent de jsdom).
+          const etat = etatInitial();
+          etat.salons[0].messages = [];
+          etat.salons[1].messages = [message('m9', 'bob', 'dans autre', 2)];
+          return etat;
+        },
+      },
+    });
+    expect(typesDemandes).toEqual([['salon', 'ajout-serveur']]);
+    expect(demandes[0]).toMatchObject({ salonId: 'autre' });
+  });
+
+  it('mémorise le rail avec le compte qui l’a affiché', async () => {
+    const { window } = await chargerPage();
+    await vi.waitFor(() =>
+      expect(
+        JSON.parse(
+          window.localStorage.getItem('chatvardage:rail-serveurs') ?? 'null'
+        )
+      ).toEqual({
+        utilisateurId: 'moi',
+        serveurs: [{ id: 'srv', nom: 'Projet', icone: null }],
+      })
+    );
   });
 
   it('ajoute un message reçu sans recharger toute la page', async () => {

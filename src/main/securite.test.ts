@@ -124,6 +124,16 @@ describe('securite (processus main)', () => {
       'Origine IPC non autorisée'
     );
     expect(action).toHaveBeenCalledTimes(2);
+
+    // Canal « tire et oublie » : valeur de refus au lieu d'une erreur, et
+    // l'action n'est jamais appelée depuis une page non reconnue.
+    const silencieuse = vi.fn(() => 'ok');
+    s.exposerCanal('test:silencieux', silencieuse, { siRefuse: false });
+    const silencieux = canaux.get('test:silencieux') as Gestionnaire;
+    expect(await silencieux(depuisAilleurs, {})).toBe(false);
+    expect(silencieuse).not.toHaveBeenCalled();
+    expect(await silencieux(depuisApp, 'conv-1')).toBe('ok');
+    expect(silencieuse).toHaveBeenCalledWith('conv-1');
   });
 
   it.each([

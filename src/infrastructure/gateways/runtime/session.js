@@ -72,7 +72,6 @@ module.exports = {
   async inscrire({ courriel, motDePasse, pseudo }) {
     const TENTATIVES_MAX = 2;
     let pseudoTente = pseudo;
-    let derniereErreur;
     for (let tentative = 0; tentative < TENTATIVES_MAX; tentative += 1) {
       try {
         const reponse = await this.appelHttp('/api/auth/register', {
@@ -81,13 +80,16 @@ module.exports = {
         });
         return this.ouvrirSession(reponse);
       } catch (erreur) {
-        derniereErreur = erreur;
         if (erreur.statut !== 409) throw erreur;
         const suffixe = String(Math.floor(1000 + Math.random() * 9000));
         pseudoTente = `${pseudo}`.slice(0, 20 - suffixe.length) + suffixe;
       }
     }
-    throw derniereErreur;
+    // Deux 409 : c'est le courriel (voir plus haut). ERR_HTTP_409 se
+    // traduisait par « Ce pseudo est déjà pris », message trompeur ici.
+    const erreur = new Error('ERR_COURRIEL_DEJA_UTILISE');
+    erreur.statut = 409;
+    throw erreur;
   },
 
   /**
@@ -132,6 +134,9 @@ module.exports = {
   },
 
   async deconnexion() {
+    // Une réponse encore en route (ex. chargerServeurs) appartient à la
+    // session qui se ferme : voir sessionCourante dans serveurs.js.
+    this.generationSession += 1;
     this.fermetureVoulue = true;
     this.arreterPollPresence();
     this.annulerReconnexionPlanifiee();

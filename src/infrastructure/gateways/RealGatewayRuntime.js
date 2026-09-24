@@ -121,6 +121,9 @@ class RealGatewayRuntime {
     // (pastille "non lu" du rail) et ouvrir le bon serveur depuis une
     // notification.
     this.serveurs = new Map();
+    // Incrémenté à chaque déconnexion : le runtime est UNIQUE et survit à
+    // un changement de compte (voir deconnexion dans runtime/session.js).
+    this.generationSession = 0;
     this.salonVersServeur = new Map();
 
     this.minuteurPollPresence = null;

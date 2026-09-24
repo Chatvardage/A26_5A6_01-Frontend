@@ -250,13 +250,6 @@ function notifierMessageSysteme(message) {
   }
 }
 
-// Mêmes clés que renderer.js (voir son commentaire équivalent) : servent à
-// transmettre, à travers une navigation entre les deux pages, la
-// conversation à ouvrir tout de suite après le chargement suite au clic
-// sur une notification.
-const CLEF_CIBLE_DM = 'notif:cible-dm';
-const CLEF_CIBLE_SALON = 'notif:cible-salon';
-
 const state = {
   conversations: [],
   activeConversationId: null,

@@ -5,6 +5,7 @@ const path = require('path');
 const {
   etat,
   isDev,
+  cleanText,
   logDebugNotif,
   envoyerVersRenderer,
 } = require('./contexte');
@@ -335,6 +336,33 @@ function basculerAgrandissement() {
   envoyerVersRenderer('fenetre:maximisee', agrandie);
   return agrandie;
 }
+
+// --- Cible d'une navigation entre pages -------------------------------------
+// Une page qui en ouvre une autre pour y montrer quelque chose (clic sur une
+// notification, « + » du rail) dépose la cible ici ; la page d'arrivée la
+// prend UNE fois à son chargement. Remplace sessionStorage, qui ne survit pas
+// de façon fiable à une navigation file:// entre deux pages (piège n° 5).
+const TYPES_CIBLE_NAVIGATION = new Set(['salon', 'prive', 'ajout-serveur']);
+
+exposerCanal('navigation:definir-cible', ({ type, id }) => {
+  if (!TYPES_CIBLE_NAVIGATION.has(type)) {
+    etat.cibleNavigation = null;
+    return false;
+  }
+  etat.cibleNavigation = { type, id: cleanText(id, 120) || null };
+  return true;
+});
+
+// Rend la cible (et l'oublie) seulement si son type fait partie de `types` :
+// une cible destinée à l'autre page reste en attente.
+exposerCanal('navigation:prendre-cible', ({ types }) => {
+  const cible = etat.cibleNavigation;
+  if (!cible || !Array.isArray(types) || !types.includes(cible.type)) {
+    return null;
+  }
+  etat.cibleNavigation = null;
+  return cible;
+});
 
 exposerCanal('fenetre:reduire', () => etat.mainWindow?.minimize());
 exposerCanal('fenetre:agrandir', () => basculerAgrandissement());

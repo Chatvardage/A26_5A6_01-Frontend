@@ -58,7 +58,13 @@ module.exports = {
 
   /** GET /api/servers, mémorisé (voir `this.serveurs`). */
   async chargerServeurs() {
+    const generation = this.generationSession;
     const serveurs = await this.appelHttp('/api/servers');
+    // Déconnecté pendant l'appel : ces serveurs sont ceux de l'ancien
+    // compte, ils ne doivent pas repeupler l'état de la session suivante.
+    if (generation !== this.generationSession) {
+      throw new Error('ERR_SESSION_FERMEE');
+    }
     this.serveurs.clear();
     this.salonVersServeur.clear();
     for (const serveur of serveurs) {

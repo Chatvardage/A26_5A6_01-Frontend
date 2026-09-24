@@ -178,7 +178,11 @@ describe('RealGatewayRuntime', () => {
           motDePasse: 'secret123',
           pseudo: 'pris',
         })
-      ).rejects.toMatchObject({ message: 'ERR_HTTP_409' });
+      ).rejects.toMatchObject({
+        // Pas ERR_HTTP_409, traduit « Ce pseudo est déjà pris ».
+        message: 'ERR_COURRIEL_DEJA_UTILISE',
+        statut: 409,
+      });
       expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
@@ -409,6 +413,36 @@ describe('RealGatewayRuntime', () => {
       runtime.etatConnexion.statut = 'hors-ligne';
       await expect(runtime.deconnexionPartout()).rejects.toThrow();
       expect(runtime.utilisateurConnecte).not.toBeNull();
+    });
+  });
+
+  describe('chargerServeurs après une déconnexion', () => {
+    it('ignore la réponse arrivée après la déconnexion (ancien compte)', async () => {
+      const { runtime } = creerRuntime();
+      runtime.jeton = 'jwt';
+      runtime.utilisateurConnecte = { id: 'u1', pseudo: 'ariane' };
+      let repondre!: (valeur: unknown) => void;
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          () =>
+            new Promise((resolution) => {
+              repondre = resolution;
+            })
+        )
+      );
+
+      const chargement = runtime.chargerServeurs();
+      await runtime.deconnexion();
+      repondre(
+        reponseJson([
+          { id: 'srv-a', nom: 'Serveur de A', salons: [{ id: 's1' }] },
+        ])
+      );
+
+      await expect(chargement).rejects.toThrow('ERR_SESSION_FERMEE');
+      expect(runtime.serveurs.size).toBe(0);
+      expect(runtime.salonVersServeur.size).toBe(0);
     });
   });
 

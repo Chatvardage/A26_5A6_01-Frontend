@@ -55,10 +55,12 @@ function oublierPreferencesDuCompte() {
 exposerCanal('session:deconnexion', async () => {
   await chatGateway.deconnexion();
   oublierPreferencesDuCompte();
+  etat.cibleNavigation = null;
 });
 exposerCanal('session:deconnexion-partout', async () => {
   await chatGateway.deconnexionPartout();
   oublierPreferencesDuCompte();
+  etat.cibleNavigation = null;
 });
 exposerCanal('navigation:motif-retour-connexion', () => {
   const motif = etat.motifRetourConnexion;
@@ -79,6 +81,7 @@ exposerCanal('session:utilisateur-connecte', () =>
 // pourquoi (motifRetourConnexion).
 chatGateway.on('session-expiree', () => {
   oublierPreferencesDuCompte();
+  etat.cibleNavigation = null;
   etat.motifRetourConnexion = 'session-expiree';
   afficherPageConnexion();
 });

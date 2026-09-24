@@ -138,7 +138,7 @@ module.exports = {
           `${this.baseUrlHttp}/api/health`,
           DELAI_BATTEMENT_COEUR_MS
         );
-        if (!reponse.ok) throw new Error(`HTTP ${reponse.status}`);
+        if (!reponse.ok) throw new Error(`ERR_HTTP_${reponse.status}`);
       } catch {
         // Le socket a pu être remplacé pendant l'appel : n'agir que s'il
         // s'agit toujours du même.

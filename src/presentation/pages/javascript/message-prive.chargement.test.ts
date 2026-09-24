@@ -54,6 +54,7 @@ async function chargerPage({
   demarrer = true,
   attendreMessages = true,
   autresReponses = {} as Record<string, unknown>,
+  avantScripts = (() => {}) as (window: JSDOM['window']) => void,
 } = {}) {
   const erreurs: unknown[] = [];
   const consoleVirtuelle = new VirtualConsole();
@@ -129,6 +130,7 @@ async function chargerPage({
     },
   });
 
+  avantScripts(window);
   // Sans démarrage : tous les scripts sauf le point d'entrée.
   const scripts = demarrer
     ? SCRIPTS
@@ -169,6 +171,64 @@ describe('page des messages privés', () => {
     expect(erreurs).toEqual([]);
     expect(appels).toEqual({});
     expect(rappels).toEqual({});
+  });
+
+  it('rail en cache : affiché pour le même compte, jamais celui d’un autre compte', async () => {
+    const cache = (utilisateurId: string) => (window: JSDOM['window']) =>
+      window.localStorage.setItem(
+        'chatvardage:rail-serveurs',
+        JSON.stringify({
+          utilisateurId,
+          serveurs: [{ id: 'srv-cache', nom: 'En cache', icone: null }],
+        })
+      );
+    const icone = '.server-icon[data-serveur-id="srv-cache"]';
+
+    const autre = await chargerPage({ avantScripts: cache('ancien-compte') });
+    expect(autre.document.querySelector(icone)).toBeNull();
+    // Cache d'un autre compte : effacé (puis réécrit pour le compte courant
+    // quand le rail arrive du réseau).
+    expect(
+      autre.window.localStorage.getItem('chatvardage:rail-serveurs') ?? ''
+    ).not.toContain('ancien-compte');
+
+    // Même compte, réseau encore en attente : le rail vient du cache.
+    const moi = await chargerPage({
+      avantScripts: cache('moi'),
+      autresReponses: { obtenirEtatSalons: () => new Promise(() => {}) },
+    });
+    await vi.waitFor(() =>
+      expect(moi.document.querySelector(icone)).not.toBeNull()
+    );
+  });
+
+  it('cibles de navigation gardées par le processus main (pas sessionStorage)', async () => {
+    const typesDemandes: unknown[] = [];
+    const cibles: unknown[] = [];
+    const pages: unknown[] = [];
+    const { document } = await chargerPage({
+      autresReponses: {
+        prendreCibleNavigation: (types: unknown) => {
+          typesDemandes.push(types);
+          return { type: 'prive', id: 'bob:moi' };
+        },
+        definirCibleNavigation: (cible: unknown) => {
+          cibles.push(cible);
+          return true;
+        },
+        navigate: (page: unknown) => {
+          pages.push(page);
+        },
+      },
+    });
+    expect(typesDemandes).toEqual([['prive']]);
+
+    // « + » du rail : ouvrir l'ajout de serveur sur la page des salons.
+    document
+      .getElementById('open-create-channel-rail')
+      ?.dispatchEvent(new document.defaultView!.MouseEvent('click'));
+    await vi.waitFor(() => expect(pages).toEqual(['index.html']));
+    expect(cibles).toEqual([{ type: 'ajout-serveur' }]);
   });
 
   it('se charge sans erreur et affiche la conversation', async () => {

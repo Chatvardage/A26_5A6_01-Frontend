@@ -172,6 +172,7 @@
       "ERR_MESSAGE_TROP_LONG": "Le message dépasse la limite de 2000 caractères.",
       "ERR_IDENTIFIANTS_INVALIDES": "Pseudo, courriel ou mot de passe incorrect.",
       "ERR_COURRIEL_DEJA_UTILISE": "Ce courriel est déjà associé à un compte.",
+      "ERR_SESSION_FERMEE": "La session a été fermée. Reconnecte-toi.",
       "ERR_RESEAU_INDISPONIBLE": "Impossible de joindre le serveur pour le moment. Réessayez plus tard.",
       "ERR_HTTP_409": "Ce pseudo est déjà pris, choisissez-en un autre.",
       "ERR_HTTP_429": "Trop de messages ou de tentatives en peu de temps. Patiente quelques secondes, puis réessaie.",
@@ -319,6 +320,12 @@
       "kickedFrom": "Tu as été expulsé·e du serveur {name}.",
       "newInvitation": "Nouvelle invitation à rejoindre un serveur.",
       "deletedNotice": "Le serveur {name} a été supprimé."
+    },
+    "titlebar": {
+      "minimize": "Réduire",
+      "maximize": "Agrandir",
+      "restore": "Restaurer",
+      "close": "Fermer"
     }
   },
   "en": {
@@ -494,6 +501,7 @@
       "ERR_MESSAGE_TROP_LONG": "The message exceeds the 2000-character limit.",
       "ERR_IDENTIFIANTS_INVALIDES": "Incorrect username, email or password.",
       "ERR_COURRIEL_DEJA_UTILISE": "This email is already associated with an account.",
+      "ERR_SESSION_FERMEE": "The session was closed. Please log in again.",
       "ERR_RESEAU_INDISPONIBLE": "Couldn't reach the server right now. Please try again later.",
       "ERR_HTTP_409": "This username is already taken, choose another one.",
       "ERR_HTTP_429": "Too many messages or attempts in a short time. Wait a few seconds, then try again.",
@@ -641,6 +649,12 @@
       "kickedFrom": "You were kicked from the server {name}.",
       "newInvitation": "New invitation to join a server.",
       "deletedNotice": "The server {name} was deleted."
+    },
+    "titlebar": {
+      "minimize": "Minimize",
+      "maximize": "Maximize",
+      "restore": "Restore",
+      "close": "Close"
     }
   }
 }

@@ -165,8 +165,19 @@ function verifierProvenance(event) {
   }
 }
 
-function exposerCanal(nom, action) {
+/**
+ * Enregistre un canal IPC dont la provenance est TOUJOURS vérifiée. Par
+ * défaut, un appel d'une page non reconnue lève une erreur. Avec
+ * `{ siRefuse: valeur }`, il renvoie cette valeur à la place : pour les
+ * canaux « tire et oublie » (notifications, badge…), où une erreur ne ferait
+ * qu'un rejet de promesse non géré côté renderer.
+ */
+function exposerCanal(nom, action, options = {}) {
+  const refusSilencieux = Object.hasOwn(options, 'siRefuse');
   ipcMain.handle(nom, (event, donnees) => {
+    if (refusSilencieux && !isTrustedIpcEvent(event)) {
+      return options.siRefuse;
+    }
     verifierProvenance(event);
     return action(donnees ?? {});
   });

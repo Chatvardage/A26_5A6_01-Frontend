@@ -117,15 +117,12 @@ el.logout?.addEventListener('click', async () => {
  * Résout l'utilisateur réellement connecté (session JWT, voir
  * obtenirUtilisateurConnecte dans preload.js/RealGatewayRuntime.js) — une
  * seule identité par session, celle authentifiée sur l'écran de
- * connexion. `sessionStorage.currentUserId` reste écrit ici uniquement comme
- * mécanisme de transmission entre index.html et message-prive.html (voir son
- * usage initial plus haut dans ce fichier), jamais comme source de vérité
- * modifiable par l'utilisateur.
+ * connexion. Toujours redemandée au processus main, jamais transmise par
+ * sessionStorage (piège n° 5 de .github/agents/agent.md).
  */
 async function initialiserUtilisateurCourant() {
   utilisateurActuel = await window.electronAPI.obtenirUtilisateurConnecte();
   utilisateurActuelId = utilisateurActuel?.id ?? '';
-  sessionStorage.setItem('currentUserId', utilisateurActuelId);
 }
 
 /**
@@ -171,20 +168,16 @@ async function initialiser() {
     if (typeof serviceNotifications?.isWindowFocused === 'function') {
       fenetreEstFocusee = Boolean(await serviceNotifications.isWindowFocused());
     }
-    // Consomme une éventuelle cible laissée par message-prive.js avant une
-    // navigation vers cette page suite au clic sur une notification de
-    // salon (voir onNavigateToConversation dans ce fichier et CLEF_CIBLE_SALON).
-    const cibleSalon = sessionStorage.getItem(CLEF_CIBLE_SALON);
-    if (cibleSalon) {
-      sessionStorage.removeItem(CLEF_CIBLE_SALON);
-      salonActifId = cibleSalon;
-    }
+    // Cible laissée par la page des messages privés avant de venir ici
+    // (clic sur une notification de salon, « + » du rail) : gardée par le
+    // processus main, voir 'navigation:prendre-cible'.
+    const cible = await window.electronAPI.prendreCibleNavigation([
+      'salon',
+      'ajout-serveur',
+    ]);
+    if (cible?.type === 'salon' && cible.id) salonActifId = cible.id;
     await actualiser();
-    // Demandé depuis le « + » du rail de la page des messages privés.
-    if (lireStockage(sessionStorage, 'chatvardage:ouvrir-ajout-serveur')) {
-      ecrireStockage(sessionStorage, 'chatvardage:ouvrir-ajout-serveur', null);
-      el.creerRail.click();
-    }
+    if (cible?.type === 'ajout-serveur') el.creerRail.click();
   } catch (erreur) {
     notifier(messageErreur(erreur), true);
   } finally {

@@ -24,12 +24,50 @@ function creerIconeFenetre(nom) {
   return svg;
 }
 
+// Libellés des boutons, traduits (section `titlebar` de translations.json)
+// dès que la langue est connue ; ces valeurs ne servent qu'en attendant ou si
+// la traduction est indisponible.
+const LIBELLES_FENETRE_PAR_DEFAUT = {
+  reduire: 'Réduire',
+  agrandir: 'Agrandir',
+  restaurer: 'Restaurer',
+  fermer: 'Fermer',
+};
+const CLES_LIBELLES_FENETRE = {
+  reduire: 'minimize',
+  agrandir: 'maximize',
+  restaurer: 'restore',
+  fermer: 'close',
+};
+
+async function traduireLibellesFenetre() {
+  try {
+    const [dictionnaires, langue] = await Promise.all([
+      ipcRenderer.invoke('i18n:dictionnaires'),
+      ipcRenderer.invoke('langue:obtenir'),
+    ]);
+    const traductions = dictionnaires?.[langue]?.titlebar ?? {};
+    return Object.fromEntries(
+      Object.entries(CLES_LIBELLES_FENETRE).map(([nom, cle]) => [
+        nom,
+        traductions[cle] ?? LIBELLES_FENETRE_PAR_DEFAUT[nom],
+      ])
+    );
+  } catch {
+    return LIBELLES_FENETRE_PAR_DEFAUT;
+  }
+}
+
+function definirLibelle(bouton, libelle) {
+  bouton.setAttribute('aria-label', libelle);
+  bouton.title = libelle;
+}
+
 function creerBoutonFenetre(nom, libelle, canal) {
   const bouton = document.createElement('button');
   bouton.type = 'button';
   bouton.className = `app-titlebar-btn app-titlebar-btn--${nom}`;
-  bouton.setAttribute('aria-label', libelle);
-  bouton.title = libelle;
+  definirLibelle(bouton, libelle);
   bouton.appendChild(creerIconeFenetre(nom));
   bouton.addEventListener('click', () => ipcRenderer.invoke(canal));
   return bouton;
@@ -49,16 +87,35 @@ window.addEventListener('DOMContentLoaded', () => {
   } else {
     const boutons = document.createElement('div');
     boutons.className = 'app-titlebar-controls';
+    let libelles = LIBELLES_FENETRE_PAR_DEFAUT;
+    let maximiseeCourante = false;
+    const reduire = creerBoutonFenetre(
+      'reduire',
+      libelles.reduire,
+      'fenetre:reduire'
+    );
     const agrandir = creerBoutonFenetre(
       'agrandir',
-      'Agrandir',
+      libelles.agrandir,
       'fenetre:agrandir'
     );
+    const fermer = creerBoutonFenetre(
+      'fermer',
+      libelles.fermer,
+      'fenetre:fermer'
+    );
     const afficherMaximisee = (maximisee) => {
-      agrandir.replaceChildren(
-        creerIconeFenetre(maximisee ? 'restaurer' : 'agrandir')
-      );
+      maximiseeCourante = maximisee;
+      const etatBouton = maximisee ? 'restaurer' : 'agrandir';
+      agrandir.replaceChildren(creerIconeFenetre(etatBouton));
+      definirLibelle(agrandir, libelles[etatBouton]);
     };
+    traduireLibellesFenetre().then((traduits) => {
+      libelles = traduits;
+      definirLibelle(reduire, libelles.reduire);
+      definirLibelle(fermer, libelles.fermer);
+      afficherMaximisee(maximiseeCourante);
+    });
     ipcRenderer.on('fenetre:maximisee', (_event, maximisee) =>
       afficherMaximisee(maximisee)
     );
@@ -66,11 +123,7 @@ window.addEventListener('DOMContentLoaded', () => {
       .invoke('fenetre:est-maximisee')
       .then(afficherMaximisee)
       .catch(() => {});
-    boutons.append(
-      creerBoutonFenetre('reduire', 'Réduire', 'fenetre:reduire'),
-      agrandir,
-      creerBoutonFenetre('fermer', 'Fermer', 'fenetre:fermer')
-    );
+    boutons.append(reduire, agrandir, fermer);
     barre.appendChild(boutons);
     // Double-clic sur la bande : agrandir/restaurer, comme une barre native.
     barre.addEventListener('dblclick', (event) => {
@@ -307,6 +360,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   supprimerMessage: (donnees) =>
     ipcRenderer.invoke('messages:supprimer', donnees),
   navigate: (page) => ipcRenderer.invoke('navigate', page),
+  // Ce que la page d'arrivée doit ouvrir (voir 'navigation:*-cible' dans
+  // src/main/fenetre.js) : { type: 'salon' | 'prive' | 'ajout-serveur', id? }.
+  definirCibleNavigation: (cible) =>
+    ipcRenderer.invoke('navigation:definir-cible', cible),
+  prendreCibleNavigation: (types) =>
+    ipcRenderer.invoke('navigation:prendre-cible', { types }),
   obtenirUtilisateurs: () => ipcRenderer.invoke('utilisateurs:lister'),
   // Fenêtre "Nouveau message privé" : suggestions (membres de ses salons,
   // interlocuteurs connus) et recherche par début de pseudo.

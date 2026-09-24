@@ -52,6 +52,10 @@ const etat = {
   // l'utilisateur (ex. 'session-expiree') : lu UNE fois par la page de
   // connexion, qui affiche alors un message explicatif.
   motifRetourConnexion: null,
+  // Ce qu'une page doit ouvrir en arrivant après une navigation (voir
+  // 'navigation:definir-cible' dans fenetre.js) : `sessionStorage` ne
+  // survit pas de façon fiable à une navigation file:// (piège n° 5).
+  cibleNavigation: null,
 };
 
 // Active les logs de diagnostic liés aux notifications (avertissement WSL,

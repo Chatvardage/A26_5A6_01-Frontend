@@ -94,7 +94,9 @@ const NotifPrefs =
       traiterMessageRecu: async () => {},
     };
   })();
-let utilisateurActuelId = sessionStorage.getItem('currentUserId') ?? null;
+// Fixé par initialiserUtilisateurCourant (état du processus main, jamais
+// sessionStorage : voir le piège n° 5).
+let utilisateurActuelId = null;
 // Utilisateur connecté complet ({id, pseudo, courriel, role} | null, voir
 // obtenirUtilisateurConnecte dans preload.js) — utilisateurActuelId ci-dessus
 // reste dérivé de cette valeur (voir initialiserUtilisateurCourant) pour ne

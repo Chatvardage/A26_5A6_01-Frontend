@@ -399,31 +399,65 @@
   // au lieu d'attendre le réseau : sinon les icônes apparaissaient d'un coup
   // et le bouton « + » descendait à chaque changement de page. localStorage
   // (et non sessionStorage) : il survit de façon fiable à la navigation
-  // file:// entre pages. Vidé à la déconnexion (oublierRailEnCache).
+  // file:// entre pages. Vidé à la déconnexion (oublierRailEnCache), et lié
+  // au compte qui l'a écrit : après une session expirée (sans déconnexion
+  // volontaire), le compte suivant ne voit jamais les serveurs du précédent.
   const CLEF_RAIL_EN_CACHE = 'chatvardage:rail-serveurs';
+  // Vrai dès que le rail a été dessiné depuis le réseau : le cache, lu de
+  // façon asynchrone, ne doit plus l'écraser.
+  let railReelAffiche = false;
 
-  function memoriserRail(serveurs) {
+  /** Utilisateur connecté (état du processus main), ou null. */
+  async function idUtilisateurConnecte() {
+    try {
+      const moi = await window.electronAPI?.obtenirUtilisateurConnecte?.();
+      return moi?.id ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function memoriserRail(serveurs) {
+    const utilisateurId = await idUtilisateurConnecte();
+    if (!utilisateurId) return;
     try {
       localStorage.setItem(
         CLEF_RAIL_EN_CACHE,
-        JSON.stringify(
-          (serveurs ?? []).map(({ id, nom, icone }) => ({ id, nom, icone }))
-        )
+        JSON.stringify({
+          utilisateurId,
+          serveurs: (serveurs ?? []).map(({ id, nom, icone }) => ({
+            id,
+            nom,
+            icone,
+          })),
+        })
       );
     } catch {
       // Stockage plein ou indisponible : le rail attendra simplement le réseau.
     }
   }
 
-  function afficherRailDepuisCache(options) {
-    let serveurs = null;
+  async function afficherRailDepuisCache(options) {
+    let cache = null;
     try {
-      serveurs = JSON.parse(localStorage.getItem(CLEF_RAIL_EN_CACHE) ?? 'null');
+      cache = JSON.parse(localStorage.getItem(CLEF_RAIL_EN_CACHE) ?? 'null');
     } catch {
-      serveurs = null;
+      cache = null;
     }
-    if (!Array.isArray(serveurs)) return;
-    afficherRailServeurs({ ...options, serveurs, memoriser: false });
+    // Ancien format (tableau seul, sans compte) : ignoré, remplacé au
+    // prochain affichage depuis le réseau.
+    if (!cache || !Array.isArray(cache.serveurs)) return;
+    const utilisateurId = await idUtilisateurConnecte();
+    if (railReelAffiche) return;
+    if (!utilisateurId || cache.utilisateurId !== utilisateurId) {
+      oublierRailEnCache();
+      return;
+    }
+    afficherRailServeurs({
+      ...options,
+      serveurs: cache.serveurs,
+      memoriser: false,
+    });
   }
 
   function oublierRailEnCache() {
@@ -444,7 +478,10 @@
     memoriser = true,
   }) {
     if (!conteneur) return;
-    if (memoriser) memoriserRail(serveurs);
+    if (memoriser) {
+      railReelAffiche = true;
+      void memoriserRail(serveurs);
+    }
     conteneur
       .querySelectorAll('.server-icon[data-serveur-id]')
       .forEach((icone) => icone.remove());

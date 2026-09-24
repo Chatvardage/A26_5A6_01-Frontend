@@ -53,7 +53,10 @@ window.addEventListener('DOMContentLoaded', async () => {
         renderConversationList();
         mettreAJourBadgeApplication();
       } else if (cible.type === 'salon') {
-        sessionStorage.setItem(CLEF_CIBLE_SALON, conversationId);
+        await window.electronAPI.definirCibleNavigation({
+          type: 'salon',
+          id: conversationId,
+        });
         window.electronAPI.navigate('index.html');
       }
     });
@@ -75,18 +78,14 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     await window.electronAPI.allerALaConnexion();
   });
-  // Consomme une éventuelle cible laissée par renderer.js avant une
-  // navigation vers cette page suite au clic sur une notification de
-  // conversation privée (voir onNavigateToConversation ci-dessus et
-  // CLEF_CIBLE_DM). Fait avant refreshConversations() plus bas : celui-ci
+  // Conversation privée à ouvrir, laissée par la page des salons avant de
+  // venir ici (clic sur une notification) et gardée par le processus main
+  // (voir 'navigation:prendre-cible'). Fait avant refreshConversations() plus bas : celui-ci
   // ne fixe activeConversationId sur la première conversation que s'il est
   // encore vide, donc le préremplir ici suffit à faire ouvrir la bonne dès
   // le premier rendu.
-  const cibleDm = sessionStorage.getItem(CLEF_CIBLE_DM);
-  if (cibleDm) {
-    sessionStorage.removeItem(CLEF_CIBLE_DM);
-    state.activeConversationId = cibleDm;
-  }
+  const cible = await window.electronAPI.prendreCibleNavigation(['prive']);
+  if (cible?.id) state.activeConversationId = cible.id;
 
   setInterval(async () => {
     await actualiserIndicateurSaisie();
@@ -234,11 +233,7 @@ document.getElementById('home-btn')?.addEventListener('click', () => {
 // « + » : ouvre la fenêtre « Ajouter un serveur » sur la page des salons.
 document
   .getElementById('open-create-channel-rail')
-  ?.addEventListener('click', () => {
-    try {
-      sessionStorage.setItem('chatvardage:ouvrir-ajout-serveur', '1');
-    } catch {
-      // Sans stockage, on arrive simplement sur la page des salons.
-    }
+  ?.addEventListener('click', async () => {
+    await window.electronAPI.definirCibleNavigation({ type: 'ajout-serveur' });
     window.electronAPI.navigate('index.html');
   });

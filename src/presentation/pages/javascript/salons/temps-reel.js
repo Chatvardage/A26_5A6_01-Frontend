@@ -68,17 +68,6 @@ function notifierMessageSysteme(message) {
   }
 }
 
-// Clé sessionStorage utilisée pour transmettre, à travers une navigation
-// index.html -> message-prive.html, la conversation privée à ouvrir tout de
-// suite après le chargement (voir onNavigateToConversation ci-dessous et sa
-// consommation dans initialiser()). sessionStorage est partagé entre les
-// deux pages (même origine file://), comme `currentUserId` l'est déjà.
-const CLEF_CIBLE_DM = 'notif:cible-dm';
-// Symétrique de CLEF_CIBLE_DM, mais dans l'autre sens (portée par
-// message-prive.js) : présente ici seulement pour la consommer au retour
-// vers cette page (voir initialiser()).
-const CLEF_CIBLE_SALON = 'notif:cible-salon';
-
 // Clic sur une notification système (voir showMessageNotification dans
 // main.js) : ouvre directement la conversation concernée plutôt que de se
 // contenter de remettre la fenêtre au premier plan. Si c'est un salon, on
@@ -86,14 +75,23 @@ const CLEF_CIBLE_SALON = 'notif:cible-salon';
 // privée, on mémorise la cible et on navigue vers message-prive.html, qui
 // la consommera à son chargement.
 if (typeof serviceNotifications?.onNavigateToConversation === 'function') {
-  serviceNotifications.onNavigateToConversation((cible) => {
+  serviceNotifications.onNavigateToConversation(async (cible) => {
     const conversationId = cible?.conversationId;
     if (!conversationId) return;
     if (cible.type === 'salon') {
       salonActifId = conversationId;
-      afficherTout();
+      // Salon d'un autre serveur que celui affiché : on recharge, et
+      // obtenirEtat choisit le serveur qui contient ce salon.
+      if (etat.salons.some((salon) => salon.id === conversationId)) {
+        afficherTout();
+      } else {
+        void actualiser();
+      }
     } else if (cible.type === 'prive') {
-      sessionStorage.setItem(CLEF_CIBLE_DM, conversationId);
+      await window.electronAPI.definirCibleNavigation({
+        type: 'prive',
+        id: conversationId,
+      });
       window.electronAPI.navigate('message-prive.html');
     }
   });
