@@ -153,11 +153,13 @@ npm run test:coverage
 
 `test:coverage` exige **100 %** (instructions, branches, fonctions, lignes)
 sur `src/**/*.ts`, `RealGatewayRuntime.js` (le vrai client réseau) et
-`logique-interface.js` (logique pure des pages de chat) — voir
+`logique-interface.js` (logique pure des pages de chat) et
+`src/main/securite.js` (provenance des URL et des appels IPC) — voir
 `vitest.config.ts`. Les pages de chat sont en plus testées de bout en bout
 dans jsdom (`*.chargement.test.ts` : tous leurs scripts, dans l'ordre réel,
-avec une fausse API Electron). `main.js` et `preload.js` ne sont pas
-mesurés : ils ne se testent qu'en lançant l'app.
+avec une fausse API Electron). Le reste du processus main
+(`main.js`, `src/main/`) et `preload.js` ne sont pas mesurés : ils ne se
+testent qu'en lançant l'app.
 
 Le warning éventuel de `@typescript-eslint` concernant la version de TypeScript est un avertissement de compatibilité de l'outil et non une erreur ESLint.
 

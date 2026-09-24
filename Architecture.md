@@ -17,7 +17,7 @@ Pages (renderer, sans Node.js)
                     IPC Electron (canaux explicites, provenance vérifiée)
                                    │
                                    ▼
-main.js ── état unique du processus : session, préférences, fenêtre
+main.js + src/main/ ── état unique du processus : session, préférences, fenêtre
    │
    ▼
 RealGatewayRuntime.js ── HTTP + Socket.IO ──► Serveur-API (Gateway, port 3000)
@@ -27,22 +27,38 @@ RealGatewayRuntime.js ── HTTP + Socket.IO ──► Serveur-API (Gateway, po
                                                 └─ User-Config-Service (préférences, présence)
 ```
 
-Un seul processus (`main.js`) détient l'état métier et une **seule**
+Un seul processus (`main.js` et ses modules `src/main/`) détient l'état métier et une **seule**
 instance de `RealGatewayRuntime`, partagée par toutes les pages : naviguer
 d'une page à l'autre ne perd ni la session ni les préférences.
 
 ## Arborescence
 
 ```text
-main.js                      Processus principal Electron
-  - fenêtre unique (verrou d'instance), sans cadre hors macOS,
-    agrandir/restaurer géré par l'app, zoom adaptatif
-  - tous les canaux IPC (exposerCanal + vérification de provenance)
-  - CSP de la page de connexion, menu natif traduit
-  - copie locale des préférences (thème, langue, notifications, alias,
-    avatar), synchronisée avec User-Config-Service et diffusée aux pages
-    ('preferences:change')
-  - notifications système, badge, sonde de connectivité réseau
+main.js                      Processus principal Electron : profil
+                             (CHATVARDAGE_PROFIL), chargement des modules
+                             ci-dessous, verrou d'instance, cycle de vie
+src/main/                    Modules du processus principal (CommonJS)
+  contexte.js                état partagé (`etat` : fenêtre, langue, thème,
+                             préférences…), logDebugNotif,
+                             envoyerVersRenderer
+  gateway.js                 l'UNIQUE instance de RealGatewayRuntime
+  securite.js                isAppUrl, exposerCanal + vérification de
+                             provenance, CSP de la page de connexion (testé)
+  menu.js                    menu natif traduit
+  fenetre.js                 fenêtre sans cadre hors macOS,
+                             agrandir/restaurer géré par l'app, zoom
+                             adaptatif, navigation, canaux 'fenetre:*'
+  notifications.js           notifications système (repli sans D-Bus),
+                             badge, canaux 'notification*'
+  preferences.js             copie locale des préférences (thème, langue,
+                             notifications, alias, avatar), synchronisée
+                             avec User-Config-Service et diffusée aux pages
+                             ('preferences:change')
+  session.js                 connexion, déconnexion, session expirée,
+                             relais des événements temps réel vers la page
+  canaux-donnees.js          canaux qui délèguent au gateway (serveurs,
+                             salons, messages, profil, présence)
+  reseau.js                  sonde de connectivité réseau du système
 
 preload.js                   Seul pont vers les pages (contextBridge)
   - window.electronAPI       session, serveurs/salons, messages, profil,

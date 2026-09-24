@@ -73,14 +73,17 @@ build multiplateforme (tag `v*` ou lancement manuel) — la couverture
 ## Architecture réelle (détail complet dans Architecture.md)
 
 ```
-main.js                    Processus main Electron. Instancie l'UNIQUE
-                            RealGatewayRuntime (backend réel), tous les
-                            canaux IPC (ipcMain.handle), CSP, menu natif
-                            traduit, fenêtre unique
-                            (requestSingleInstanceLock), sans cadre hors
-                            macOS (frame: false), agrandir/restaurer géré
-                            à la main (basculerAgrandissement) et zoom
-                            adaptatif (appliquerZoomAdaptatif).
+main.js                    Processus main Electron : assemble les
+                            modules de src/main/ et gère le cycle de vie
+                            (requestSingleInstanceLock, activate…).
+src/main/                  Modules du processus main (CommonJS), un par
+                            responsabilité — voir Architecture.md. L'état
+                            partagé passe par `etat` (contexte.js), jamais
+                            par des variables globales ; l'UNIQUE
+                            RealGatewayRuntime vit dans gateway.js. Un
+                            nouveau canal IPC passe toujours par
+                            exposerCanal (securite.js), qui vérifie la
+                            provenance.
 preload.js                  Seul pont autorisé vers le renderer
                             (contextBridge). Deux objets globaux exposés :
                             window.electronAPI (session, salons, i18n,
