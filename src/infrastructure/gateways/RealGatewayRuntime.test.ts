@@ -510,6 +510,23 @@ describe('RealGatewayRuntime', () => {
       ).toBe('chatvardage');
     });
 
+    it('session.revoquee : vérifie la session (socket courant seulement)', () => {
+      const { runtime, socket } = creerRuntime();
+      runtime.utilisateurConnecte = { id: 'moi', pseudo: 'moi' };
+      const verifier = vi
+        .spyOn(runtime, 'verifierSessionApres401')
+        .mockResolvedValue(undefined);
+      runtime.connecterSocket();
+
+      socket._declencher('session.revoquee');
+      expect(verifier).toHaveBeenCalledTimes(1);
+
+      // Socket remplacé : l'événement tardif de l'ancien est ignoré.
+      runtime.socket = null;
+      socket._declencher('session.revoquee');
+      expect(verifier).toHaveBeenCalledTimes(1);
+    });
+
     it('oublie une room retirée par le serveur, pour pouvoir la rejoindre de nouveau', () => {
       const { runtime, socket } = creerRuntime();
       runtime.utilisateurConnecte = { id: 'moi', pseudo: 'moi' };

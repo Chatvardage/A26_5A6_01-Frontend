@@ -975,6 +975,15 @@ class RealGatewayRuntime {
       }
     });
 
+    // Jeton refusé par Message-Service (révoqué, expiré), juste avant qu'il
+    // ne ferme le socket : on vérifie la session (voir
+    // verifierSessionApres401) au lieu de se reconnecter en boucle avec un
+    // jeton mort. Si elle est bien morte, retour à l'écran de connexion.
+    socket.on('session.revoquee', () => {
+      if (this.socket !== socket) return;
+      void this.verifierSessionApres401();
+    });
+
     // Le garde `this.socket !== socket` ignore les événements d'un socket
     // déjà remplacé ou fermé volontairement (voir fermerSocket).
     socket.on('disconnect', () => {

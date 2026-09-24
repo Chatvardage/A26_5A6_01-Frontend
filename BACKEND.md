@@ -72,8 +72,10 @@ Socket.IO (`/messages`, `auth: { token }`) : `private-message.created/updated/de
 annonce alors sa présence et rejoint ses salons ; avant, le serveur refuse
 ses événements — repli au bout de 5 s si l'événement n'arrive jamais, par
 exemple face à un Message-Service plus ancien), `room-message.revoked` (accès au salon perdu : le client
-oublie la room et la rejoindra si l'accès revient), `typing` (éphémère,
-salon et DM).
+oublie la room et la rejoindra si l'accès revient), `session.revoquee`
+(jeton refusé, socket déconnecté : le client vérifie sa session, voir
+verifierSessionApres401, au lieu de se reconnecter en boucle), `typing`
+(éphémère, salon et DM).
 
 **Rôles et autorisation** : il n'y a plus de notion d'« hôte »/propriétaire
 par salon. L'autorité (créer/renommer/changer visibilité/supprimer un salon,
