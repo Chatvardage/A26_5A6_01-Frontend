@@ -359,8 +359,9 @@ function afficherSalons() {
   });
 }
 
-function creerActionsMessage(message, texteEl) {
+function creerActionsMessage(message, texteEl, peutModifier = true) {
   return ChatUiShared.creerActionsMessage({
+    peutModifier,
     message,
     texteEl,
     api: window.electronAPI,
@@ -584,10 +585,17 @@ function afficherMessages(options = {}) {
         article
           .querySelector('.message-body')
           ?.appendChild(creerActionsMessageNonLivre(message));
-      } else if (estMessagePersonnel) {
+      } else if (
+        estMessagePersonnel ||
+        // Un modérateur du serveur (ou son propriétaire, un admin) peut
+        // supprimer le message d'un autre, pas le modifier.
+        ChatUiShared.peutModererServeur(roleActuel())
+      ) {
         article
           .querySelector('.message-body')
-          ?.appendChild(creerActionsMessage(message, texteEl));
+          ?.appendChild(
+            creerActionsMessage(message, texteEl, estMessagePersonnel)
+          );
       }
       el.messages.appendChild(article);
     });

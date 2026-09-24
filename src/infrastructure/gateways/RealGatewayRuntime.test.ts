@@ -375,6 +375,43 @@ describe('RealGatewayRuntime', () => {
     });
   });
 
+  describe('deconnexionPartout', () => {
+    it('invalide tous les jetons auprès d’Auth puis ferme la session', async () => {
+      const { runtime } = creerRuntime();
+      runtime.etatConnexion.statut = 'connecte';
+      runtime.jeton = 'jwt';
+      runtime.utilisateurConnecte = { id: 'u1', pseudo: 'ariane' };
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+      vi.stubGlobal('fetch', fetchMock);
+
+      await runtime.deconnexionPartout();
+
+      const [url, options] = fetchMock.mock.calls[0];
+      expect(url).toBe('http://gateway.test/api/auth/logout-all');
+      expect(options.method).toBe('POST');
+      expect(runtime.jeton).toBeNull();
+      expect(runtime.utilisateurConnecte).toBeNull();
+    });
+
+    it('garde la session ouverte si Auth refuse ou si le réseau manque', async () => {
+      const { runtime } = creerRuntime();
+      runtime.etatConnexion.statut = 'connecte';
+      runtime.jeton = 'jwt';
+      runtime.utilisateurConnecte = { id: 'u1', pseudo: 'ariane' };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(reponseJson({ erreur: 'x' }, 503))
+      );
+
+      await expect(runtime.deconnexionPartout()).rejects.toThrow();
+      expect(runtime.jeton).toBe('jwt');
+
+      runtime.etatConnexion.statut = 'hors-ligne';
+      await expect(runtime.deconnexionPartout()).rejects.toThrow();
+      expect(runtime.utilisateurConnecte).not.toBeNull();
+    });
+  });
+
   describe('obtenirEtat (serveurs)', () => {
     const serveur = (id: string, salonIds: string[], extra = {}) => ({
       id,

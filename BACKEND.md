@@ -51,6 +51,7 @@ respectifs pour le détail par service.
 | POST | `/api/auth/login` | `{ identifiant, mot_de_passe }` → `{ jeton, utilisateur }` |
 | POST | `/api/auth/register` | `{ pseudo, courriel, mot_de_passe }` → `{ jeton, utilisateur }` |
 | GET/PATCH/DELETE | `/api/auth/me` | Profil courant (lecture/modification/suppression du compte) |
+| POST | `/api/auth/logout-all` | « Se déconnecter partout » (page profil) : invalide tous les jetons du compte |
 | GET | `/api/users/lookup?ids=` | Résolution de pseudo pour d'autres utilisateurs (id → pseudo uniquement) |
 | GET | `/api/users/search?q=` | Recherche par début de pseudo (nouveau DM, invitation) |
 | GET/POST | `/api/servers` | Mes serveurs (sans la liste des membres) / créer un serveur |
@@ -63,7 +64,7 @@ respectifs pour le détail par service.
 | POST | `/api/servers/:id/invitations`, `/invitations/accept`, `/invitations/refuse` | Invitations |
 | POST/PATCH/DELETE | `/api/servers/:id/channels`, `/api/channels/:id` | Créer / modifier / supprimer un salon |
 | POST/GET | `/api/messages/rooms/:roomId`, `/history` | Messages de salon |
-| PATCH/DELETE | `/api/messages/rooms/:roomId/:id` | Modifier/supprimer un message de salon |
+| PATCH/DELETE | `/api/messages/rooms/:roomId/:id` | Modifier (auteur) / supprimer (auteur, ou modérateur du serveur) un message de salon |
 | POST/GET | `/api/messages`, `/api/messages/history/:otherUserId` | Messages privés (DM) |
 | GET | `/api/messages/conversations` | Liste des conversations privées |
 | PATCH/DELETE | `/api/messages/:id` | Modifier/supprimer un DM |

@@ -502,6 +502,9 @@
     messageErreur,
     champMessage,
     getEtatReseau,
+    // Faux pour le message d'un autre qu'un modérateur peut seulement
+    // supprimer (Message-Service réserve la modification à l'auteur).
+    peutModifier = true,
   }) {
     const actions = document.createElement('div');
     actions.classList.add('message-actions');
@@ -612,7 +615,7 @@
     const restaurerActions = () => {
       definirEtatAction(message.id, { mode: 'normal' });
       actions.classList.remove('confirming-delete');
-      actions.replaceChildren(modifier, supprimer);
+      actions.replaceChildren(...boutons);
     };
 
     const afficherConfirmationSuppression = () => {
@@ -686,10 +689,11 @@
       afficherConfirmationSuppression().focus();
     });
 
-    actions.append(modifier, supprimer);
+    const boutons = peutModifier ? [modifier, supprimer] : [supprimer];
+    actions.append(...boutons);
 
     const etat = lireEtatAction(message.id);
-    if (etat.mode === 'edition' && reseauConnecte()) {
+    if (etat.mode === 'edition' && peutModifier && reseauConnecte()) {
       afficherEdition(etat.brouillon);
     } else if (etat.mode === 'suppression' && reseauConnecte()) {
       afficherConfirmationSuppression();

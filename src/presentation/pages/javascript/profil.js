@@ -89,6 +89,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     deleteActions: $('delete-account-actions'),
     backToDashboard: $('back-to-dashboard'),
     logoutBtn: $('logout-btn'),
+    logoutAllBtn: $('logout-all-btn'),
+    logoutAllMessage: $('logout-all-message'),
     toast: $('toast'),
   };
 
@@ -533,6 +535,20 @@ window.addEventListener('DOMContentLoaded', async () => {
     } catch (erreur) {
       console.error('[logout] échec de deconnexionSession :', erreur);
     }
+    await window.electronAPI.allerALaConnexion();
+  });
+  el.logoutAllBtn?.addEventListener('click', async () => {
+    afficherMessageChamp(el.logoutAllMessage, '', 'ok');
+    el.logoutAllBtn.disabled = true;
+    try {
+      await window.electronAPI.deconnexionPartout();
+    } catch (erreur) {
+      // Hors ligne ou Auth indisponible : la session reste ouverte ici.
+      afficherMessageChamp(el.logoutAllMessage, messageErreur(erreur), 'error');
+      el.logoutAllBtn.disabled = false;
+      return;
+    }
+    oublierRailEnCache();
     await window.electronAPI.allerALaConnexion();
   });
 

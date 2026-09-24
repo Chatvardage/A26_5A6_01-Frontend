@@ -119,6 +119,18 @@ module.exports = {
     }
   },
 
+  /**
+   * « Se déconnecter partout » : Auth invalide tous les jetons du compte
+   * (ceux des autres appareils compris), puis la session locale est fermée
+   * comme pour une déconnexion normale. En cas d'échec (hors ligne), rien
+   * n'est fermé : l'appelant affiche l'erreur.
+   */
+  async deconnexionPartout() {
+    this.verifierReseauConnecte();
+    await this.appelHttp('/api/auth/logout-all', { methode: 'POST' });
+    await this.deconnexion();
+  },
+
   async deconnexion() {
     this.fermetureVoulue = true;
     this.arreterPollPresence();

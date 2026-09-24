@@ -44,6 +44,8 @@ declare global {
       } | null>;
       /** Déconnexion explicite (voir page profil). */
       deconnexionSession: () => Promise<void>;
+      /** Déconnexion de tous les appareils : invalide tous les jetons. */
+      deconnexionPartout: () => Promise<void>;
       /**
        * Motif d'un retour automatique à cet écran (ex. 'session-expiree'
        * quand le jeton a expiré en cours d'utilisation), lu une seule fois ;

@@ -278,6 +278,8 @@
       "avatarInvalid": "Ce fichier n'est pas une image lisible (PNG, JPEG, WebP ou GIF).",
       "avatarTooLarge": "Image trop volumineuse (10 Mo maximum).",
       "accountSectionHint": "Change ton mot de passe. Le courriel ne peut pas être modifié.",
+      "logoutAll": "Se déconnecter partout",
+      "logoutAllHint": "Ferme ta session sur tous tes appareils, celui-ci compris (appareil perdu ou prêté).",
       "emailReadonlyHint": "Le courriel ne peut pas être modifié.",
       "currentPasswordIncorrect": "Mot de passe actuel incorrect."
     },
@@ -598,6 +600,8 @@
       "avatarInvalid": "This file is not a readable image (PNG, JPEG, WebP or GIF).",
       "avatarTooLarge": "Image too large (10 MB max).",
       "accountSectionHint": "Change your password. The email address cannot be changed.",
+      "logoutAll": "Log out everywhere",
+      "logoutAllHint": "Ends your session on all your devices, this one included (lost or lent device).",
       "emailReadonlyHint": "The email address cannot be changed.",
       "currentPasswordIncorrect": "Current password is incorrect."
     },

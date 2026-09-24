@@ -56,6 +56,10 @@ exposerCanal('session:deconnexion', async () => {
   await chatGateway.deconnexion();
   oublierPreferencesDuCompte();
 });
+exposerCanal('session:deconnexion-partout', async () => {
+  await chatGateway.deconnexionPartout();
+  oublierPreferencesDuCompte();
+});
 exposerCanal('navigation:motif-retour-connexion', () => {
   const motif = etat.motifRetourConnexion;
   etat.motifRetourConnexion = null;
