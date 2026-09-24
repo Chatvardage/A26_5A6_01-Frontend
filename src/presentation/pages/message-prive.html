@@ -10,6 +10,9 @@
     <title>ChatVardage — Messages privés</title>
     <link rel="stylesheet" href="css/styles.css" />
     <link rel="stylesheet" href="css/message-prive.css" />
+    <!-- Chargé AVANT le premier rendu : applique le thème mémorisé (voir
+         theme-browser.js), sinon flash du thème sombre à la navigation. -->
+    <script src="javascript/theme-browser.js"></script>
   </head>
   <body>
     <nav
@@ -32,22 +35,16 @@
         <span class="notif-dot notif-dot--rail" hidden></span>
       </button>
       <div class="rail-divider"></div>
+      <!-- Icônes des serveurs insérées ici par message-prive.js
+           (ChatUiShared.afficherRailServeurs) ; un clic ouvre ce serveur sur
+           la page des salons. -->
       <button
-        class="server-icon"
-        title="Projet"
-        aria-label="Serveur : Projet"
-        data-i18n-title="nav.project"
-        data-i18n-aria-label="nav.project"
-      >
-        P
-        <span class="notif-dot notif-dot--rail" hidden></span>
-      </button>
-      <button
-        class="server-icon"
+        id="open-create-channel-rail"
+        class="server-icon server-icon--add"
         title="Ajouter un serveur"
         aria-label="Ajouter un serveur"
-        data-i18n-title="nav.addServer"
-        data-i18n-aria-label="nav.addServer"
+        data-i18n-title="servers.addTitle"
+        data-i18n-aria-label="servers.addTitle"
       >
         +
       </button>
@@ -90,40 +87,75 @@
         aria-label="Liste des conversations privées"
       ></ul>
       <div id="user-panel">
-        <div class="avatar"></div>
+        <!-- Photo (ou initiale) + pastille de présence : voir
+             ChatUiShared.afficherAvatarCourant. -->
+        <div id="current-user-avatar" class="avatar user-avatar"></div>
         <div class="user-info">
-          <select
-            id="current-user-select"
-            aria-label="Utilisateur simulé"
-            data-i18n-aria-label="nav.simulatedUser"
-          ></select>
-          <div class="user-meta">
-            <button
-              class="presence-label presence-toggle"
-              id="current-user-presence"
-              type="button"
-              data-i18n-title="network.changePresence"
-            >
-              En ligne
-            </button>
-            <select
-              id="language-select"
-              aria-label="Langue / Language"
-              class="language-select"
-            >
-              <option value="fr">FR</option>
-              <option value="en">EN</option>
-            </select>
-            <select
-              id="theme-select"
-              aria-label="Thème"
-              data-i18n-aria-label="theme.label"
-            >
-              <option value="sombre" data-i18n="theme.dark">Sombre</option>
-              <option value="clair" data-i18n="theme.light">Clair</option>
-            </select>
+          <div class="current-user-row">
+            <span id="current-user-pseudo" class="current-user-pseudo"></span>
+            <span id="current-user-role-badge" class="role-badge" hidden></span>
           </div>
         </div>
+        <button
+          id="open-profile"
+          class="notif-settings-btn"
+          type="button"
+          title="Profil"
+          aria-label="Profil"
+          data-i18n-title="nav.profile"
+          data-i18n-aria-label="nav.profile"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <circle cx="8" cy="5.5" r="2.6" fill="currentColor" />
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              d="M2.6 14c.5-3 2.9-5 5.4-5s4.9 2 5.4 5"
+            />
+          </svg>
+        </button>
+        <button
+          id="logout-btn"
+          class="notif-settings-btn"
+          type="button"
+          title="Se déconnecter"
+          aria-label="Se déconnecter"
+          data-i18n-title="nav.logout"
+          data-i18n-aria-label="nav.logout"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M6.3 2.5H3.4a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H6.3"
+            />
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M9.8 5.2 12.9 8l-3.1 2.8M12.6 8H5.9"
+            />
+          </svg>
+        </button>
         <button
           id="open-notif-settings"
           class="notif-settings-btn"
@@ -206,6 +238,22 @@
               >
             </span>
           </label>
+          <label class="notif-menu-option notif-menu-option--case">
+            <input type="checkbox" id="notif-apercu" />
+            <span class="notif-menu-option-text">
+              <span
+                class="notif-menu-option-title"
+                data-i18n="notifications.previewTitle"
+                >Afficher le contenu</span
+              >
+              <span
+                class="notif-menu-option-desc"
+                data-i18n="notifications.previewDesc"
+                >Le texte du message apparaît dans la notification système,
+                même sur un écran verrouillé</span
+              >
+            </span>
+          </label>
         </div>
       </div>
     </aside>
@@ -215,52 +263,38 @@
         <div class="dm-user">
           <div class="avatar topbar-avatar"></div>
           <div>
-            <div class="user-name" data-i18n="dm.selectConversation">
-              Sélectionnez une conversation
-            </div>
-            <div class="user-status" data-i18n="dm.noActiveConversation">
-              Aucune conversation active
-            </div>
+            <!-- Remplis par message-prive.js (afficherAucuneConversation /
+                 renderActiveConversation) : vides au départ pour ne pas
+                 afficher un faux état le temps du chargement. -->
+            <div class="user-name"></div>
+            <div class="user-status"></div>
           </div>
         </div>
-        <div class="network-simulation">
+        <div
+          id="connection-status"
+          class="connection-status"
+          data-state="inconnu"
+          role="status"
+          aria-live="polite"
+        >
+          <span class="dot" aria-hidden="true"></span>
+          <span class="connection-text">
+            <span id="connection-label"></span>
+            <span id="connection-detail" class="connection-detail" hidden></span>
+          </span>
           <button
-            id="simulate-network-cut"
-            class="network-test-button"
+            id="connection-retry"
+            class="connection-retry"
             type="button"
-            data-i18n="network.cut"
+            data-i18n="network.retryNow"
+            hidden
           >
-            Coupure
+            Réessayer
           </button>
-          <button
-            id="simulate-network-reconnect"
-            class="network-test-button"
-            type="button"
-            data-i18n="network.reconnect"
-          >
-            Reconnexion
-          </button>
-          <div
-            id="connection-status"
-            class="network-test-button"
-            data-state="deconnecte"
-            aria-live="polite"
-          >
-            <span class="dot"></span>
-            <span id="connection-label">Déconnecté</span>
-          </div>
         </div>
       </header>
 
-      <div id="message-list" aria-live="polite">
-        <article class="message-row">
-          <div class="message-body">
-            <p class="text" data-i18n="dm.noConversationSelected">
-              Aucune conversation sélectionnée.
-            </p>
-          </div>
-        </article>
-      </div>
+      <div id="message-list" aria-live="polite"></div>
 
       <div
         id="typing-indicator"
@@ -318,8 +352,14 @@
 
     <script src="javascript/notif-prefs.js"></script>
     <script src="javascript/i18n-browser.js"></script>
-    <script src="javascript/theme-browser.js"></script>
     <script src="javascript/chat-ui-shared.js"></script>
-    <script type="module" src="javascript/message-prive.js"></script>
+    <script src="javascript/logique-interface.js"></script>
+    <script src="javascript/messages-prives/etat.js"></script>
+    <script src="javascript/messages-prives/historique.js"></script>
+    <script src="javascript/messages-prives/conversations.js"></script>
+    <script src="javascript/messages-prives/affichage.js"></script>
+    <script src="javascript/messages-prives/saisie.js"></script>
+    <script src="javascript/messages-prives/rail.js"></script>
+    <script src="javascript/message-prive.js"></script>
   </body>
 </html>

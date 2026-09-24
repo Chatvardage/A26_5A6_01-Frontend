@@ -21,15 +21,15 @@
    ========================================================= */
 
 :root[data-theme='clair'] {
-  --bg: #1fb28d;
-  --card: #17987d;
-  --slate: #2b7089;
-  --slate-hover: #35819c;
-  --input-bg: #d7dad8;
-  --mint: #3ddc97;
+  --bg: #cdeee3;
+  --card: #e3f6ef;
+  --slate: #0f8a6c;
+  --slate-hover: #13a07f;
+  --input-bg: #ffffff;
+  --mint: #15a383;
   --coral: #c14f39;
-  --muted: #3a5a54;
-  --text: #023344;
+  --muted: #4b706a;
+  --text: #0b3b36;
   --button-text: #fff;
   --input-text: #14282a;
   --placeholder: rgba(20, 40, 40, 0.55);
@@ -42,6 +42,12 @@
 
 * {
   box-sizing: border-box;
+}
+
+/* Même règle que styles.css : le logo ne doit pas pouvoir être glissé. */
+img {
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 body {
@@ -59,6 +65,108 @@ body {
   justify-content: center;
 
   padding: 24px;
+}
+
+/* --- Barre de titre personnalisée ---------------------------------------------
+   Bande glissable injectée par preload.js (fenêtre sans cadre, voir
+   createWindow dans main.js), avec les boutons réduire/agrandir/fermer. */
+:root {
+  --titlebar-height: 32px;
+  --titlebar-bg: #082e2a;
+  --titlebar-text: #9fb8b3;
+  --titlebar-text-strong: #eef5f2;
+}
+
+:root[data-theme='clair'] {
+  --titlebar-bg: #bfe6d8;
+  --titlebar-text: #2f5a53;
+  --titlebar-text-strong: #0b3b36;
+}
+
+.app-titlebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  height: var(--titlebar-height);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: var(--titlebar-bg);
+  color: var(--titlebar-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+.app-titlebar::before {
+  content: '';
+  width: 16px;
+  height: 16px;
+  background: url('../../../../assets/icon.png') center / contain no-repeat;
+}
+
+.app-titlebar-title {
+  flex: 1;
+}
+
+.app-titlebar-controls {
+  display: flex;
+  align-self: stretch;
+  margin-right: -12px;
+  -webkit-app-region: no-drag;
+}
+
+.app-titlebar-btn {
+  width: 44px;
+  border: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--titlebar-text);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.app-titlebar-btn svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+}
+
+.app-titlebar-btn:hover {
+  background: rgba(127, 127, 127, 0.18);
+  color: var(--titlebar-text-strong);
+}
+
+.app-titlebar-btn--fermer:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+
+.app-titlebar-btn:focus-visible {
+  outline: 2px solid var(--titlebar-text);
+  outline-offset: -2px;
+}
+
+/* macOS : place pour les feux tricolores, à gauche. */
+:root.platform-darwin .app-titlebar {
+  padding-left: 80px;
+}
+
+/* Voir styles.css : place réservée dès le premier affichage, sans attendre
+   le preload, pour que la page ne « saute » pas. */
+body {
+  border-top: var(--titlebar-height) solid var(--titlebar-bg);
 }
 
 /* =========================================================
@@ -264,6 +372,10 @@ body {
   color: var(--muted);
 }
 
+.field-message[data-kind='info'] {
+  color: var(--text);
+}
+
 /* =========================================================
    BOUTON CONNEXION
    ========================================================= */
@@ -329,6 +441,34 @@ body {
   text-align: center;
 
   margin: 2px 0 0 0;
+}
+
+/* =========================================================
+   LIEN CONNEXION <-> INSCRIPTION
+   ========================================================= */
+
+.login-switch {
+  background: none;
+  border: none;
+  padding: 4px 0 0 0;
+  margin: 0;
+
+  font-size: clamp(12px, 0.85vw, 14px);
+  font-weight: 700;
+  color: var(--accent, currentColor);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.login-switch:hover,
+.login-switch:focus-visible {
+  opacity: 0.85;
+}
+
+.login-card-title {
+  font-size: clamp(18px, 1.6vw, 24px);
+  text-align: center;
+  margin: 0;
 }
 
 /* =========================================================

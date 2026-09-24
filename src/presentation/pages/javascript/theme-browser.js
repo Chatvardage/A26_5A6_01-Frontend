@@ -17,9 +17,55 @@
 (function (global) {
   let themeActuel = 'sombre';
 
+  const THEMES = ['sombre', 'clair'];
+  // Dernier thème appliqué, mémorisé pour la page SUIVANTE : chaque
+  // navigation (salons ↔ messages privés ↔ profil) recharge un document
+  // complet, et l'IPC 'theme:obtenir' est asynchrone — sans ce cache, la
+  // page était d'abord peinte avec le thème par défaut du CSS (sombre), d'où
+  // un flash avant l'arrivée du thème clair. Ce script est chargé dans
+  // <head> pour que l'application ci-dessous précède le premier rendu.
+  const CLEF_CACHE = 'chatvardage:theme';
+
   function appliquerTheme(theme) {
+    if (!THEMES.includes(theme)) return;
     themeActuel = theme;
     global.document.documentElement.dataset.theme = theme;
+    try {
+      global.localStorage.setItem(CLEF_CACHE, theme);
+    } catch {
+      // Best-effort : sans stockage, seul le flash revient.
+    }
+  }
+
+  // Textes statiques (data-i18n) masqués jusqu'à la première
+  // I18n.appliquerTraductionsStatiques() (qui retire cette classe) : sinon le
+  // texte écrit en dur dans le HTML apparaît une fraction de seconde avant la
+  // traduction (ou dans la mauvaise langue). Filet de sécurité : retirée
+  // quoi qu'il arrive après 1,5 s, pour ne jamais laisser une page sans texte.
+  global.document.documentElement.classList.add('i18n-en-attente');
+  global.setTimeout(
+    () => global.document.documentElement.classList.remove('i18n-en-attente'),
+    1500
+  );
+
+  // Changement de page sans « saut » : chaque page est un document complet
+  // rechargé par Electron, dont le contenu arrivait par à-coups (listes
+  // vides, puis remplies au fil des réponses réseau). Le cadre (barre de
+  // titre, rail, fonds des colonnes) s'affiche tout de suite ; le contenu
+  // est masqué jusqu'à ce que la page signale son premier rendu complet
+  // (pagePrete), puis apparaît en fondu (voir .page-en-chargement dans
+  // styles.css). Filet de sécurité : affiché quoi qu'il arrive après 2 s.
+  global.document.documentElement.classList.add('page-en-chargement');
+  function pagePrete() {
+    global.document.documentElement.classList.remove('page-en-chargement');
+  }
+  global.setTimeout(pagePrete, 2000);
+
+  try {
+    const themeCache = global.localStorage.getItem(CLEF_CACHE);
+    if (THEMES.includes(themeCache)) appliquerTheme(themeCache);
+  } catch {
+    // localStorage indisponible : repli sur le thème par défaut.
   }
 
   function obtenirTheme() {
@@ -51,5 +97,6 @@
     appliquerTheme,
     obtenirTheme,
     initialiserDepuisElectronAPI,
+    pagePrete,
   });
 })(window);

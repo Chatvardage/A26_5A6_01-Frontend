@@ -13,42 +13,28 @@ backend vit dans un **dépôt Git séparé** : API HTTP + WebSocket, base de
 données, Redis, panneau d'administration — tout ça hors de ce dépôt, avec
 son propre README et son propre docker-compose.yml. Un agent qui travaille
 ici n'a pas à implémenter cette API ; ce dépôt ne fait qu'y **consommer**
-via `ChatGateway`, une fois cette évolution faite (voir plus bas).
+via `RealGatewayRuntime.js` (voir plus bas).
 
-> ⚠️ `Architecture.md` à la racine décrit une architecture **planifiée**
-> (frontend/backend séparés, `hooks/`, `stores/`, `view-models/`...) qui ne
-> correspond **pas** au code réel de ce dépôt. Ne t'y fie pas pour
-> comprendre la structure actuelle — ce document-ci (AGENTS.md) est à jour.
+> `Architecture.md` à la racine décrit la structure **réelle** du code
+> (processus main, preload, pages, flux de session/préférences/fenêtre).
+> Le garder à jour quand on ajoute un fichier, un canal IPC important ou un
+> flux.
 
-### Migration en cours (Contrôle 2) — à garder en tête
+### Backend réel (Contrôle 2) — état actuel
 
-Le sujet du Contrôle 2 impose de faire évoluer `ChatGateway` pour qu'il
-communique avec une vraie API (HTTP + WebSocket) au lieu de
-`MockGatewayRuntime.js` uniquement. Points à respecter si une tâche touche
-à ça :
-
-- `MockGateway`/`MockGatewayRuntime.js` doivent **rester utilisables**
-  pour les tests et le développement hors ligne (exigence explicite de
-  l'énoncé) — ne pas les supprimer, prévoir une implémentation
-  alternative de `ChatGateway` à côté, pas à leur place.
-- Les scénarios de remise doivent utiliser l'API réelle : à terme, une
-  implémentation `ChatGateway` réseau (HTTP+WebSocket) doit pouvoir être
-  substituée à `MockGateway` sans changer l'UI qui la consomme — c'est
-  tout l'intérêt de dépendre de l'interface `ChatGateway`, pas d'une
-  implémentation concrète (déjà en place, voir plus bas).
-- Nouvelles fonctionnalités desktop attendues par l'énoncé, pas encore
-  construites au moment d'écrire ce document : panneau de connexion/
-  déconnexion, choix du thème clair/sombre, gestion d'une liste de salons,
-  sauvegarde/récupération des messages privés et de la configuration
-  utilisateur via l'API. À l'ouverture de l'app, on doit voir directement
-  l'écran de clavardage, pas un panneau de configuration.
+L'app parle uniquement au vrai backend, via `RealGatewayRuntime.js` (voir
+`BACKEND.md`). **Aucun mock** : pas de gateway simulé, pas de mode hors
+ligne, pas de données de démonstration en mémoire ou en localStorage — ne
+pas en réintroduire (décision d'équipe). Les doublures des tests unitaires
+(`vi.fn()`, `electron` simulé) ne sont pas concernées. `maquette/` ne
+contient que les maquettes de design (PDF).
 
 ## Ce que c'est (aujourd'hui)
 
 Application de chat desktop (Electron), projet étudiant (cours 420-5A6-ST).
 Un seul processus Electron `main.js` fait autorité pour tout l'état
 métier (utilisateurs, salons, messages, présence, réseau) : c'est
-`MockGatewayRuntime.js`, une seule instance, jamais dupliquée par fenêtre.
+`RealGatewayRuntime.js`, une seule instance, jamais dupliquée par fenêtre.
 Deux surfaces UI très différentes consomment cet état via IPC :
 
 1. **Écran de connexion** (`src/presentation/pages/connexion/`) — React +
@@ -65,7 +51,7 @@ npm install
 npm run start:dev     # mode dev : Vite + Electron orchestrés par scripts/start.js
 npm start              # mode prod : build automatique (prestart) puis Electron seul
 npm test               # vitest run
-npm run test:coverage  # avec couverture (seuil 95 % par fichier, voir vitest.config.ts)
+npm run test:coverage  # avec couverture : 100 % exigé sur src/**/*.ts, RealGatewayRuntime.js et runtime/ (voir vitest.config.ts)
 npm run lint            # eslint . --ext .js,.jsx,.ts,.tsx
 npx tsc --noEmit        # compilation TypeScript sans émission
 npm run build           # build de la page de connexion (dist/login/)
@@ -79,42 +65,50 @@ détecté par **aucun** de ces outils s'il casse au runtime — le seul moyen
 fiable de le vérifier est de lancer l'app et de cliquer dedans (voir
 "Piège n°1" plus bas).
 
-CI (`.github/workflows/builds.yml`) : `npm ci && npm run lint && npm test`
-avant tout build multiplateforme. Pas de vérification de couverture en CI
-actuellement — c'est une vérification locale seulement.
+CI (`.github/workflows/builds.yml`) : `npm ci && npm run lint &&
+npm run test:coverage` à chaque PR, sur `main`/`develop`, et avant tout
+build multiplateforme (tag `v*` ou lancement manuel) — la couverture
+(100 %) est donc vérifiée en CI.
 
-## Architecture réelle (pas celle d'Architecture.md)
+## Architecture réelle (détail complet dans Architecture.md)
 
 ```
-main.js                    Processus main Electron. Instancie l'UNIQUE
-                            MockGatewayRuntime, tous les canaux IPC
-                            (ipcMain.handle), CSP, menu natif traduit,
-                            fenêtre unique (requestSingleInstanceLock).
+main.js                    Processus main Electron : assemble les
+                            modules de src/main/ et gère le cycle de vie
+                            (requestSingleInstanceLock, activate…).
+src/main/                  Modules du processus main (CommonJS), un par
+                            responsabilité — voir Architecture.md. L'état
+                            partagé passe par `etat` (contexte.js), jamais
+                            par des variables globales ; l'UNIQUE
+                            RealGatewayRuntime vit dans gateway.js. Un
+                            nouveau canal IPC passe toujours par
+                            exposerCanal (securite.js), qui vérifie la
+                            provenance.
 preload.js                  Seul pont autorisé vers le renderer
                             (contextBridge). Deux objets globaux exposés :
                             window.electronAPI (session, salons, i18n,
                             réseau, présence...) et window.notifications
                             (notifications système, badge, focus fenêtre).
+                            Injecte aussi la barre de titre (.app-titlebar)
+                            dans chaque page, boutons → canaux 'fenetre:*'.
 scripts/start.js            Orchestre Vite + Electron (dev) ou juste
                             Electron après build (prod) — évite le rituel
                             manuel "deux terminaux + $env:NODE_ENV".
 
 src/infrastructure/gateways/
-  ChatGateway.ts             Interface TypeScript du contrat de gateway
-                              (utilisée par l'écran de connexion React).
-  MockGateway.ts              Implémentation TS de ce contrat (tests via
-                              MockGateway.test.ts) — PAS ce qui tourne
-                              réellement dans main.js.
-  MockGatewayRuntime.js        La VRAIE implémentation utilisée par
-                              main.js AUJOURD'HUI (Contrôle 1). Classe JS
-                              simple, aucune dépendance TS. Lève des CODES
-                              d'erreur stables (ex. "ERR_PSEUDO_PRIS|alice"),
-                              JAMAIS de texte traduit — voir i18n plus bas.
-                              Doit rester fonctionnelle après le Contrôle 2
-                              (tests, dev hors ligne) même quand une
-                              implémentation réseau de ChatGateway existera
-                              en parallèle — voir "Migration en cours" plus
-                              haut.
+  AuthGateway.ts             Interface TypeScript du contrat de gateway
+                              utilisé par l'écran de connexion React.
+  RealGatewayRuntime.js        La VRAIE implémentation utilisée par
+                              main.js : HTTP + Socket.IO vers le Gateway
+                              (Serveur-API). Classe JS simple, aucune
+                              dépendance TS. Lève des CODES d'erreur
+                              stables (ex. "ERR_PSEUDO_PRIS|alice"), JAMAIS
+                              de texte traduit — voir i18n plus bas.
+  runtime/*.js                 Ses méthodes, un fichier par domaine
+                              (session, serveurs, messages, présence,
+                              réseau…), ajoutées à son prototype par
+                              Object.assign : `this` y est l'instance.
+                              Nouvelle méthode → le fichier du domaine.
 
 src/i18n/
   translations.json           SEULE source de vérité pour tous les textes
@@ -141,9 +135,28 @@ src/presentation/pages/
                                 son état — seulement des clés/codes,
                                 traduits au RENDU avec la langue courante
                                 (voir "Piège n°3").
-  index.html + renderer.js     Dashboard (salons).
-  message-prive.html + javascript/message-prive.js
-                                Page des messages privés (DM).
+  index.html + javascript/salons/*.js + renderer.js
+                                Dashboard (salons) : scripts classiques qui
+                                partagent la portée globale, chargés dans
+                                l'ordre d'index.html ; renderer.js (le
+                                dernier) démarre la page. Seules des
+                                DÉFINITIONS et des abonnements au niveau
+                                supérieur des fichiers salons/*.js : rien ne
+                                doit s'y exécuter au chargement (voir
+                                salons.chargement.test.ts).
+  javascript/logique-interface.js
+                                Logique pure des pages de chat, testée à
+                                100 % : y mettre toute règle testable
+                                (fusion, défilement, tris…).
+  message-prive.html + javascript/messages-prives/*.js
+                     + javascript/message-prive.js
+                                Page des messages privés (DM), découpée
+                                comme les salons : les scripts de
+                                messages-prives/ ne font que DÉCLARER ;
+                                seul message-prive.js, chargé en dernier,
+                                démarre la page (DOMContentLoaded). Rien ne
+                                doit s'exécuter au chargement (voir
+                                message-prive.chargement.test.ts).
   javascript/notif-prefs.js    Préférences de notification, partagées
                                 entre les deux pages JS vanilla via
                                 window.NotifPrefs (même pattern que
@@ -186,7 +199,7 @@ zones doit vérifier activement qu'il n'en réintroduit pas une.
    `t(langueActuelle, ...)`. Sinon, changer de langue après coup ne
    retraduit jamais ce qui est déjà affiché.
 
-4. **`MockGatewayRuntime.js` doit lever des CODES, jamais du texte
+4. **`RealGatewayRuntime.js` doit lever des CODES, jamais du texte
    français en dur** (`throw new Error('ERR_XXX')`, pas
    `throw new Error('Une erreur en français')`). La traduction se fait à
    la frontière IPC/UI (voir `messageErreur()` dans `i18n-browser.js`, ou
@@ -199,19 +212,39 @@ zones doit vérifier activement qu'il n'en réintroduit pas une.
    navigation (identité de l'utilisateur connecté, langue...), utiliser
    un état côté processus main exposé via IPC (voir
    `session:utilisateur-connecte`, `langue:obtenir`), pas seulement
-   `sessionStorage`.
+   `sessionStorage`. Pour ce qu'une page doit ouvrir en arrivant
+   (notification cliquée, « + » du rail) : `definirCibleNavigation` avant
+   de naviguer, `prendreCibleNavigation([types])` à l'arrivée (canaux
+   `navigation:*-cible`, src/main/fenetre.js).
 
 6. **Fichiers de config qui reviennent en arrière** : `package.json`
    (version de `vitest`/`@vitest/coverage-v8` — doit matcher la version de
    `vite` installée, sinon deux copies de `vite` s'installent et `tsc`
-   plante), `.eslintrc.js` (`ignorePatterns` doit exclure `dist/`), et
-   `ChatGateway.ts` (a déjà perdu `pseudoDisponible` plusieurs fois). Si
+   plante) et `.eslintrc.js` (`ignorePatterns` doit exclure `dist/`). Si
    `npx tsc --noEmit` échoue avec une erreur de type Vite/Vitest
    incohérente, vérifier `npm ls vite` en premier.
 
-7. **`clamp(min, préféré, max)` avec `min > max`** est déjà arrivé dans
-   `connexion.css` (`clamp(15px, 0.75vw, 13px)`) — invalide silencieusement
-   en CSS, pas d'erreur, juste un rendu cassé.
+7. **Barre de titre : deux copies du style.** `.app-titlebar` et
+   `--titlebar-*` sont définis dans `styles.css` (pages vanilla) ET dans
+   `connexion.css` (page React, bundle Vite séparé) : toute modification
+   doit être faite dans les deux. Tout élément `position: fixed` en haut de
+   page doit tenir compte de `--titlebar-height`.
+
+8. **Contenu traduit du serveur par défaut.** `SALONS_PAR_DEFAUT` et
+   `MESSAGE_BIENVENUE_ID` (`logique-interface.js`) reprennent les identifiants figés
+   de Room-Service/Message-Service et les noms d'origine (`annonces`,
+   `général`). Si une migration backend change ces noms ou le texte de
+   bienvenue, mettre à jour ces constantes et
+   `channels.welcomeMessage` (fr + en) dans `translations.json`.
+
+9. **Thème : uniquement depuis la page profil.** Ne pas réintroduire de
+   sélecteur de thème sur les écrans de connexion/inscription. La langue,
+   elle, reste choisie à la connexion et est enregistrée dans le profil
+   (`apresOuvertureSessionAvecLangueChoisie` dans `main.js`).
+
+10. **`clamp(min, préféré, max)` avec `min > max`** est déjà arrivé dans
+    `connexion.css` (`clamp(15px, 0.75vw, 13px)`) — invalide silencieusement
+    en CSS, pas d'erreur, juste un rendu cassé.
 
 Ces régressions reviennent parce que plusieurs personnes éditent les mêmes
 fichiers sans toujours repartir de la dernière version poussée. Avant de
@@ -229,7 +262,7 @@ conflit Git (`<<<<<<<`, `=======`, `>>>>>>>`) ne traîne dans le diff.
   `data-i18n-placeholder`, retraduits par `appliquerTraductionsStatiques()`.
 - Toute nouvelle clé de traduction va dans `src/i18n/translations.json`,
   sous les DEUX langues (`fr` et `en`) — jamais une clé dans une seule.
-- Toute nouvelle erreur métier dans `MockGatewayRuntime.js` : un code
+- Toute nouvelle erreur métier dans `RealGatewayRuntime.js` : un code
   stable (`ERR_NOUVELLE_ERREUR`, éventuellement `ERR_X|param`), plus les
   deux traductions correspondantes dans `translations.json` sous
   `errors.*`.

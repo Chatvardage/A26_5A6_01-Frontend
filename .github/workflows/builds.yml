@@ -6,11 +6,20 @@ permissions:
 env:
   CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
+# Lint et tests (couverture à 100 %) à chaque PR et sur les branches
+# principales ; les builds multiplateformes seulement sur un tag v* ou à la
+# demande.
 on:
   workflow_dispatch:
+  pull_request:
   push:
+    branches: [main, develop]
     tags:
       - 'v*'
+
+concurrency:
+  group: builds-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint-test:
@@ -24,10 +33,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
-      - run: npm test
+      # Couverture à 100 % exigée (voir vitest.config.ts).
+      - run: npm run test:coverage
 
   build:
     needs: lint-test
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     strategy:
       fail-fast: false
       matrix:
