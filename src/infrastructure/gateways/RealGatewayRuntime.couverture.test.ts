@@ -361,6 +361,32 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
       expect(runtime.obtenirUtilisateurConnecte()).toBeNull();
     });
 
+    it('suppression du compte : présence suspendue pendant l’appel, reprise en cas d’échec', async () => {
+      const { runtime } = runtimeConnecte();
+      runtime.minuteurPollPresence = setInterval(() => undefined, 60_000);
+      const demarrer = vi
+        .spyOn(runtime, 'demarrerPollPresence')
+        .mockImplementation(() => undefined);
+      let pollPendantAppel: unknown = 'non appelé';
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (_url: string, options?: { method?: string }) => {
+          if (options?.method !== 'DELETE') {
+            // Vérification de session après le 401 : jeton toujours valide.
+            return reponseJson({ id: 'moi', pseudo: 'moi' });
+          }
+          pollPendantAppel = runtime.minuteurPollPresence;
+          return reponseJson({ erreur: 'mot de passe actuel incorrect' }, 401);
+        })
+      );
+
+      await expect(runtime.profilSupprimerCompte('faux')).rejects.toThrow();
+      expect(pollPendantAppel).toBeNull();
+      // Le compte existe toujours : la présence reprend.
+      expect(demarrer).toHaveBeenCalledTimes(1);
+      expect(runtime.obtenirUtilisateurConnecte()).not.toBeNull();
+    });
+
     it('mot de passe changé mais reconnexion impossible : code dédié', async () => {
       const { runtime } = runtimeConnecte();
       vi.stubGlobal(

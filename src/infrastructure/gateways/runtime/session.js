@@ -275,10 +275,20 @@ module.exports = {
   },
 
   async profilSupprimerCompte(motDePasseActuel) {
-    await this.appelHttp('/api/auth/me', {
-      methode: 'DELETE',
-      corps: { mot_de_passe_actuel: motDePasseActuel },
-    });
+    // Plus d'envoi périodique de présence pendant la suppression : un PUT
+    // arrivé juste après recréerait dans User-Config une configuration pour
+    // un compte qui n'existe plus (le Gateway mémorise l'identité ~10 s).
+    this.arreterPollPresence();
+    try {
+      await this.appelHttp('/api/auth/me', {
+        methode: 'DELETE',
+        corps: { mot_de_passe_actuel: motDePasseActuel },
+      });
+    } catch (erreur) {
+      // Mot de passe incorrect, hors ligne… : le compte existe toujours.
+      if (this.sessionActive()) this.demarrerPollPresence();
+      throw erreur;
+    }
     await this.deconnexion();
   },
 };

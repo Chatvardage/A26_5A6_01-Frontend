@@ -18,8 +18,7 @@ const URL_SOCKET_PAR_DEFAUT = 'http://localhost:3000';
 function obtenirConfiguration() {
   return {
     baseUrlHttp: process.env.CHATVARDAGE_API_URL || URL_API_HTTP_PAR_DEFAUT,
-    baseUrlSocket:
-      process.env.CHATVARDAGE_SOCKET_URL || URL_SOCKET_PAR_DEFAUT,
+    baseUrlSocket: process.env.CHATVARDAGE_SOCKET_URL || URL_SOCKET_PAR_DEFAUT,
   };
 }
 
