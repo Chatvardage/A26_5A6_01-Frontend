@@ -89,5 +89,8 @@
       "icon": "assets/icon.png",
       "category": "Network"
     }
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
