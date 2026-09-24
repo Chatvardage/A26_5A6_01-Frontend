@@ -35,6 +35,9 @@ module.exports = {
     clearTimeout(this.minuteurRepliConnexionPrete);
     // Plus de flux temps réel : l'instantané de présence n'est plus fiable.
     this.enLigneTempsReel = null;
+    clearTimeout(this.minuteurSuiviPresence);
+    this.minuteurSuiviPresence = null;
+    this.cleSuiviPresence = null;
     socket?.disconnect();
   },
 

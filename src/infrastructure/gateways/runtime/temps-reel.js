@@ -51,6 +51,9 @@ module.exports = {
       this.socketPret = true;
       // Les autres clients ont pu nous voir « hors ligne » pendant la coupure.
       this.annoncerPresence();
+      // Session serveur neuve : abonnement à la présence à refaire.
+      this.cleSuiviPresence = null;
+      this.suivrePresence();
       // Rejoint à nouveau les rooms Socket.IO des salons déjà connus (une
       // reconnexion Socket.IO démarre une session serveur neuve).
       this.roomsSocketRejointes.clear();
@@ -84,9 +87,6 @@ module.exports = {
     socket.on('typing', (evt) => this.traiterSaisieEntrante(evt));
     // Présence en temps réel (voir Message-Service, 'presence.changed').
     socket.on('presence.changed', (evt) => this.traiterPresenceEntrante(evt));
-    socket.on('presence.snapshot', (evt) =>
-      this.traiterInstantanePresence(evt)
-    );
     socket.on('profil.changed', (evt) => this.traiterProfilEntrant(evt));
     socket.on('serveur.change', (evt) => this.traiterServeurEntrant(evt));
     // Accès à un salon perdu (expulsion, salon réservé…) : Message-Service a

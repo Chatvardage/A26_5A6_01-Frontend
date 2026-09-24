@@ -1295,14 +1295,14 @@ describe('RealGatewayRuntime', () => {
     });
 
     it("l'instantané met hors ligne les connus absents de la liste (partis juste avant)", () => {
-      const { runtime, socket } = runtimeConnecte();
+      const { runtime } = runtimeConnecte();
       runtime.enregistrerUtilisateurConnu({ id: 'parti', pseudo: 'parti' });
       runtime.presences.parti = 'en-ligne'; // vu en ligne par le sondage
       runtime.presences.moi = 'en-ligne';
       const recues: unknown[] = [];
       runtime.on('presence', (p: unknown) => recues.push(p));
 
-      socket._declencher('presence.snapshot', { enLigne: ['present', 'moi'] });
+      runtime.traiterInstantanePresence({ enLigne: ['present', 'moi'] });
 
       expect(runtime.presences).toMatchObject({
         parti: 'hors-ligne',
@@ -1323,7 +1323,7 @@ describe('RealGatewayRuntime', () => {
           ])
         )
       );
-      socket._declencher('presence.snapshot', { enLigne: ['present'] });
+      runtime.traiterInstantanePresence({ enLigne: ['present'] });
 
       await runtime.chargerProfilsPublics(['parti', 'present'], {
         inclureAvatar: false,
@@ -1353,22 +1353,115 @@ describe('RealGatewayRuntime', () => {
 
     it('socket coupé : la liste temps réel est abandonnée (retour au sondage)', () => {
       const { runtime, socket } = runtimeConnecte();
-      socket._declencher('presence.snapshot', { enLigne: ['u2'] });
+      runtime.traiterInstantanePresence({ enLigne: ['u2'] });
       expect(runtime.enLigneTempsReel).not.toBeNull();
       socket._declencher('disconnect');
       expect(runtime.enLigneTempsReel).toBeNull();
 
-      socket._declencher('presence.snapshot', { enLigne: ['u2'] });
+      runtime.traiterInstantanePresence({ enLigne: ['u2'] });
       runtime.fermerSocket();
       expect(runtime.enLigneTempsReel).toBeNull();
     });
 
     it('ignore un instantané invalide', () => {
-      const { runtime, socket } = runtimeConnecte();
-      socket._declencher('presence.snapshot', { enLigne: 'u2' });
-      socket._declencher('presence.snapshot', { enLigne: [1] });
-      socket._declencher('presence.snapshot', null);
+      const { runtime } = runtimeConnecte();
+      runtime.traiterInstantanePresence({ enLigne: 'u2' });
+      runtime.traiterInstantanePresence({ enLigne: [1] });
+      runtime.traiterInstantanePresence(null);
       expect(runtime.enLigneTempsReel).toBeNull();
+    });
+
+    describe('presence.suivre (abonnement aux utilisateurs connus)', () => {
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      // Socket pas encore connecté (contrairement à runtimeConnecte).
+      const preparer = () => {
+        const { runtime, socket } = creerRuntime();
+        runtime.jeton = 'jwt';
+        runtime.utilisateurConnecte = { id: 'moi', pseudo: 'moi' };
+        return { runtime, socket };
+      };
+      const appelsSuivre = (socket: ReturnType<typeof creerFauxSocket>) =>
+        socket.emit.mock.calls.filter(([e]) => e === 'presence.suivre');
+
+      it('après connexion.prete : suit les connus (sans soi), applique la réponse', () => {
+        const { runtime, socket } = preparer();
+        runtime.enregistrerUtilisateurConnu({ id: 'u2', pseudo: 'deux' });
+        runtime.enregistrerUtilisateurConnu({ id: 'u3', pseudo: 'trois' });
+        runtime.presences.u3 = 'en-ligne';
+        runtime.connecterSocket();
+        socket._declencher('connexion.prete');
+
+        const [[, donnees, ack]] = appelsSuivre(socket);
+        expect(donnees).toEqual({ ids: ['u2', 'u3'] });
+        expect(socket.timeout).toHaveBeenCalledWith(8000);
+        ack(null, { enLigne: ['u2'] });
+        expect(runtime.presences).toMatchObject({
+          u2: 'en-ligne',
+          u3: 'hors-ligne',
+        });
+
+        // Même liste : rien n'est renvoyé.
+        runtime.suivrePresence();
+        expect(appelsSuivre(socket)).toHaveLength(1);
+      });
+
+      it('regroupe les nouveaux utilisateurs, et retente après un refus', () => {
+        vi.useFakeTimers();
+        const { runtime, socket } = preparer();
+        runtime.connecterSocket();
+        socket._declencher('connexion.prete');
+        const [[, , premierAck]] = appelsSuivre(socket);
+        premierAck(null, { enLigne: [] });
+
+        runtime.enregistrerUtilisateurConnu({ id: 'a', pseudo: 'a' });
+        runtime.enregistrerUtilisateurConnu({ id: 'b', pseudo: 'b' });
+        runtime.enregistrerUtilisateurConnu({ id: 'a', pseudo: 'a2' });
+        expect(appelsSuivre(socket)).toHaveLength(1);
+        vi.advanceTimersByTime(1100);
+        expect(appelsSuivre(socket)).toHaveLength(2);
+        expect(appelsSuivre(socket)[1][1]).toEqual({ ids: ['a', 'b'] });
+
+        // Refus (trop rapproché) : redemandé plus tard.
+        appelsSuivre(socket)[1][2](new Error('timeout'));
+        vi.advanceTimersByTime(1100);
+        expect(appelsSuivre(socket)).toHaveLength(3);
+      });
+
+      it('sans socket prêt : rien ; réponse d’un ancien socket ignorée', () => {
+        vi.useFakeTimers();
+        const { runtime, socket } = preparer();
+        runtime.enregistrerUtilisateurConnu({ id: 'u2', pseudo: 'deux' });
+        runtime.suivrePresence();
+        expect(appelsSuivre(socket)).toHaveLength(0);
+
+        runtime.connecterSocket();
+        socket._declencher('connexion.prete');
+        const [[, , ack]] = appelsSuivre(socket);
+        runtime.planifierSuiviPresence();
+        runtime.fermerSocket();
+        ack(null, { enLigne: ['u2'] });
+        expect(runtime.presences.u2).toBeUndefined();
+        vi.advanceTimersByTime(2000);
+        expect(appelsSuivre(socket)).toHaveLength(1);
+      });
+
+      it('500 utilisateurs suivis au plus, les plus récents', () => {
+        const { runtime, socket } = preparer();
+        for (let i = 0; i < 520; i += 1) {
+          runtime.utilisateursConnus.set(`u${i}`, {
+            id: `u${i}`,
+            pseudo: `u${i}`,
+          });
+        }
+        runtime.connecterSocket();
+        socket._declencher('connexion.prete');
+        const ids = appelsSuivre(socket)[0][1].ids;
+        expect(ids).toHaveLength(500);
+        expect(ids[0]).toBe('u20');
+      });
     });
 
     it("n'annonce rien tant que sa présence est inconnue ou le socket fermé", () => {

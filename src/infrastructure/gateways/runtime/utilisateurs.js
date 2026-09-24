@@ -15,6 +15,10 @@ module.exports = {
 
   enregistrerUtilisateurConnu(utilisateur) {
     if (!utilisateur || !utilisateur.id) return;
+    // Nouvel utilisateur affiché : on suivra aussi sa présence.
+    if (!this.utilisateursConnus.has(utilisateur.id)) {
+      this.planifierSuiviPresence();
+    }
     const existant = this.utilisateursConnus.get(utilisateur.id) ?? {};
     this.utilisateursConnus.set(utilisateur.id, {
       id: utilisateur.id,

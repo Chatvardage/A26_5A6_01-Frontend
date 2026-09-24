@@ -37,6 +37,11 @@ const DELAI_REPLI_CONNEXION_PRETE_MS = 5000;
 // Délai d'accusé de réception de 'room-message.join' (Message-Service
 // vérifie l'accès auprès de Room-Service, ROOM_SERVICE_TIMEOUT_MS = 3 s).
 const DELAI_ACK_REJOINDRE_SALON_MS = 8000;
+// Présence temps réel des seuls utilisateurs connus (voir suivrePresence) :
+// 500 au plus (limite de Message-Service), demandes regroupées (le serveur
+// en accepte une par seconde).
+const MAX_PRESENCES_SUIVIES = 500;
+const DELAI_SUIVI_PRESENCE_MS = 1100;
 const DELAI_BATTEMENT_COEUR_MS = 5000;
 // Cause d'un état non connecté (voir EtatConnexion.ts) : affichée à
 // l'utilisateur pour distinguer "ta machine n'a pas de réseau" de "le
@@ -49,6 +54,8 @@ const NOM_FICHIER_SESSION = 'session.json';
 const CHEMINS_SANS_SESSION = ['/api/auth/login', '/api/auth/register'];
 
 module.exports = {
+  DELAI_SUIVI_PRESENCE_MS,
+  MAX_PRESENCES_SUIVIES,
   CAUSE_HORS_LIGNE,
   CAUSE_SERVEUR_INJOIGNABLE,
   CHEMINS_SANS_SESSION,

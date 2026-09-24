@@ -3,10 +3,57 @@
 // runtime/presence.js — Présence (la sienne, celle des autres) et sondage de secours.
 // Méthodes de RealGatewayRuntime, ajoutées à son prototype (voir
 // RealGatewayRuntime.js) : `this` est l'instance.
-const { INTERVALLE_POLL_PRESENCE_MS } = require('./constantes');
+const {
+  DELAI_ACK_REJOINDRE_SALON_MS,
+  DELAI_SUIVI_PRESENCE_MS,
+  INTERVALLE_POLL_PRESENCE_MS,
+  MAX_PRESENCES_SUIVIES,
+} = require('./constantes');
 
 module.exports = {
   // --- Présence -----------------------------------------------------------------
+
+  /**
+   * Abonne le socket à la présence des utilisateurs connus de l'app (ceux
+   * qu'elle affiche : membres, auteurs, conversations…), les plus récents
+   * d'abord, 500 au plus. Message-Service n'envoie plus 'presence.changed'
+   * qu'aux clients qui suivent l'utilisateur. Sans effet si la liste n'a pas
+   * changé ; retenté plus tard en cas d'échec.
+   */
+  suivrePresence() {
+    clearTimeout(this.minuteurSuiviPresence);
+    this.minuteurSuiviPresence = null;
+    const socket = this.socket;
+    if (!socket || !this.socketPret) return;
+    const moi = this.utilisateurConnecte?.id;
+    const ids = [...this.utilisateursConnus.keys()]
+      .filter((id) => id !== moi)
+      .slice(-MAX_PRESENCES_SUIVIES);
+    const cle = ids.join(',');
+    if (cle === this.cleSuiviPresence) return;
+    this.cleSuiviPresence = cle;
+    socket
+      .timeout(DELAI_ACK_REJOINDRE_SALON_MS)
+      .emit('presence.suivre', { ids }, (erreur, reponse) => {
+        if (this.socket !== socket) return;
+        if (erreur) {
+          // Refusée (trop rapprochée) ou sans réponse : on redemandera.
+          this.cleSuiviPresence = null;
+          this.planifierSuiviPresence();
+          return;
+        }
+        this.traiterInstantanePresence(reponse, ids);
+      });
+  },
+
+  /** Regroupe les demandes (voir DELAI_SUIVI_PRESENCE_MS). */
+  planifierSuiviPresence() {
+    if (this.minuteurSuiviPresence) return;
+    this.minuteurSuiviPresence = setTimeout(
+      () => this.suivrePresence(),
+      DELAI_SUIVI_PRESENCE_MS
+    );
+  },
 
   definirPresenceInterne({ utilisateurId, statut }) {
     this.presences[utilisateurId] = statut;
@@ -46,7 +93,12 @@ module.exports = {
    * ligne. Tout autre utilisateur connu est hors ligne, y compris ceux qui ont
    * quitté juste avant (dont on n'a pas reçu l'annonce).
    */
-  traiterInstantanePresence(evt) {
+  /**
+   * Qui est en ligne parmi `suivis` (réponse à 'presence.suivre') : les
+   * autres suivis sont hors ligne. Sans `suivis`, parmi tous les
+   * utilisateurs connus.
+   */
+  traiterInstantanePresence(evt, suivis) {
     if (
       !Array.isArray(evt?.enLigne) ||
       !evt.enLigne.every((id) => typeof id === 'string')
@@ -56,8 +108,10 @@ module.exports = {
     this.enLigneTempsReel = new Set(evt.enLigne);
     const moi = this.utilisateurConnecte?.id;
     const connus = new Set([
-      ...this.utilisateursConnus.keys(),
-      ...Object.keys(this.presences),
+      ...(suivis ?? [
+        ...this.utilisateursConnus.keys(),
+        ...Object.keys(this.presences),
+      ]),
       ...evt.enLigne,
     ]);
     for (const id of connus) {

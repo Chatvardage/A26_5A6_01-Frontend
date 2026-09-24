@@ -322,7 +322,9 @@ Autres mesures :
 
 ## 9. Limites connues et pistes d'amélioration
 
-- La présence des autres est poussée en temps réel (`presence.changed`) et
+- La présence des autres est poussée en temps réel (`presence.changed`),
+  seulement pour les utilisateurs connus de l'app (500 au plus : ceux
+  affichés), auxquels elle s'abonne avec `presence.suivre` ; elle est
   réconciliée par un sondage toutes les 20 s (sans les photos). Les photos
   ne sont rechargées que sur `profil.changed` et après une reconnexion du
   socket, pour rattraper les changements manqués pendant la coupure.

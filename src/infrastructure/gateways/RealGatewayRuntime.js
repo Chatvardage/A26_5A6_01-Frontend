@@ -77,8 +77,8 @@ class RealGatewayRuntime {
     // Dernier « hors ligne » reçu en temps réel par utilisateur (id -> date),
     // voir DUREE_PRIORITE_HORS_LIGNE_MS.
     this.horsLigneTempsReel = new Map();
-    // Utilisateurs en ligne selon Message-Service : instantané reçu à la
-    // connexion du socket ('presence.snapshot'), tenu à jour par les
+    // Utilisateurs en ligne selon Message-Service : réponse à
+    // 'presence.suivre' (voir suivrePresence), tenue à jour par les
     // 'presence.changed'. Fait foi tant que le socket est connecté ; null
     // sinon (on revient alors au sondage seul).
     this.enLigneTempsReel = null;
