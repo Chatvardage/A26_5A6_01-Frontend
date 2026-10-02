@@ -1,5 +1,5 @@
 // Processus main d'Electron, découpé en modules (voir main.js et
-// Architecture.md). Provenance des URL et des appels IPC, CSP.
+// A26_5A6_01-Infra/docs/architecture-frontend.md). Provenance des URL et des appels IPC, CSP.
 const { ipcMain, session } = require('electron');
 const path = require('path');
 const { fileURLToPath } = require('url');

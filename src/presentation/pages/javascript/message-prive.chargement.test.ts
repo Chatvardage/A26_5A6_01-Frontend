@@ -160,6 +160,26 @@ const textes = (document: Document) =>
   );
 
 describe('page des messages privés', () => {
+  it('rattrape par REST un DM manque pendant la coupure sans nouveau message socket', async () => {
+    let messages = conversations();
+    const { rappels, document, appels } = await chargerPage({
+      autresReponses: { obtenirConversationsPrivees: () => messages },
+    });
+    const avant = appels.obtenirConversationsPrivees;
+    messages = [
+      {
+        ...messages[0],
+        messages: [
+          ...messages[0].messages,
+          dm('manque', 'bob', 'pendant la coupure', 2),
+        ],
+      },
+    ];
+    await rappels.onSynchronisationRequise();
+    expect(appels.obtenirConversationsPrivees).toBeGreaterThan(avant);
+    expect(textes(document)).toContain('pendant la coupure');
+  });
+
   afterEach(() => {
     for (const page of pagesOuvertes.splice(0)) page.window.close();
   });

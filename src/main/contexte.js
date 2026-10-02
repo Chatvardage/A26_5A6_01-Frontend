@@ -1,5 +1,5 @@
 // Processus main d'Electron, découpé en modules (voir main.js et
-// Architecture.md). État partagé entre les modules du processus main.
+// A26_5A6_01-Infra/docs/architecture-frontend.md). État partagé entre les modules du processus main.
 const { LANGUE_PAR_DEFAUT } = require('../i18n/i18n.js');
 
 const isDev = process.env.NODE_ENV === 'development';

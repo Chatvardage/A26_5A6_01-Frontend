@@ -49,6 +49,9 @@ module.exports = {
     const marquerPret = () => {
       clearTimeout(this.minuteurRepliConnexionPrete);
       this.socketPret = true;
+      // Redis Pub/Sub ne rejoue rien : les pages doivent relire leur etat
+      // durable en REST une fois le socket authentifie et abonne aux DM.
+      this.emettre('synchronisation-requise');
       // Les autres clients ont pu nous voir « hors ligne » pendant la coupure.
       this.annoncerPresence();
       // Session serveur neuve : abonnement à la présence à refaire.
