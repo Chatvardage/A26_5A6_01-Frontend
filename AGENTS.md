@@ -72,7 +72,7 @@ lancement manuel) — la couverture (100 %), les types et le build de la page
 de connexion sont donc vérifiés en CI. Le lint échoue au moindre
 avertissement (`--max-warnings=0`).
 
-**Audit des dépendances** : le CI lance `npm audit --audit-level=high` (dépendances de dev comprises). Si un avis `high` ou `critical` sans correctif compatible le bloque, forcer une version corrigée par un `overrides` ciblé dans `package.json` si elle existe ; sinon consigner l'exception (paquet, avis, raison, condition de retrait). Ne pas retirer ni affaiblir l'étape.
+**Audit des dépendances** : le CI lance `npm audit --audit-level=high` (dépendances de dev comprises). Si un avis `high` ou `critical` sans correctif compatible le bloque, forcer une version corrigée par un `overrides` ciblé dans `package.json` si elle existe ; sinon consigner l'exception dans la section « Limites connues » du README (paquet, avis, raison, condition de retrait). Ne pas retirer ni affaiblir l'étape.
 
 ## Architecture réelle (détail complet dans Infra/docs/architecture-frontend.md)
 
