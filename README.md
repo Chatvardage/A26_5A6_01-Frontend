@@ -1,6 +1,6 @@
 # Chatvardage — Client desktop
 
-Application Electron de clavardage issue du contrôle 1, connectée au backend réel pour le contrôle 2. Connexion, serveurs/salons, DM, profils, thème, langue et notifications passent par une instance de `RealGatewayRuntime`, accessible aux vues par IPC. Aucun mock n’est utilisé à l’exécution.
+Application Electron de clavardage connectée aux services HTTP et temps réel de Chatvardage. Connexion, serveurs/salons, DM, profils, thème, langue et notifications passent par une instance de `RealGatewayRuntime`, accessible aux vues par IPC. Aucun mock n’est utilisé à l’exécution.
 
 ## Démarrer
 
@@ -43,6 +43,6 @@ Installateurs : `npm run build:win`, `npm run build:mac`, `npm run build:linux` 
 
 ## Documentation
 
-L’[architecture du frontend](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/develop/docs/architecture-frontend.md), le [guide détaillé](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/develop/docs/services/Frontend.md), le [contrat réseau](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/develop/docs/api/frontend.md) et la [validation C2](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/develop/docs/validation-c2.md) sont centralisés dans Infra. Voir [AGENTS.md](AGENTS.md) pour contribuer.
+L’[architecture du frontend](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/develop/docs/architecture-frontend.md), le [guide détaillé](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/develop/docs/services/Frontend.md), le [contrat réseau](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/develop/docs/api/frontend.md) et la [validation fonctionnelle](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/develop/docs/validation.md) sont centralisés dans Infra. Voir [AGENTS.md](AGENTS.md) pour contribuer.
 
-Le tag historique C1 `v1.0.1` contient une version déclarée `1.0.0` : cette incohérence est conservée dans l’historique et expliquée dans la remise Infra. Les prochaines versions sont contrôlées par le CI.
+Le CI vérifie la cohérence entre la version déclarée, le fichier de verrouillage npm et les tags de publication.

@@ -6,21 +6,20 @@ travaille dans **ce dépôt**.
 ## Portée — lire en premier
 
 Ce dépôt est le **frontend uniquement** : l'application desktop Electron
-issue du Contrôle 1. Il n'inclut PAS le backend.
+de Chatvardage. Il n'inclut PAS le backend.
 
-Depuis le Contrôle 2 (backend conteneurisé et services temps réel), le
-backend vit dans un **dépôt Git séparé** : API HTTP + WebSocket, base de
+Le backend conteneurisé et les services temps réel vivent dans des **dépôts Git séparés** : API HTTP + WebSocket, base de
 données, Redis, panneau d'administration — tout ça hors de ce dépôt, avec
 son propre README et son propre docker-compose.yml. Un agent qui travaille
 ici n'a pas à implémenter cette API ; ce dépôt ne fait qu'y **consommer**
 via `RealGatewayRuntime.js` (voir plus bas).
 
-> [architecture dans Infra](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/develop/docs/architecture-frontend.md) à la racine décrit la structure **réelle** du code
+> L’[architecture dans Infra](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/develop/docs/architecture-frontend.md) décrit la structure **réelle** du code
 > (processus main, preload, pages, flux de session/préférences/fenêtre).
 > Le garder à jour quand on ajoute un fichier, un canal IPC important ou un
 > flux.
 
-### Backend réel (Contrôle 2) — état actuel
+### Backend réel — état actuel
 
 L'app parle uniquement au vrai backend, via `RealGatewayRuntime.js` (voir
 `BACKEND.md`). **Aucun mock** : pas de gateway simulé, pas de mode hors
@@ -31,7 +30,7 @@ contient que les maquettes de design (PDF).
 
 ## Ce que c'est (aujourd'hui)
 
-Application de chat desktop (Electron), projet étudiant (cours 420-5A6-ST).
+Application de clavardage desktop construite avec Electron.
 Un seul processus Electron `main.js` fait autorité pour tout l'état
 métier (utilisateurs, salons, messages, présence, réseau) : c'est
 `RealGatewayRuntime.js`, une seule instance, jamais dupliquée par fenêtre.
@@ -270,6 +269,6 @@ conflit Git (`<<<<<<<`, `=======`, `>>>>>>>`) ne traîne dans le diff.
   purement locales à UNE page (ex. `NotifPrefs`), jamais pour de l'état
   qui doit survivre à une navigation entre pages — voir Piège n°5.
 
-## Documentation centrale du contrôle 2
+## Documentation centrale
 
-Infra est la référence du démarrage complet, des architectures, contrats et scénarios de remise. Le README local décrit le dépôt et ses commandes; les guides détaillés sont dans `A26_5A6_01-Infra/docs/`. Toute modification de contrat doit mettre à jour la référence centrale et ses liens. Mobile relève du contrôle 3.
+Infra est la référence du démarrage complet, des architectures, contrats et scénarios de validation. Le README local décrit le dépôt et ses commandes; les guides détaillés sont dans `A26_5A6_01-Infra/docs/`. Toute modification de contrat doit mettre à jour la référence centrale et ses liens.
