@@ -23,7 +23,6 @@ export default defineConfig({
       exclude: [
         'src/**/*.test.ts',
         'src/**/*.d.ts',
-        // Contrat TypeScript uniquement : les interfaces sont effacées à la compilation.
         'src/infrastructure/gateways/AuthGateway.ts',
       ],
       thresholds: {
