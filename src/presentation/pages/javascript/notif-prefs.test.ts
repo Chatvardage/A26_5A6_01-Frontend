@@ -5,9 +5,25 @@ import './notif-prefs.js';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- script non typé
 const NotifPrefs = (window as any).NotifPrefs;
 
+const installerStockageMemoire = () => {
+  const donnees = new Map<string, string>();
+  const stockage = {
+    getItem: (cle: string) => donnees.get(cle) ?? null,
+    setItem: (cle: string, valeur: string) => { donnees.set(cle, String(valeur)); },
+    removeItem: (cle: string) => { donnees.delete(cle); },
+    clear: () => { donnees.clear(); },
+    key: (index: number) => [...donnees.keys()][index] ?? null,
+    get length() { return donnees.size; },
+  };
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: stockage,
+  });
+};
+
 describe('NotifPrefs : aperçu dans les notifications système', () => {
   beforeEach(() => {
-    localStorage.clear();
+    installerStockageMemoire();
   });
 
   it('affiche le contenu par défaut, masquable par utilisateur', () => {
@@ -50,14 +66,11 @@ describe('NotifPrefs : aperçu dans les notifications système', () => {
   });
 
   it('stockage indisponible : contenu affiché, sans erreur', () => {
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-      throw new Error('bloqué');
-    });
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('bloqué');
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get: () => { throw new Error('bloqué'); },
     });
     expect(NotifPrefs.afficheApercu('u1')).toBe(true);
     expect(() => NotifPrefs.definirApercu('u1', false)).not.toThrow();
-    vi.restoreAllMocks();
   });
 });

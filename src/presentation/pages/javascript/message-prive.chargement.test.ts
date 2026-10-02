@@ -72,6 +72,17 @@ async function chargerPage({
   pagesOuvertes.push(dom);
   const { window } = dom;
 
+  // jsdom ne fournit pas l'API native <dialog>. L'application l'utilise
+  // réellement dans Electron/Chromium; le test reproduit donc ce contrat.
+  if (window.HTMLDialogElement) {
+    window.HTMLDialogElement.prototype.showModal = function () {
+      this.setAttribute('open', '');
+    };
+    window.HTMLDialogElement.prototype.close = function () {
+      this.removeAttribute('open');
+    };
+  }
+
   const rappels: Record<string, Rappel> = {};
   const appels: Record<string, number> = {};
   const reponses: Record<string, unknown> = {
@@ -364,4 +375,35 @@ describe('page des messages privés', () => {
       document.querySelector('#toast')?.classList.contains('error')
     ).not.toBe(true);
   }, 15000);
+
+  it('met à jour en direct la présence dans le sélecteur même sans conversation existante', async () => {
+    const { document, rappels, erreurs } = await chargerPage({
+      autresReponses: {
+        obtenirSuggestionsDm: [
+          { id: 'alice', pseudo: 'alice', present: false, alias: null, avatar: null },
+        ],
+      },
+    });
+
+    (document.getElementById('open-new-dm') as HTMLButtonElement).click();
+    await vi.waitFor(() =>
+      expect(document.querySelector('.user-choice[data-user-id="alice"]')).not.toBeNull()
+    );
+
+    const avatar = document.querySelector(
+      '.user-choice[data-user-id="alice"] .avatar'
+    ) as HTMLElement;
+    expect(avatar.classList.contains('offline')).toBe(true);
+    expect(avatar.title).toBe(traductions.fr.dm.offline);
+
+    rappels.onPresenceChange?.({ utilisateurId: 'alice', statut: 'en-ligne' });
+    expect(avatar.classList.contains('offline')).toBe(false);
+    expect(avatar.title).toBe(traductions.fr.dm.online);
+
+    rappels.onPresenceChange?.({ utilisateurId: 'alice', statut: 'hors-ligne' });
+    expect(avatar.classList.contains('offline')).toBe(true);
+    expect(avatar.title).toBe(traductions.fr.dm.offline);
+    expect(erreurs).toEqual([]);
+  });
+
 });
