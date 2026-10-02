@@ -53,23 +53,26 @@ npm test               # vitest run
 npm run test:coverage  # avec couverture : 100 % exigé sur src/**/*.ts, RealGatewayRuntime.js et runtime/ (voir vitest.config.ts)
 npm run lint            # eslint . --ext .js,.jsx,.ts,.tsx
 npx tsc --noEmit        # compilation TypeScript sans émission
+npm audit --audit-level=high  # aucune vulnérabilité high/critical (vérifié en CI)
 npm run build           # build de la page de connexion (dist/login/)
 ```
 
 **Avant de considérer une tâche terminée**, dans cet ordre :
-`npx tsc --noEmit` → `npm run lint` → `npm test` (ou `test:coverage` si le
-changement touche la logique) → `npm run build`. Un changement qui touche
+`npm audit --audit-level=high` → `npx tsc --noEmit` → `npm run lint` → `npm test`
+(ou `test:coverage` si le changement touche la logique) → `npm run build`. Un changement qui touche
 au dashboard ou aux messages privés (JS vanilla, jamais compilé) ne sera
 détecté par **aucun** de ces outils s'il casse au runtime — le seul moyen
 fiable de le vérifier est de lancer l'app et de cliquer dedans (voir
 "Piège n°1" plus bas).
 
-CI (`.github/workflows/builds.yml`) : `npm ci && npm run lint &&
-npx tsc --noEmit && npm run test:coverage && npm run build:login` à chaque
+CI (`.github/workflows/builds.yml`) : `npm ci && npm audit --audit-level=high &&
+npm run lint && npx tsc --noEmit && npm run test:coverage && npm run build:login` à chaque
 PR, sur `main`/`develop`, et avant tout build multiplateforme (tag `v*` ou
 lancement manuel) — la couverture (100 %), les types et le build de la page
 de connexion sont donc vérifiés en CI. Le lint échoue au moindre
 avertissement (`--max-warnings=0`).
+
+**Audit des dépendances** : le CI lance `npm audit --audit-level=high` (dépendances de dev comprises). Si un avis `high` ou `critical` sans correctif compatible le bloque, forcer une version corrigée par un `overrides` ciblé dans `package.json` si elle existe ; sinon consigner l'exception dans une section « Limites connues » du README, à créer au besoin (paquet, avis, raison, condition de retrait). Ne pas retirer ni affaiblir l'étape.
 
 ## Architecture réelle (détail complet dans Infra/docs/architecture-frontend.md)
 

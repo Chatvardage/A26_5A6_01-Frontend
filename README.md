@@ -33,6 +33,7 @@ node scripts/start.js
 ## Vérifier et construire
 
 ```bash
+npm audit --audit-level=high
 npx tsc --noEmit
 npm run lint
 npm run test:coverage

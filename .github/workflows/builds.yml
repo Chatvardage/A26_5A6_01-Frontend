@@ -33,6 +33,9 @@ jobs:
           cache: npm
       - run: node scripts/verifier-version.mjs
       - run: npm ci
+      # Toutes les dépendances (dev comprises) : une vulnérabilité high ou
+      # critical ne doit pas pouvoir entrer sans faire échouer le CI.
+      - run: npm audit --audit-level=high
       - run: npm run lint
       # Types vérifiés à chaque PR : Vite et Vitest transpilent sans contrôler.
       - run: npx tsc --noEmit -p tsconfig.json
