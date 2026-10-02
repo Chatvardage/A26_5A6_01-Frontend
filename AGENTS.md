@@ -65,9 +65,11 @@ fiable de le vérifier est de lancer l'app et de cliquer dedans (voir
 "Piège n°1" plus bas).
 
 CI (`.github/workflows/builds.yml`) : `npm ci && npm run lint &&
-npm run test:coverage` à chaque PR, sur `main`/`develop`, et avant tout
-build multiplateforme (tag `v*` ou lancement manuel) — la couverture
-(100 %) est donc vérifiée en CI.
+npx tsc --noEmit && npm run test:coverage && npm run build:login` à chaque
+PR, sur `main`/`develop`, et avant tout build multiplateforme (tag `v*` ou
+lancement manuel) — la couverture (100 %), les types et le build de la page
+de connexion sont donc vérifiés en CI. Le lint échoue au moindre
+avertissement (`--max-warnings=0`).
 
 ## Architecture réelle (détail complet dans Infra/docs/architecture-frontend.md)
 
