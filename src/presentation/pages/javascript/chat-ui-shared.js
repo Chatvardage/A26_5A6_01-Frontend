@@ -147,6 +147,7 @@
       const bouton = document.createElement('button');
       bouton.type = 'button';
       bouton.classList.add('user-choice');
+      bouton.dataset.userId = user.id;
       bouton.disabled = desactive;
 
       const avatar = document.createElement('span');

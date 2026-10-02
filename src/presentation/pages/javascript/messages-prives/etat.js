@@ -299,6 +299,19 @@ function brancherPresence() {
     presences[presence.utilisateurId] = presence.statut;
     afficherPresenceCourante();
 
+    // Le sélecteur « Nouveau message privé » peut contenir un utilisateur
+    // avec qui aucune conversation n'existe encore. Sa présence doit donc
+    // être rafraîchie même dans ce cas, pendant que le dialogue reste ouvert.
+    const choixUtilisateur = Array.from(
+      dmDialogContent?.querySelectorAll('.user-choice[data-user-id]') ?? []
+    ).find((element) => element.dataset.userId === presence.utilisateurId);
+    const avatarChoix = choixUtilisateur?.querySelector('.avatar');
+    if (avatarChoix) {
+      const estEnLigne = presence.statut === 'en-ligne';
+      avatarChoix.classList.toggle('offline', !estEnLigne);
+      avatarChoix.title = estEnLigne ? t('dm.online') : t('dm.offline');
+    }
+
     const conversation = state.conversations.find(
       (item) => item.otherUser?.id === presence.utilisateurId
     );
