@@ -11,10 +11,21 @@ export type Etat = 'connecte' | 'deconnecte' | 'reconnexion';
  * Contient le statut de la connexion, le timestamp depuis lequel l'état est actif, et éventuellement le nombre de
  * reconnexions.
  */
+/**
+ * Raison pour laquelle la connexion n'est pas établie :
+ * 'hors-ligne' : le système d'exploitation n'a pas de réseau (aucune tentative n'est faite).
+ * 'serveur-injoignable' : le réseau est là, mais le serveur ne répond pas (tentatives avec délai croissant).
+ */
+export type CauseDeconnexion = 'hors-ligne' | 'serveur-injoignable';
+
 export interface EtatConnexion {
   readonly statut: Etat;
   readonly depuis: number;
   readonly reconnexions?: number;
+  /** Absente quand statut === 'connecte'. */
+  readonly cause?: CauseDeconnexion;
+  /** Timestamp (epoch ms) de la prochaine tentative planifiée, si une est planifiée. */
+  readonly prochaineTentative?: number;
 }
 
 /**
@@ -70,4 +81,19 @@ export function estDeconnecte(etat: EtatConnexion): boolean {
  */
 export function estEnReconnexion(etat: EtatConnexion): boolean {
   return etat.statut === 'reconnexion';
+}
+
+/**
+ * Nombre de secondes (arrondi au supérieur, jamais négatif) avant la prochaine tentative de reconnexion, ou null si
+ * aucune tentative n'est planifiée.
+ *
+ * @param etat L'état de connexion
+ * @param maintenant Le timestamp courant (epoch ms), par défaut Date.now()
+ */
+export function secondesAvantTentative(
+  etat: EtatConnexion,
+  maintenant: number = Date.now()
+): number | null {
+  if (etat.prochaineTentative === undefined) return null;
+  return Math.max(0, Math.ceil((etat.prochaineTentative - maintenant) / 1000));
 }

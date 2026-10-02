@@ -52,4 +52,13 @@ describe('i18n-web', () => {
       expect(() => t('fr', 'channels.send')).not.toThrow();
     });
   });
+
+  it('traduit les erreurs serveur (500, 502, 503, 504) et la limite (429) dans chaque langue', () => {
+    for (const langue of LANGUES_SUPPORTEES) {
+      for (const code of [429, 500, 502, 503, 504]) {
+        const cle = `errors.ERR_HTTP_${code}`;
+        expect(t(langue, cle)).not.toBe(cle);
+      }
+    }
+  });
 });

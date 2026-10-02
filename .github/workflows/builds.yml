@@ -6,28 +6,48 @@ permissions:
 env:
   CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
+# Lint et tests (couverture à 100 %) à chaque PR et sur les branches
+# principales ; les builds multiplateformes seulement sur un tag v* ou à la
+# demande.
 on:
   workflow_dispatch:
+  pull_request:
   push:
+    branches: [main, develop]
     tags:
       - 'v*'
+
+concurrency:
+  group: builds-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
+      - run: node scripts/verifier-version.mjs
       - run: npm ci
+      # Toutes les dépendances (dev comprises) : une vulnérabilité high ou
+      # critical ne doit pas pouvoir entrer sans faire échouer le CI.
+      - run: npm audit --audit-level=high
       - run: npm run lint
-      - run: npm test
+      # Types vérifiés à chaque PR : Vite et Vitest transpilent sans contrôler.
+      - run: npx tsc --noEmit -p tsconfig.json
+      # Couverture à 100 % exigée (voir vitest.config.ts).
+      - run: npm run test:coverage
+      # Bundle de la page de connexion : une erreur de build ne doit pas
+      # attendre le prochain tag pour être détectée.
+      - run: npm run build:login
 
   build:
     needs: lint-test
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     strategy:
       fail-fast: false
       matrix:
@@ -44,14 +64,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run ${{ matrix.script }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: ChatVardage-${{ matrix.artifact }}
           path: release/**

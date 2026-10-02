@@ -9,6 +9,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ChatVardage</title>
     <link rel="stylesheet" href="css/styles.css" />
+    <!-- Chargé AVANT le premier rendu : applique le thème mémorisé (voir
+         theme-browser.js), sinon flash du thème sombre à la navigation. -->
+    <script src="javascript/theme-browser.js"></script>
   </head>
   <body>
     <nav
@@ -25,24 +28,15 @@
         <span class="notif-dot notif-dot--rail" hidden></span>
       </button>
       <div class="rail-divider"></div>
-      <button
-        id="server-icon-projet"
-        class="server-icon active"
-        title="Projet"
-        aria-label="Serveur : Projet"
-        data-i18n-title="nav.project"
-        data-i18n-aria-label="nav.project"
-      >
-        P
-        <span class="notif-dot notif-dot--rail" hidden></span>
-      </button>
+      <!-- Icônes des serveurs insérées ici par le JS
+           (ChatUiShared.afficherRailServeurs), avant le « + ». -->
       <button
         id="open-create-channel-rail"
-        class="server-icon"
-        title="Créer un salon"
-        aria-label="Créer un salon"
-        data-i18n-title="nav.createChannel"
-        data-i18n-aria-label="nav.createChannel"
+        class="server-icon server-icon--add"
+        title="Ajouter un serveur"
+        aria-label="Ajouter un serveur"
+        data-i18n-title="servers.addTitle"
+        data-i18n-aria-label="servers.addTitle"
       >
         +
       </button>
@@ -50,50 +44,104 @@
 
     <aside id="channel-sidebar">
       <div class="sidebar-header">
-        <span id="server-name" data-i18n="nav.chatName">Nom chat</span>
+        <!-- Nom du serveur actif : ouvre son menu (paramètres, inviter,
+             quitter, supprimer selon le rôle). -->
+        <button
+          id="server-menu-btn"
+          class="server-menu-btn"
+          type="button"
+          disabled
+          title="Menu du serveur"
+          data-i18n-title="servers.menu"
+        >
+          <span id="server-name"></span>
+          <span class="server-menu-chevron" aria-hidden="true">▾</span>
+        </button>
         <button
           id="open-create-channel"
           class="icon-action"
+          hidden
           title="Créer un salon"
           data-i18n-title="nav.createChannel"
         >
           +
         </button>
       </div>
-      <ul id="channel-list">
-        <li class="category" data-i18n="nav.project">Projet</li>
-      </ul>
+      <ul id="channel-list"></ul>
       <button id="open-invitations" class="sidebar-action">
         <span data-i18n="nav.invitations">Invitations</span>
-        <span id="invitation-count" class="badge">0</span>
+        <span id="invitation-count" class="badge" hidden>0</span>
       </button>
       <div id="user-panel">
-        <div class="avatar"></div>
+        <!-- Photo (ou initiale) + pastille de présence : voir
+             ChatUiShared.afficherAvatarCourant. -->
+        <div id="current-user-avatar" class="avatar user-avatar"></div>
         <div class="user-info">
-          <select
-            id="current-user-select"
-            aria-label="Utilisateur simulé"
-            data-i18n-aria-label="nav.simulatedUser"
-          ></select>
-          <div class="user-meta">
-            <button
-              class="presence-label presence-toggle"
-              id="current-user-presence"
-              type="button"
-              data-i18n-title="network.changePresence"
-            >
-              En ligne
-            </button>
-            <select
-              id="language-select"
-              aria-label="Langue / Language"
-              class="language-select"
-            >
-              <option value="fr">FR</option>
-              <option value="en">EN</option>
-            </select>
+          <div class="current-user-row">
+            <span id="current-user-pseudo" class="current-user-pseudo"></span>
+            <span id="current-user-role-badge" class="role-badge" hidden></span>
           </div>
         </div>
+        <button
+          id="open-profile"
+          class="notif-settings-btn"
+          type="button"
+          title="Profil"
+          aria-label="Profil"
+          data-i18n-title="nav.profile"
+          data-i18n-aria-label="nav.profile"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <circle cx="8" cy="5.5" r="2.6" fill="currentColor" />
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              d="M2.6 14c.5-3 2.9-5 5.4-5s4.9 2 5.4 5"
+            />
+          </svg>
+        </button>
+        <button
+          id="logout-btn"
+          class="notif-settings-btn"
+          type="button"
+          title="Se déconnecter"
+          aria-label="Se déconnecter"
+          data-i18n-title="nav.logout"
+          data-i18n-aria-label="nav.logout"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M6.3 2.5H3.4a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H6.3"
+            />
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M9.8 5.2 12.9 8l-3.1 2.8M12.6 8H5.9"
+            />
+          </svg>
+        </button>
         <button
           id="open-notif-settings"
           class="notif-settings-btn"
@@ -176,6 +224,22 @@
               >
             </span>
           </label>
+          <label class="notif-menu-option notif-menu-option--case">
+            <input type="checkbox" id="notif-apercu" />
+            <span class="notif-menu-option-text">
+              <span
+                class="notif-menu-option-title"
+                data-i18n="notifications.previewTitle"
+                >Afficher le contenu</span
+              >
+              <span
+                class="notif-menu-option-desc"
+                data-i18n="notifications.previewDesc"
+                >Le texte du message apparaît dans la notification système,
+                même sur un écran verrouillé</span
+              >
+            </span>
+          </label>
         </div>
       </div>
     </aside>
@@ -183,7 +247,7 @@
     <main id="main">
       <header id="topbar">
         <div class="channel-name">
-          <span id="active-channel-name"># général</span>
+          <span id="active-channel-name"></span>
           <span
             id="private-indicator"
             class="private-indicator"
@@ -191,11 +255,24 @@
             data-i18n="channels.private"
             >Privé</span
           >
+          <button
+            id="open-room-settings"
+            class="icon-action"
+            type="button"
+            hidden
+            title="Paramètres du salon"
+            aria-label="Paramètres du salon"
+            data-i18n-title="roomSettings.title"
+            data-i18n-aria-label="roomSettings.title"
+          >
+            ⚙
+          </button>
         </div>
         <div class="topbar-actions">
           <button
             id="open-members"
-            class="secondary-button"
+            class="network-test-button"
+            disabled
             data-i18n="channels.members"
           >
             Membres
@@ -203,34 +280,31 @@
           <button
             id="open-invite-user"
             class="primary-button"
+            hidden
             data-i18n="channels.invite"
           >
             Inviter
           </button>
-          <div class="network-simulation">
-            <div
-              id="connection-status"
-              data-state="deconnecte"
-              aria-live="polite"
-            >
-              <span class="dot"></span>
-              <span id="connection-label">Déconnecté</span>
-            </div>
+          <div
+            id="connection-status"
+            class="connection-status"
+            data-state="inconnu"
+            role="status"
+            aria-live="polite"
+          >
+            <span class="dot" aria-hidden="true"></span>
+            <span class="connection-text">
+              <span id="connection-label"></span>
+              <span id="connection-detail" class="connection-detail" hidden></span>
+            </span>
             <button
-              id="simulate-network-cut"
-              class="network-test-button"
+              id="connection-retry"
+              class="connection-retry"
               type="button"
-              data-i18n="network.cut"
+              data-i18n="network.retryNow"
+              hidden
             >
-              Coupure
-            </button>
-            <button
-              id="simulate-network-reconnect"
-              class="network-test-button"
-              type="button"
-              data-i18n="network.reconnect"
-            >
-              Reconnexion
+              Réessayer
             </button>
           </div>
         </div>
@@ -294,6 +368,15 @@
     <script src="javascript/notif-prefs.js"></script>
     <script src="javascript/i18n-browser.js"></script>
     <script src="javascript/chat-ui-shared.js"></script>
+    <script src="javascript/logique-interface.js"></script>
+    <!-- Page des salons : scripts classiques, dans CET ordre (voir l'en-tête
+         de javascript/salons/etat.js) ; renderer.js la démarre, en dernier. -->
+    <script src="javascript/salons/etat.js"></script>
+    <script src="javascript/salons/historique.js"></script>
+    <script src="javascript/salons/affichage.js"></script>
+    <script src="javascript/salons/dialogues.js"></script>
+    <script src="javascript/salons/session.js"></script>
+    <script src="javascript/salons/temps-reel.js"></script>
     <script src="../../../renderer.js"></script>
   </body>
 </html>
