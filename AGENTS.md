@@ -58,8 +58,8 @@ npm run build           # build de la page de connexion (dist/login/)
 ```
 
 **Avant de considérer une tâche terminée**, dans cet ordre :
-`npx tsc --noEmit` → `npm run lint` → `npm test` (ou `test:coverage` si le
-changement touche la logique) → `npm run build` → `npm audit --audit-level=high`. Un changement qui touche
+`npm audit --audit-level=high` → `npx tsc --noEmit` → `npm run lint` → `npm test`
+(ou `test:coverage` si le changement touche la logique) → `npm run build`. Un changement qui touche
 au dashboard ou aux messages privés (JS vanilla, jamais compilé) ne sera
 détecté par **aucun** de ces outils s'il casse au runtime — le seul moyen
 fiable de le vérifier est de lancer l'app et de cliquer dedans (voir
