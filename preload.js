@@ -245,6 +245,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   obtenirPresences: () => ipcRenderer.invoke('presence:obtenir'),
   modifierPresence: (statut) =>
     ipcRenderer.invoke('presence:modifier', { statut }),
+  onSynchronisationRequise: (rappel) => {
+    const ecouteur = () => rappel();
+    ipcRenderer.on('reseau:synchronisation-requise', ecouteur);
+    return () =>
+      ipcRenderer.removeListener('reseau:synchronisation-requise', ecouteur);
+  },
   onEtatReseauChange: (rappel) => {
     const ecouteur = (_event, etat) => rappel(etat);
     ipcRenderer.on('reseau:etat-change', ecouteur);

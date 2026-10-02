@@ -1,5 +1,5 @@
 // Processus main d'Electron, découpé en modules (voir main.js et
-// Architecture.md). Notifications système et badge.
+// A26_5A6_01-Infra/docs/architecture-frontend.md). Notifications système et badge.
 const { app, nativeImage, Notification } = require('electron');
 const { t } = require('../i18n/i18n.js');
 const {

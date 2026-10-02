@@ -1,5 +1,5 @@
 // Processus main d'Electron, découpé en modules (voir main.js et
-// Architecture.md). Fenêtre principale, navigation et barre de titre.
+// A26_5A6_01-Infra/docs/architecture-frontend.md). Fenêtre principale, navigation et barre de titre.
 const { BrowserWindow, ipcMain, screen, shell } = require('electron');
 const path = require('path');
 const {

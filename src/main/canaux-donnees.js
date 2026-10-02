@@ -1,5 +1,5 @@
 // Processus main d'Electron, découpé en modules (voir main.js et
-// Architecture.md). Canaux IPC qui délèguent directement au gateway
+// A26_5A6_01-Infra/docs/architecture-frontend.md). Canaux IPC qui délèguent directement au gateway
 // (profil, utilisateurs, présence, serveurs, salons, messages).
 const { chatGateway } = require('./gateway');
 const { exposerCanal } = require('./securite');

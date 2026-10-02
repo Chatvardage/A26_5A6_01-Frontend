@@ -58,6 +58,24 @@ const UTILISATEUR_BRUT = {
 };
 
 describe('RealGatewayRuntime', () => {
+  it('demande une relecture REST quand le socket est authentifie, y compris apres reconnexion', () => {
+    vi.useFakeTimers();
+    const { runtime, socket } = creerRuntime();
+    const rappel = vi.fn();
+    runtime.on('synchronisation-requise', rappel);
+    runtime.connecterSocket();
+    expect(rappel).not.toHaveBeenCalled();
+    socket._declencher('connexion.prete');
+    expect(rappel).toHaveBeenCalledTimes(1);
+    const nouveauSocket = creerFauxSocket();
+    runtime.creerSocket = () => nouveauSocket;
+    runtime.connecterSocket();
+    nouveauSocket._declencher('connexion.prete');
+    expect(rappel).toHaveBeenCalledTimes(2);
+    runtime.fermerSocket();
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
     vi.restoreAllMocks();
   });

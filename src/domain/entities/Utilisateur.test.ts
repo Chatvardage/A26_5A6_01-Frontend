@@ -19,12 +19,12 @@ describe('creerUtilisateur', () => {
 
   it('crée un utilisateur avec courriel et rôle', () => {
     expect(
-      creerUtilisateur('u1', 'ariane', 'ariane@example.com', 'moderateur')
+      creerUtilisateur('u1', 'ariane', 'ariane@example.com', 'admin')
     ).toEqual({
       id: 'u1',
       pseudo: 'ariane',
       courriel: 'ariane@example.com',
-      role: 'moderateur',
+      role: 'admin',
     });
   });
 });

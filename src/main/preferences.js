@@ -1,5 +1,5 @@
 // Processus main d'Electron, découpé en modules (voir main.js et
-// Architecture.md). Préférences (thème, langue, notifications, profil public).
+// A26_5A6_01-Infra/docs/architecture-frontend.md). Préférences (thème, langue, notifications, profil public).
 const { Menu } = require('electron');
 const { LANGUE_PAR_DEFAUT, LANGUES_SUPPORTEES } = require('../i18n/i18n.js');
 const translations = require('../i18n/translations.json');

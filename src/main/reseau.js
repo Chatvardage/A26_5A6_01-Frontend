@@ -1,5 +1,5 @@
 // Processus main d'Electron, découpé en modules (voir main.js et
-// Architecture.md). Réseau du système d'exploitation.
+// A26_5A6_01-Infra/docs/architecture-frontend.md). Réseau du système d'exploitation.
 const { net, powerMonitor } = require('electron');
 const { chatGateway } = require('./gateway');
 

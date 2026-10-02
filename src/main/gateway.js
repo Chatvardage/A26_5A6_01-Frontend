@@ -1,5 +1,5 @@
 // Processus main d'Electron, découpé en modules (voir main.js et
-// Architecture.md). Instance unique du gateway.
+// A26_5A6_01-Infra/docs/architecture-frontend.md). Instance unique du gateway.
 const {
   RealGatewayRuntime,
 } = require('../infrastructure/gateways/RealGatewayRuntime.js');

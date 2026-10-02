@@ -1,5 +1,5 @@
 // Processus main d'Electron, découpé en modules (voir main.js et
-// Architecture.md). Session (connexion, déconnexion) et relais des événements du gateway.
+// A26_5A6_01-Infra/docs/architecture-frontend.md). Session (connexion, déconnexion) et relais des événements du gateway.
 const { etat, MODE_NOTIFICATION_PAR_DEFAUT } = require('./contexte');
 const { chatGateway } = require('./gateway');
 const { exposerCanal } = require('./securite');
@@ -127,5 +127,11 @@ chatGateway.on('message-supprime', (message) => {
 chatGateway.on('message-recu', (payload) => {
   if (etat.mainWindow && !etat.mainWindow.isDestroyed()) {
     etat.mainWindow.webContents.send('messages:nouveau', payload);
+  }
+});
+
+chatGateway.on('synchronisation-requise', () => {
+  if (etat.mainWindow && !etat.mainWindow.isDestroyed()) {
+    etat.mainWindow.webContents.send('reseau:synchronisation-requise');
   }
 });

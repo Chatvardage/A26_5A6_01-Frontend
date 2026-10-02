@@ -31,6 +31,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - run: node scripts/verifier-version.mjs
       - run: npm ci
       - run: npm run lint
       # Couverture à 100 % exigée (voir vitest.config.ts).

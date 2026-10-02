@@ -1,5 +1,5 @@
 // Processus main d'Electron, découpé en modules (voir main.js et
-// Architecture.md). Menu applicatif.
+// A26_5A6_01-Infra/docs/architecture-frontend.md). Menu applicatif.
 const { app, Menu } = require('electron');
 const { t } = require('../i18n/i18n.js');
 const { etat, isDev } = require('./contexte');

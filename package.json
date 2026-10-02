@@ -1,6 +1,6 @@
 {
   "name": "chatvardage",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "main": "main.js",
   "scripts": {
     "prestart": "node -e \"if (process.env.NODE_ENV !== 'development') { require('child_process').execSync('npm run build:login', { stdio: 'inherit' }); }\"",

@@ -3,11 +3,11 @@
  * (jamais choisi ni modifiable côté client).
  *
  * La modération des serveurs et salons ne dépend PAS de ce rôle global mais
- * du rôle de l'utilisateur dans chaque serveur (voir `Serveur.ts`). Seul
- * `admin` a des droits partout (et l'accès au Dashboard). `moderateur` global
- * est un reste de l'ancien modèle : il n'accorde plus aucun droit.
+ * du rôle de l'utilisateur dans chaque serveur (voir `Serveur.ts`) : le
+ * modérateur n'existe qu'à l'intérieur d'un serveur. Seul `admin` a des
+ * droits partout (et l'accès au Dashboard).
  */
-export type RoleUtilisateur = 'admin' | 'moderateur' | 'utilisateur';
+export type RoleUtilisateur = 'admin' | 'utilisateur';
 
 /**
  * Représente un utilisateur dans le système.

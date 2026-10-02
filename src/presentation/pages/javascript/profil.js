@@ -161,12 +161,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (el.courrielAffiche) el.courrielAffiche.textContent = utilisateur?.courriel ?? '';
     if (el.roleBadge) {
       const role = utilisateur?.role;
-      const cle =
-        role === 'admin'
-          ? 'channels.roleAdmin'
-          : role === 'moderateur'
-            ? 'channels.roleModerator'
-            : null;
+      // Rôle global : seul l'admin a un badge (le modérateur n'existe que
+      // dans un serveur).
+      const cle = role === 'admin' ? 'channels.roleAdmin' : null;
       el.roleBadge.hidden = !cle;
       el.roleBadge.textContent = cle ? t(cle) : '';
     }

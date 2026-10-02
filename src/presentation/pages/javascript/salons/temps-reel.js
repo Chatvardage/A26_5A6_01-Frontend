@@ -475,3 +475,12 @@ window.electronAPI.onMessageSupprimeChange((message) => {
   ChatUiShared.oublierEtatActionMessage(message?.messageId);
   appliquerMessageSalonSupprime(message?.messageId);
 });
+
+window.electronAPI.onSynchronisationRequise?.(async () => {
+  try {
+    await actualiser({ conserverPositionScroll: true });
+    await actualiserBadgeMessagesPrives();
+  } catch (erreur) {
+    notifier(messageErreur(erreur), true);
+  }
+});

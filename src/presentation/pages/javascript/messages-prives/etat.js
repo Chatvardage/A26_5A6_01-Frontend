@@ -281,12 +281,9 @@ function afficherUtilisateurCourant() {
   afficherPresenceCourante();
   if (currentUserRoleBadgeEl) {
     const role = state.utilisateurActuel?.role;
-    const cleRole =
-      role === 'admin'
-        ? 'channels.roleAdmin'
-        : role === 'moderateur'
-          ? 'channels.roleModerator'
-          : null;
+    // Rôle global : seul l'admin a un badge (le modérateur n'existe que
+    // dans un serveur, voir la page des salons).
+    const cleRole = role === 'admin' ? 'channels.roleAdmin' : null;
     currentUserRoleBadgeEl.hidden = !cleRole;
     currentUserRoleBadgeEl.textContent = cleRole ? t(cleRole) : '';
     currentUserRoleBadgeEl.title = cleRole ? t(cleRole) : '';

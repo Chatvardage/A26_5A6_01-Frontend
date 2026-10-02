@@ -184,6 +184,15 @@ window.addEventListener('DOMContentLoaded', async () => {
     notifierErreur: (erreur) => notifier(messageErreur(erreur), true),
   });
 
+  window.electronAPI.onSynchronisationRequise?.(async () => {
+    try {
+      await refreshConversations({ conserverPositionScroll: true });
+      await actualiserBadgeSalons();
+    } catch (erreur) {
+      notifier(messageErreur(erreur), true);
+    }
+  });
+
   window.electronAPI.onEtatReseauChange((nouvelEtat) => {
     afficherEtatReseau(nouvelEtat);
   });
