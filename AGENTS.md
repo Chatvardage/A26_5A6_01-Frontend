@@ -14,7 +14,7 @@ son propre README et son propre docker-compose.yml. Un agent qui travaille
 ici n'a pas à implémenter cette API ; ce dépôt ne fait qu'y **consommer**
 via `RealGatewayRuntime.js` (voir plus bas).
 
-> L’[architecture dans Infra](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/develop/docs/architecture-frontend.md) décrit la structure **réelle** du code
+> L’[architecture dans Infra](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/main/docs/architecture-frontend.md) décrit la structure **réelle** du code
 > (processus main, preload, pages, flux de session/préférences/fenêtre).
 > Le garder à jour quand on ajoute un fichier, un canal IPC important ou un
 > flux.

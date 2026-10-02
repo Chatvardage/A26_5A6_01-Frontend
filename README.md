@@ -4,7 +4,7 @@ Application Electron de clavardage connectée aux services HTTP et temps réel d
 
 ## Démarrer
 
-1. Suivre le [démarrage complet dans Infra](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/develop/README.md) puis y lancer `./scripts/healthcheck.sh`.
+1. Suivre le [démarrage complet dans Infra](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/main/README.md) puis y lancer `./scripts/healthcheck.sh`.
 2. Installer Node.js 22 et npm sur le poste desktop (le backend tourne entièrement dans Docker).
 3. Dans ce dépôt :
 
@@ -43,6 +43,6 @@ Installateurs : `npm run build:win`, `npm run build:mac`, `npm run build:linux` 
 
 ## Documentation
 
-L’[architecture du frontend](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/develop/docs/architecture-frontend.md), le [guide détaillé](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/develop/docs/services/Frontend.md), le [contrat réseau](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/develop/docs/api/frontend.md) et la [validation fonctionnelle](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/develop/docs/validation.md) sont centralisés dans Infra. Voir [AGENTS.md](AGENTS.md) pour contribuer.
+L’[architecture du frontend](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/main/docs/architecture-frontend.md), le [guide détaillé](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/main/docs/services/Frontend.md), le [contrat réseau](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/main/docs/api/frontend.md) et la [validation fonctionnelle](https://github.com/Chatvardage/A26_5A6_01-Infra/blob/main/docs/validation.md) sont centralisés dans Infra. Voir [AGENTS.md](AGENTS.md) pour contribuer.
 
 Le CI vérifie la cohérence entre la version déclarée, le fichier de verrouillage npm et les tags de publication.
