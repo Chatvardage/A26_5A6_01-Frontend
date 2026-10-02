@@ -64,8 +64,8 @@ détecté par **aucun** de ces outils s'il casse au runtime — le seul moyen
 fiable de le vérifier est de lancer l'app et de cliquer dedans (voir
 "Piège n°1" plus bas).
 
-CI (`.github/workflows/builds.yml`) : `npm ci && npm run lint &&
-npx tsc --noEmit && npm run test:coverage && npm run build:login` à chaque
+CI (`.github/workflows/builds.yml`) : `npm ci && npm audit --audit-level=high &&
+npm run lint && npx tsc --noEmit && npm run test:coverage && npm run build:login` à chaque
 PR, sur `main`/`develop`, et avant tout build multiplateforme (tag `v*` ou
 lancement manuel) — la couverture (100 %), les types et le build de la page
 de connexion sont donc vérifiés en CI. Le lint échoue au moindre
