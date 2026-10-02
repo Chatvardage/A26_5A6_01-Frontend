@@ -34,8 +34,13 @@ jobs:
       - run: node scripts/verifier-version.mjs
       - run: npm ci
       - run: npm run lint
+      # Types vérifiés à chaque PR : Vite et Vitest transpilent sans contrôler.
+      - run: npx tsc --noEmit -p tsconfig.json
       # Couverture à 100 % exigée (voir vitest.config.ts).
       - run: npm run test:coverage
+      # Bundle de la page de connexion : une erreur de build ne doit pas
+      # attendre le prochain tag pour être détectée.
+      - run: npm run build:login
 
   build:
     needs: lint-test
