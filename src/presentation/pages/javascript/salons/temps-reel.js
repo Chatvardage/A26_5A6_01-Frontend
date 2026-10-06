@@ -87,8 +87,10 @@ async function ouvrirConversation(cible) {
     if (etat.salons.some((salon) => salon.id === conversationId)) {
       afficherTout();
     } else {
-      void actualiser();
+      await actualiser();
     }
+    // Résultat de recherche : jusqu'au message lui-même.
+    if (cible.messageId) await allerAuMessageSalon(cible.messageId);
   } else if (cible.type === 'prive') {
     await window.electronAPI.definirCibleNavigation({
       type: 'prive',

@@ -575,6 +575,10 @@ function afficherMessages(options = {}) {
             creerActionsMessage(message, texteEl, estMessagePersonnel)
           );
       }
+      article.dataset.messageId = message.id;
+      if (ChatUiShared.estMessageCible(message.id)) {
+        article.classList.add('message-cible');
+      }
       if (message === dernierLivre && lecturesSalon.salonId === salon.id) {
         const vuPar = ChatUiShared.texteVuPar(
           LogiqueInterface.lecteursJusqua(
@@ -584,11 +588,8 @@ function afficherMessages(options = {}) {
           ),
           t
         );
-        if (vuPar) {
-          article
-            .querySelector('.message-body')
-            ?.appendChild(ChatUiShared.creerLigneLecture(vuPar));
-        }
+        // Juste sous le message, au-dessus de Modifier / Supprimer.
+        if (vuPar) texteEl.after(ChatUiShared.creerLigneLecture(vuPar));
       }
       el.messages.appendChild(article);
     });
@@ -621,7 +622,7 @@ function afficherMessages(options = {}) {
  * défilement automatique près du haut de la liste (voir l'écouteur 'scroll'
  * plus bas).
  */
-async function chargerMessagesPlusAnciensSalon() {
+async function chargerMessagesPlusAnciensSalon({ taille } = {}) {
   const salon = salonActif();
   if (
     !salon ||
@@ -629,7 +630,7 @@ async function chargerMessagesPlusAnciensSalon() {
     etatHistoriqueSalon.enChargement ||
     etatHistoriqueSalon.finHistorique
   ) {
-    return;
+    return false;
   }
 
   const plusAncienCharge =
@@ -643,9 +644,10 @@ async function chargerMessagesPlusAnciensSalon() {
       salonId: salon.id,
       utilisateurId: utilisateurActuelId,
       avantId: plusAncienCharge?.id,
+      ...(taille ? { taille } : {}),
     });
     if (etatHistoriqueSalon.salonId !== salon.id) {
-      return;
+      return false;
     }
     etatHistoriqueSalon.messagesAnciens = fusionnerHistorique(
       etatHistoriqueSalon.messagesAnciens,
@@ -653,8 +655,10 @@ async function chargerMessagesPlusAnciensSalon() {
       'date'
     );
     etatHistoriqueSalon.finHistorique = resultat.finHistorique;
+    return true;
   } catch (erreur) {
     notifier(messageErreur(erreur), true);
+    return false;
   } finally {
     if (etatHistoriqueSalon.salonId === salon.id) {
       etatHistoriqueSalon.enChargement = false;
@@ -773,4 +777,36 @@ async function appliquerLecture(lecture) {
     ],
   };
   afficherMessages({ garderScroll: true });
+}
+
+// Saut vers un message ancien (résultat de recherche) : pages plus grandes
+// que la pagination normale, et un plafond pour un très long historique.
+const TAILLE_PAGE_SAUT = 100;
+const PAGES_MAX_SAUT = 20;
+
+/**
+ * Affiche le message `messageId` du salon affiché : charge l'historique
+ * plus ancien jusqu'à lui (sans trou, comme « Charger plus »), puis défile
+ * jusqu'à lui et le met en évidence.
+ */
+async function allerAuMessageSalon(messageId) {
+  const estCharge = () => {
+    const salon = salonActif();
+    return Boolean(
+      salon &&
+      (LogiqueInterface.contientMessage(salon.messages, messageId) ||
+        (etatHistoriqueSalon.salonId === salon.id &&
+          LogiqueInterface.contientMessage(
+            etatHistoriqueSalon.messagesAnciens,
+            messageId
+          )))
+    );
+  };
+  for (let page = 0; !estCharge() && page < PAGES_MAX_SAUT; page += 1) {
+    if (!(await chargerMessagesPlusAnciensSalon({ taille: TAILLE_PAGE_SAUT })))
+      break;
+  }
+  if (!ChatUiShared.allerAuMessageAffiche(el.messages, messageId)) {
+    notifier(t('search.messageNotFound'), true);
+  }
 }

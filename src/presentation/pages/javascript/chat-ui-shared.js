@@ -895,7 +895,11 @@
 
     bouton.append(meta, extrait);
     bouton.addEventListener('click', () =>
-      surChoix({ type: resultat.type, conversationId: resultat.conversationId })
+      surChoix({
+        type: resultat.type,
+        conversationId: resultat.conversationId,
+        messageId: message.id,
+      })
     );
     const item = document.createElement('li');
     item.appendChild(bouton);
@@ -1063,6 +1067,40 @@
     return ligne;
   }
 
+  // --- Aller à un message (résultat de recherche) ---------------------------
+  // Message mis en évidence quelques secondes ; gardé ici pour que les
+  // rendus suivants (accusés de lecture, message reçu) le conservent.
+  const DUREE_MISE_EN_EVIDENCE_MS = 2500;
+  let messageCible = { id: null, jusqua: 0 };
+
+  /** Vrai si la ligne du message `messageId` doit être mise en évidence. */
+  function estMessageCible(messageId) {
+    return messageCible.id === messageId && Date.now() < messageCible.jusqua;
+  }
+
+  /**
+   * Fait défiler `conteneur` jusqu'au message `messageId` (lignes marquées
+   * `data-message-id`) et le met en évidence. Faux s'il n'est pas affiché.
+   */
+  function allerAuMessageAffiche(conteneur, messageId) {
+    const ligne = [...conteneur.querySelectorAll('[data-message-id]')].find(
+      (element) => element.dataset.messageId === messageId
+    );
+    if (!ligne) return false;
+    messageCible = {
+      id: messageId,
+      jusqua: Date.now() + DUREE_MISE_EN_EVIDENCE_MS,
+    };
+    ligne.classList.add('message-cible');
+    ligne.scrollIntoView?.({ block: 'center' });
+    window.setTimeout(() => {
+      conteneur
+        .querySelectorAll('.message-cible')
+        .forEach((element) => element.classList.remove('message-cible'));
+    }, DUREE_MISE_EN_EVIDENCE_MS);
+    return true;
+  }
+
   /** « Vu par alice, bob et 3 autres » (null si personne). */
   function texteVuPar(noms, t) {
     if (!noms.length) return null;
@@ -1078,6 +1116,8 @@
   }
 
   window.ChatUiShared = Object.freeze({
+    estMessageCible,
+    allerAuMessageAffiche,
     creerSeparateurNonLus,
     creerStatutLecture,
     creerLigneLecture,

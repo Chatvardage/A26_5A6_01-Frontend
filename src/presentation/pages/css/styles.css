@@ -2006,3 +2006,10 @@ dialog::backdrop {
 .own-message .read-receipt {
   text-align: right;
 }
+
+/* Message atteint depuis la recherche : mis en évidence quelques secondes
+   (voir ChatUiShared.allerAuMessageAffiche). */
+.message-row.message-cible .text {
+  box-shadow: 0 0 0 2px var(--primary);
+  transition: box-shadow 0.3s ease;
+}

@@ -52,6 +52,8 @@ window.addEventListener('DOMContentLoaded', async () => {
       await renderActiveConversation();
       renderConversationList();
       mettreAJourBadgeApplication();
+      // Résultat de recherche : jusqu'au message lui-même.
+      if (cible.messageId) await allerAuMessageDm(cible.messageId);
     } else if (cible.type === 'salon') {
       await window.electronAPI.definirCibleNavigation({
         type: 'salon',

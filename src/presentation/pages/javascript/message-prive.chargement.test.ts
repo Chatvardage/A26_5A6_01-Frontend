@@ -691,5 +691,77 @@ describe('page des messages privés', () => {
       });
       await vi.waitFor(() => expect(appels.obtenirNonLus).toBe(avant + 1));
     });
+
+    it('« Lu à … » juste sous le message, au-dessus de Modifier / Supprimer', async () => {
+      const { document } = await chargerPage({
+        attendreMessages: false,
+        autresReponses: {
+          obtenirConversationsPrivees: conversationAvec([
+            dm('m1', 'moi', 'mon message', 1),
+          ]),
+          obtenirLectures: {
+            lecteurs: [{ utilisateurId: 'bob', nom: 'bob', luJusqua: 1 }],
+          },
+        },
+      });
+      await vi.waitFor(() =>
+        expect(document.querySelector('.read-receipt')).not.toBeNull()
+      );
+      const corps = document.querySelector('.message-row .message-body')!;
+      const ordre = [...corps.children].map((e) => e.className.split(' ')[0]);
+      expect(ordre.indexOf('read-receipt')).toBe(ordre.indexOf('text') + 1);
+      expect(ordre.at(-1)).not.toBe('read-receipt');
+    });
+  });
+
+  it('recherche : charge l’historique jusqu’au message choisi et le met en évidence', async () => {
+    const demandes: unknown[] = [];
+    const { document, window } = await chargerPage({
+      autresReponses: {
+        obtenirConversationsPrivees: [
+          { ...conversations()[0], finHistorique: false },
+        ],
+        rechercherMessages: {
+          resultats: [
+            {
+              type: 'prive',
+              conversationId: 'bob:moi',
+              auteurNom: 'bob',
+              message: dm('ancien', 'bob', 'un vieux message', 0),
+            },
+          ],
+          curseurSuivant: null,
+        },
+        obtenirMessagesPriveesAvant: (donnees: unknown) => {
+          demandes.push(donnees);
+          return {
+            messages: [dm('ancien', 'bob', 'un vieux message', 0)],
+            finHistorique: true,
+          };
+        },
+      },
+    });
+    const dialogue =
+      document.querySelector<HTMLDialogElement>('#search-dialog')!;
+    const champ = dialogue.querySelector<HTMLInputElement>('.search-input')!;
+    document.getElementById('open-search')?.click();
+    champ.value = 'vieux';
+    champ.dispatchEvent(new window.Event('input'));
+    await vi.waitFor(() =>
+      expect(dialogue.querySelectorAll('.search-result')).toHaveLength(1)
+    );
+    dialogue.querySelector<HTMLElement>('.search-result')?.click();
+
+    await vi.waitFor(() =>
+      expect(
+        document
+          .querySelector('[data-message-id="ancien"]')
+          ?.classList.contains('message-cible')
+      ).toBe(true)
+    );
+    expect(demandes).toEqual([
+      expect.objectContaining({ avantId: 'm1', taille: 100 }),
+    ]);
+    expect(textes(document)).toEqual(['un vieux message', 'salut']);
   });
 });

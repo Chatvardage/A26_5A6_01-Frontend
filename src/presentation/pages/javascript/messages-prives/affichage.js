@@ -310,6 +310,10 @@ async function renderActiveConversation(options = {}) {
     });
 
     row.classList.add('message-row');
+    row.dataset.messageId = message.id;
+    if (ChatUiShared.estMessageCible(message.id)) {
+      row.classList.add('message-cible');
+    }
     if (isOwn) {
       row.classList.add('own-message');
     }
@@ -424,7 +428,7 @@ function creerActionsMessageNonLivre(message) {
   });
 }
 
-async function chargerMessagesPlusAnciensDm() {
+async function chargerMessagesPlusAnciensDm({ taille } = {}) {
   const conversation = state.conversations.find(
     (entry) => entry.id === state.activeConversationId
   );
@@ -434,7 +438,7 @@ async function chargerMessagesPlusAnciensDm() {
     etatHistoriqueDm.enChargement ||
     etatHistoriqueDm.finHistorique
   ) {
-    return;
+    return false;
   }
 
   const plusAncienCharge =
@@ -448,17 +452,20 @@ async function chargerMessagesPlusAnciensDm() {
       conversationId: conversation.id,
       utilisateurId: state.currentUserId,
       avantId: plusAncienCharge?.id,
+      ...(taille ? { taille } : {}),
     });
     if (etatHistoriqueDm.conversationId !== conversation.id) {
-      return;
+      return false;
     }
     etatHistoriqueDm.messagesAnciens = fusionnerHistoriqueDm(
       etatHistoriqueDm.messagesAnciens,
       resultat.messages
     );
     etatHistoriqueDm.finHistorique = resultat.finHistorique;
+    return true;
   } catch (erreur) {
     notifier(messageErreur(erreur), true);
+    return false;
   } finally {
     if (etatHistoriqueDm.conversationId === conversation.id) {
       etatHistoriqueDm.enChargement = false;
@@ -511,4 +518,39 @@ async function appliquerLecture(lecture) {
     luJusqua: Math.max(lecturesDm.luJusqua ?? 0, lecture.luJusqua),
   };
   await renderActiveConversation({ garderScroll: true });
+}
+
+// Saut vers un message ancien (résultat de recherche) : pages plus grandes
+// que la pagination normale, et un plafond pour un très long historique.
+const TAILLE_PAGE_SAUT_DM = 100;
+const PAGES_MAX_SAUT_DM = 20;
+
+/**
+ * Affiche le message `messageId` de la conversation affichée : charge
+ * l'historique plus ancien jusqu'à lui (sans trou, comme « Charger plus »),
+ * puis défile jusqu'à lui et le met en évidence.
+ */
+async function allerAuMessageDm(messageId) {
+  const estCharge = () => {
+    const conversation = trouverConversation(state.activeConversationId);
+    return Boolean(
+      conversation &&
+      (LogiqueInterface.contientMessage(
+        conversation.messages ?? [],
+        messageId
+      ) ||
+        (etatHistoriqueDm.conversationId === conversation.id &&
+          LogiqueInterface.contientMessage(
+            etatHistoriqueDm.messagesAnciens,
+            messageId
+          )))
+    );
+  };
+  for (let page = 0; !estCharge() && page < PAGES_MAX_SAUT_DM; page += 1) {
+    if (!(await chargerMessagesPlusAnciensDm({ taille: TAILLE_PAGE_SAUT_DM })))
+      break;
+  }
+  if (!ChatUiShared.allerAuMessageAffiche(messageList, messageId)) {
+    notifier(t('search.messageNotFound'), true);
+  }
 }

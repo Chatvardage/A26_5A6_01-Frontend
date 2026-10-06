@@ -761,5 +761,109 @@ describe('page des salons (scripts découpés)', () => {
       });
       await vi.waitFor(() => expect(appels.obtenirNonLus).toBe(avant + 1));
     });
+
+    it('« Vu par » juste sous le message, au-dessus de Modifier / Supprimer', async () => {
+      const etat = etatInitial();
+      etat.salons[0].messages = [message('m1', 'moi', 'mon message', 1)];
+      const { document } = await chargerPage({
+        autresReponses: {
+          obtenirEtatSalons: etat,
+          obtenirLectures: {
+            lecteurs: [{ utilisateurId: 'bob', nom: 'bob', luJusqua: 1 }],
+          },
+        },
+      });
+      await vi.waitFor(() =>
+        expect(document.querySelector('.read-receipt')).not.toBeNull()
+      );
+      const corps = document.querySelector('.message-row .message-body')!;
+      const ordre = [...corps.children].map((e) => e.className.split(' ')[0]);
+      expect(ordre.indexOf('read-receipt')).toBe(ordre.indexOf('text') + 1);
+      expect(ordre.at(-1)).not.toBe('read-receipt');
+    });
+  });
+
+  describe('recherche : aller au message', () => {
+    const page = (window: JSDOM['window']) => {
+      window.HTMLDialogElement.prototype.showModal = function () {
+        this.setAttribute('open', '');
+      };
+      window.HTMLDialogElement.prototype.close = function () {
+        this.removeAttribute('open');
+      };
+    };
+    const rechercherEtCliquer = async (
+      document: Document,
+      window: JSDOM['window']
+    ) => {
+      const dialogue =
+        document.querySelector<HTMLDialogElement>('#search-dialog')!;
+      const champ = dialogue.querySelector<HTMLInputElement>('.search-input')!;
+      document.querySelector<HTMLElement>('#open-search')?.click();
+      champ.value = 'vieux';
+      champ.dispatchEvent(new window.Event('input'));
+      await vi.waitFor(() =>
+        expect(dialogue.querySelectorAll('.search-result')).toHaveLength(1)
+      );
+      dialogue.querySelector<HTMLElement>('.search-result')?.click();
+    };
+    const resultat = {
+      type: 'salon',
+      conversationId: 'general',
+      auteurNom: 'bob',
+      message: message('ancien', 'bob', 'un vieux message', 0),
+    };
+
+    it('charge l’historique jusqu’au message, puis le met en évidence', async () => {
+      const etat = etatInitial();
+      etat.salons[0].finHistorique = false;
+      const demandes: unknown[] = [];
+      const { document, window } = await chargerPage({
+        autresReponses: {
+          obtenirEtatSalons: etat,
+          rechercherMessages: { resultats: [resultat], curseurSuivant: null },
+          obtenirMessagesSalonAvant: (donnees: unknown) => {
+            demandes.push(donnees);
+            return {
+              messages: [message('ancien', 'bob', 'un vieux message', 0)],
+              finHistorique: true,
+            };
+          },
+        },
+      });
+      page(window);
+      await rechercherEtCliquer(document, window);
+
+      await vi.waitFor(() =>
+        expect(
+          document
+            .querySelector('[data-message-id="ancien"]')
+            ?.classList.contains('message-cible')
+        ).toBe(true)
+      );
+      expect(demandes).toEqual([
+        expect.objectContaining({
+          salonId: 'general',
+          avantId: 'm1',
+          taille: 100,
+        }),
+      ]);
+      expect(textes(document)).toEqual(['un vieux message', 'salut']);
+    });
+
+    it('message disparu de l’historique : message d’erreur', async () => {
+      const { document, window } = await chargerPage({
+        autresReponses: {
+          rechercherMessages: { resultats: [resultat], curseurSuivant: null },
+        },
+      });
+      page(window);
+      await rechercherEtCliquer(document, window);
+      await vi.waitFor(() =>
+        expect(document.querySelector('#toast')?.textContent).toBe(
+          traductions.fr.search.messageNotFound
+        )
+      );
+    });
   });
 });

@@ -338,7 +338,8 @@
       "noConversation": "Ouvre un salon ou une conversation pour y chercher.",
       "searching": "Recherche…",
       "noResults": "Aucun message trouvé.",
-      "more": "Plus de résultats"
+      "more": "Plus de résultats",
+      "messageNotFound": "Ce message n'est plus dans l'historique (supprimé ou trop ancien)."
     },
     "readReceipts": {
       "newMessages": "Nouveaux messages",
@@ -689,7 +690,8 @@
       "noConversation": "Open a channel or a conversation to search it.",
       "searching": "Searching…",
       "noResults": "No messages found.",
-      "more": "More results"
+      "more": "More results",
+      "messageNotFound": "This message is no longer in the history (deleted or too old)."
     },
     "readReceipts": {
       "newMessages": "New messages",
