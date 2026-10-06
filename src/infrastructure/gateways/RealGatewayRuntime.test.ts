@@ -715,6 +715,32 @@ describe('RealGatewayRuntime', () => {
       expect(await runtime.obtenirNonLus()).toEqual({ salons: {}, prives: {} });
     });
 
+    it('accepte les réponses vides pour les non-lus et les accusés de lecture', async () => {
+      const { runtime } = creerRuntime();
+      runtime.utilisateurConnecte = { id: 'moi', pseudo: 'moi' };
+      vi.spyOn(runtime, 'resoudrePseudos').mockResolvedValue(undefined);
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      for (const reponse of [
+        { ok: true, status: 204, json: async () => null },
+        reponseJson(null),
+      ]) {
+        fetchMock.mockResolvedValue(reponse);
+        await expect(runtime.obtenirNonLus()).resolves.toEqual({
+          salons: {},
+          prives: {},
+        });
+        for (const type of ['salon', 'prive']) {
+          await expect(
+            runtime.obtenirLectures({
+              type,
+              conversationId: type === 'salon' ? 'r1' : 'moi:u2',
+            })
+          ).resolves.toEqual({ lecteurs: [] });
+        }
+      }
+    });
+
     it('marque un salon ou une conversation privée comme lu', async () => {
       const { runtime } = creerRuntime();
       runtime.utilisateurConnecte = { id: 'moi', pseudo: 'moi' };

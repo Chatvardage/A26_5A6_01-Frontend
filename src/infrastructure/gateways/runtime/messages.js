@@ -213,7 +213,7 @@ module.exports = {
   async obtenirNonLus() {
     const nonLus = { salons: {}, prives: {} };
     if (!this.utilisateurConnecte) return nonLus;
-    const { counts } = await this.appelHttp('/api/messages/unread');
+    const { counts } = (await this.appelHttp('/api/messages/unread')) ?? {};
     for (const [idServeur, nombre] of Object.entries(counts ?? {})) {
       const locale = this.versConversationLocale(idServeur);
       if (!locale || !(nombre > 0)) continue;
@@ -305,16 +305,16 @@ module.exports = {
   async obtenirLectures({ type, conversationId }) {
     const bruts =
       type === 'salon'
-        ? (
+        ? ((
             await this.appelHttp(
               `/api/messages/rooms/${encodeURIComponent(conversationId)}/read-states`
             )
-          ).lecteurs
+          )?.lecteurs ?? [])
         : [
             await this.appelHttp(
               `/api/messages/conversations/${encodeURIComponent(this.autreParticipantDm(conversationId))}/read-state`
             ),
-          ];
+          ].filter(Boolean);
     await this.resoudrePseudos(bruts.map((brut) => brut.userId));
     return {
       lecteurs: bruts.map((brut) => ({

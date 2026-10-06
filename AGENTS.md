@@ -281,3 +281,15 @@ conflit Git (`<<<<<<<`, `=======`, `>>>>>>>`) ne traîne dans le diff.
 ## Documentation centrale
 
 Infra est la référence du démarrage complet, des architectures, contrats et scénarios de validation. Le README local décrit le dépôt et ses commandes; les guides détaillés sont dans `A26_5A6_01-Infra/docs/`. Toute modification de contrat doit mettre à jour la référence centrale et ses liens.
+
+## Revue PR #100 — décisions du 6 octobre 2026
+
+- Réponses HTTP vides : correction retenue pour les non-lus et les lecteurs, y compris le DM (204 produit undefined dans appelHttp). Tests de régression pour 204 et JSON null.
+- versConversationLocale sans session : pas de garde supplémentaire; son appelant obtenirNonLus vérifie la session avant de convertir les identifiants. Aucun autre appel de production ne nécessite ce cas.
+- totalNonLus avec un type inconnu : pas de changement; les appelants utilisent salon ou prive. Accepter silencieusement une valeur hors contrat masquerait une erreur d'appel.
+- Math.max avec une lecture absente : pas de repli à zéro; traiterLectureEntrante fournit une date numérique. La validation des dates Redis est renforcée dans Message-Service, à la source. Un repli nullish ne corrigerait d'ailleurs pas NaN.
+- Minuteur après fermeture de recherche : reporté; il peut déclencher une requête bornée supplémentaire, sans fuite de données ni changement de conversation. Ce coût ponctuel ne justifie pas de modifier le cycle de vie du dialogue dans cette correction.
+- Suppression du canal resumes-conversations-privees : conservée; la recherche dans les fichiers de production ne trouve plus de consommateur. La suppression est intentionnelle, les non-lus viennent du serveur.
+- CSS :has() : conservé; Electron embarque une version de Chromium compatible (voir la version Electron de package.json).
+
+Validation : Node 22.23.2, npm ci --ignore-scripts, audit high, TypeScript, lint, 263 tests (couverture 100 %) et build passent. Le lockfile met à jour uniquement http-cache-semantics 4.2.0 vers 4.3.0 et source-map-js 1.2.1 vers 1.2.2 pour retirer les deux avis high. Il reste huit avis modérés. La première tentative de tests sous Node 18 échouait au chargement de Vitest; Node 22 est requis par le projet. Les changements concernent le runtime main testé, sans modification des pages; pas de validation manuelle Electron effectuée.
