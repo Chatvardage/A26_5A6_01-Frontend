@@ -289,6 +289,12 @@ function brancherMessagesRecus() {
       }
       NotifPrefs.traiterMessageRecu(messageNormalise, {
         utilisateurId: state.currentUserId,
+        api: window.electronAPI,
+        surNonLusActualises: async () => {
+          renderConversationList();
+          await actualiserBadgeSalons({ recharger: false });
+          mettreAJourBadgeApplication();
+        },
         surSalon: async () => {
           // Aucun appel réseau : les compteurs suffisent aux pastilles.
           await actualiserBadgeSalons({ recharger: false });

@@ -310,7 +310,7 @@
   // conversations privées) — elle reste donc du ressort de l'appelant, via
   // les callbacks `surSalon`/`surPrive`.
   async function traiterMessageRecu(message, options) {
-    const { utilisateurId, surSalon, surPrive, notifierMessageSysteme } =
+    const { utilisateurId, surSalon, surPrive, notifierMessageSysteme, api, surNonLusActualises } =
       options ?? {};
     try {
       const mode = obtenirMode(utilisateurId);
@@ -342,6 +342,11 @@
             ? message
             : { ...message, contenu: '', apercuMasque: true }
         );
+      }
+      // Le snapshot HTTP peut déjà inclure cet événement arrivé en retard.
+      if (api && message.auteurId !== utilisateurId) {
+        await chargerNonLus(api);
+        await surNonLusActualises?.();
       }
     } catch (erreur) {
       console.error('[notifications:message-recu] ERREUR:', erreur);

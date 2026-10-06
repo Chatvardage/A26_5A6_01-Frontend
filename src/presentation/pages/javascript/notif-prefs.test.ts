@@ -445,3 +445,34 @@ it.each(['salon', 'prive'])(
     await vi.waitFor(() => expect(NotifPrefs.nombreNonLus(type, conversationId)).toBe(0));
   }
 );
+
+it.each([['salon', true], ['prive', true], ['salon', false], ['prive', false]] as const)(
+  'réconcilie un événement %s après snapshot (déjà inclus : %s)',
+  async (type, dejaInclus) => {
+    const conversationId = `retard-${type}`;
+    const nonLus = (nombre: number) => ({
+      salons: type === 'salon' ? { [conversationId]: nombre } : {},
+      prives: type === 'prive' ? { [conversationId]: nombre } : {},
+    });
+    const serveur = api(nonLus(1));
+    await NotifPrefs.chargerNonLus(serveur);
+    NotifPrefs.ajouterNonLu(type, conversationId);
+    expect(NotifPrefs.nombreNonLus(type, conversationId)).toBe(2);
+    const nombreServeur = dejaInclus ? 1 : 2;
+    let repondre!: (valeur: ReturnType<typeof nonLus>) => void;
+    serveur.obtenirNonLus.mockImplementationOnce(() => new Promise((r) => { repondre = r; }));
+    const rafraichirBadges = vi.fn(() => {
+      expect(NotifPrefs.nombreNonLus(type, conversationId)).toBe(nombreServeur);
+    });
+    const enCours = NotifPrefs.traiterMessageRecu(
+      { type, conversationId, auteurId: 'autre' },
+      { utilisateurId: 'moi', api: serveur, surNonLusActualises: rafraichirBadges }
+    );
+    await vi.waitFor(() => expect(serveur.obtenirNonLus).toHaveBeenCalledTimes(2));
+    expect(rafraichirBadges).not.toHaveBeenCalled();
+    repondre(nonLus(nombreServeur));
+    await enCours;
+    expect(rafraichirBadges).toHaveBeenCalledTimes(1);
+    expect(NotifPrefs.nombreNonLus(type, conversationId)).toBe(nombreServeur);
+  }
+);

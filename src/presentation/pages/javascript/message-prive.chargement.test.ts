@@ -454,13 +454,11 @@ describe('page des messages privés', () => {
         lastMessage: null,
       },
     ];
+    const nonLus = { salons: { s1: 1 } as Record<string, number>, prives: { 'bob:moi': 2, 'carla:moi': 4 } };
     const { document, rappels } = await chargerPage({
       autresReponses: {
         obtenirConversationsPrivees: deuxConversations(),
-        obtenirNonLus: {
-          salons: { s1: 1 },
-          prives: { 'bob:moi': 2, 'carla:moi': 4 },
-        },
+        obtenirNonLus: () => nonLus,
         obtenirServeurs: [
           { id: 'srv', nom: 'Projet', icone: null, salonIds: ['s1'] },
           { id: 'calme', nom: 'Calme', icone: null, salonIds: ['s2'] },
@@ -494,6 +492,8 @@ describe('page des messages privés', () => {
       )?.hidden
     ).toBe(true);
 
+    nonLus.prives['bob:moi'] = 0;
+    nonLus.prives['carla:moi'] = 5;
     // Message reçu dans une autre conversation : un non-lu de plus.
     await rappels.onNouveauMessage({
       conversationType: 'dm',
@@ -505,6 +505,7 @@ describe('page des messages privés', () => {
     await vi.waitFor(() =>
       expect(compteur('carla:moi')?.textContent).toBe('5')
     );
+    nonLus.salons.s2 = 1;
     // Message de salon : pastille de son serveur.
     await rappels.onNouveauMessage({
       conversationType: 'salon',

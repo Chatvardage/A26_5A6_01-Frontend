@@ -464,14 +464,18 @@ describe('page des salons (scripts découpés)', () => {
 
   it('un message reçu ailleurs incrémente le compteur ; dans le salon affiché, il est lu', async () => {
     const marques: unknown[] = [];
+    const nonLus = { salons: {} as Record<string, number>, prives: {} as Record<string, number> };
     const { document, rappels } = await chargerPage({
       autresReponses: {
+        obtenirNonLus: () => nonLus,
         marquerConversationLue: (donnees: unknown) => {
           marques.push(donnees);
           return { nonLus: 0 };
         },
       },
     });
+    nonLus.salons.autre = 1;
+    nonLus.prives['bob:moi'] = 1;
     rappels.onNouveauMessage({
       conversationType: 'salon',
       salonId: 'autre',

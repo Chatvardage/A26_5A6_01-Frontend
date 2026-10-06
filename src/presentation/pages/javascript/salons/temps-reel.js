@@ -243,6 +243,12 @@ if (typeof window.electronAPI?.onNouveauMessage === 'function') {
     }
     NotifPrefs.traiterMessageRecu(messageNormalise, {
       utilisateurId: utilisateurActuelId,
+      api: window.electronAPI,
+      surNonLusActualises: () => {
+        afficherSalons();
+        actualiserBadgeMessagesPrives();
+        mettreAJourBadgeApplication();
+      },
       surSalon: () => integrerMessageSalonRecu(payload),
       surPrive: async () => {
         await actualiserBadgeMessagesPrives();
