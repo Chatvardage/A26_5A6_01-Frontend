@@ -52,6 +52,12 @@ function oublierPreferencesDuCompte() {
   etat.avatarActuel = null;
 }
 
+exposerCanal('session:definir-motif-retour', ({ motif }) => {
+  if (typeof motif === 'string' && motif.trim()) {
+    etat.motifRetourConnexion = motif;
+  }
+  return etat.motifRetourConnexion;
+});
 exposerCanal('session:deconnexion', async () => {
   await chatGateway.deconnexion();
   oublierPreferencesDuCompte();

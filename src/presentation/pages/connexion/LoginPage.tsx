@@ -22,6 +22,10 @@ interface LoginPageProps {
   /** Clé de traduction d'un message d'information à afficher en arrivant
    * (ex. 'auth.sessionExpired'), ou null. */
   messageRetour?: string | null;
+  /** Si true, affiche un bouton de confirmation pour fermer le message. */
+  messageRetourConfirmable?: boolean;
+  /** Appelé quand l'utilisateur confirme le message de retour. */
+  onMessageRetourConfirme?: () => void;
 }
 
 
@@ -60,6 +64,8 @@ export function LoginPage({
   onSessionEtablie,
   allerAInscription,
   messageRetour = null,
+  messageRetourConfirmable = false,
+  onMessageRetourConfirme,
 }: LoginPageProps) {
   const [identifiant, setIdentifiant] = useState('');
   const [motDePasse, setMotDePasse] = useState('');
@@ -161,9 +167,18 @@ export function LoginPage({
         />
 
         {messageRetour && !erreurSoumission && (
-          <p className="field-message" role="status" data-kind="info">
-            {t(langue, messageRetour)}
-          </p>
+          <div className="field-message" role="status" data-kind="info">
+            <p>{t(langue, messageRetour)}</p>
+            {messageRetourConfirmable && onMessageRetourConfirme && (
+              <button
+                type="button"
+                className="login-switch"
+                onClick={onMessageRetourConfirme}
+              >
+                {t(langue, 'auth.confirm')}
+              </button>
+            )}
+          </div>
         )}
 
         {erreurSoumission && (
