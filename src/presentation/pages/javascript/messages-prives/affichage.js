@@ -433,7 +433,21 @@ function creerActionsMessageNonLivre(message) {
   });
 }
 
-async function chargerMessagesPlusAnciensDm({ taille } = {}) {
+const paginationsEnCoursDm = new Map();
+
+function chargerMessagesPlusAnciensDm(options = {}) {
+  const id = state.activeConversationId;
+  const enCours = paginationsEnCoursDm.get(id);
+  if (enCours) return enCours;
+  const requete = executerPaginationDm(options).finally(() => {
+    if (paginationsEnCoursDm.get(id) === requete)
+      paginationsEnCoursDm.delete(id);
+  });
+  paginationsEnCoursDm.set(id, requete);
+  return requete;
+}
+
+async function executerPaginationDm({ taille } = {}) {
   const conversation = state.conversations.find(
     (entry) => entry.id === state.activeConversationId
   );

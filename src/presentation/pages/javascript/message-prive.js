@@ -50,6 +50,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (cible.type === 'prive') {
       state.activeConversationId = conversationId;
       await renderActiveConversation();
+      if (state.activeConversationId !== conversationId) return;
       renderConversationList();
       mettreAJourBadgeApplication();
       // Résultat de recherche : jusqu'au message lui-même.

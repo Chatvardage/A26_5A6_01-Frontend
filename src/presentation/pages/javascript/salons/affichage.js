@@ -629,7 +629,21 @@ function afficherMessages(options = {}) {
  * défilement automatique près du haut de la liste (voir l'écouteur 'scroll'
  * plus bas).
  */
-async function chargerMessagesPlusAnciensSalon({ taille } = {}) {
+const paginationsEnCoursSalon = new Map();
+
+function chargerMessagesPlusAnciensSalon(options = {}) {
+  const id = salonActifId;
+  const enCours = paginationsEnCoursSalon.get(id);
+  if (enCours) return enCours;
+  const requete = executerPaginationSalon(options).finally(() => {
+    if (paginationsEnCoursSalon.get(id) === requete)
+      paginationsEnCoursSalon.delete(id);
+  });
+  paginationsEnCoursSalon.set(id, requete);
+  return requete;
+}
+
+async function executerPaginationSalon({ taille } = {}) {
   const salon = salonActif();
   if (
     !salon ||

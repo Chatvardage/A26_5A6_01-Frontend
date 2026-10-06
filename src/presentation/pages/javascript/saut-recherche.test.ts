@@ -7,7 +7,10 @@ it.each(['Dm', 'Salon'])(
   async (type) => {
     const dm = type === 'Dm';
     const chemin = dm ? 'messages-prives/affichage.js' : 'salons/affichage.js';
-    const source = readFileSync(`src/presentation/pages/javascript/${chemin}`, 'utf8');
+    const source = readFileSync(
+      `src/presentation/pages/javascript/${chemin}`,
+      'utf8'
+    );
     const debut = source.indexOf(
       `async function allerAuMessage${type}(messageId) {`
     );
@@ -60,3 +63,82 @@ it.each(['Dm', 'Salon'])(
     expect(notifier).not.toHaveBeenCalled();
   }
 );
+
+it.each(['Dm', 'Salon'])(
+  'partage la pagination %s déjà en cours avec le saut',
+  async (type) => {
+    const chemin =
+      type === 'Dm' ? 'messages-prives/affichage.js' : 'salons/affichage.js';
+    const source = readFileSync(
+      `src/presentation/pages/javascript/${chemin}`,
+      'utf8'
+    );
+    const debut = source.indexOf(
+      `const paginationsEnCours${type} = new Map();`
+    );
+    const fin = source.indexOf(
+      `async function executerPagination${type}`,
+      debut
+    );
+    let finir!: (valeur: boolean) => void;
+    const executer = vi.fn(
+      () =>
+        new Promise<boolean>((r) => {
+          finir = r;
+        })
+    );
+    const contexte = {
+      state: { activeConversationId: 'initiale' },
+      salonActifId: 'initiale',
+      [`executerPagination${type}`]: executer,
+    };
+    const charger = runInNewContext(
+      `${source.slice(debut, fin)}; chargerMessagesPlusAnciens${type}`,
+      contexte
+    );
+    const defilement = charger();
+    const saut = charger({ taille: 100 });
+    expect(saut).toBe(defilement);
+    expect(executer).toHaveBeenCalledTimes(1);
+    finir(true);
+    await expect(saut).resolves.toBe(true);
+    charger();
+    expect(executer).toHaveBeenCalledTimes(2);
+    finir(false);
+  }
+);
+
+it('annule le saut DM si la conversation change pendant son ouverture', async () => {
+  const source = readFileSync(
+    'src/presentation/pages/javascript/message-prive.js',
+    'utf8'
+  );
+  const debut = source.indexOf('const ouvrirConversation = async (cible) => {');
+  const fin = source.indexOf('\n  };', debut) + 5;
+  let finir!: () => void;
+  const state = { activeConversationId: '' };
+  const sauter = vi.fn();
+  const contexte = {
+    state,
+    renderActiveConversation: () =>
+      new Promise<void>((r) => {
+        finir = r;
+      }),
+    renderConversationList: vi.fn(),
+    mettreAJourBadgeApplication: vi.fn(),
+    allerAuMessageDm: sauter,
+  };
+  const ouvrir = runInNewContext(
+    `${source.slice(debut, fin)}; ouvrirConversation`,
+    contexte
+  );
+  const attente = ouvrir({
+    type: 'prive',
+    conversationId: 'initiale',
+    messageId: 'ancien',
+  });
+  state.activeConversationId = 'autre';
+  finir();
+  await attente;
+  expect(sauter).not.toHaveBeenCalled();
+});
