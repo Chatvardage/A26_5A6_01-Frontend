@@ -181,16 +181,6 @@ async function renderActiveConversation(options = {}) {
   // pourquoi (sinon ce rond de notification et la vraie notification
   // système de main.js, qui exige déjà le focus pour la même décision,
   // finissent en désaccord).
-  if (fenetreEstFocusee) {
-    NotifPrefs.marquerLu(window.electronAPI, 'prive', conversation.id, {
-      estAffichee: () =>
-        fenetreEstFocusee && state.activeConversationId === conversation.id,
-      surChangement: () => {
-        renderConversationList();
-        mettreAJourBadgeApplication();
-      },
-    });
-  }
   // La conversation "active" que main.js ne doit pas notifier (voir
   // showMessageNotification côté main.js) reste définie qu'on ait le
   // focus ou non : c'est elle qui est affichée à l'écran.
@@ -385,6 +375,18 @@ async function renderActiveConversation(options = {}) {
     row.append(avatar, body);
     messageList.appendChild(row);
   });
+
+  if (fenetreEstFocusee && dernierLivre?.id) {
+    NotifPrefs.marquerLu(window.electronAPI, 'prive', conversation.id, {
+      messageId: dernierLivre.id,
+      estAffichee: () =>
+        fenetreEstFocusee && state.activeConversationId === conversation.id,
+      surChangement: () => {
+        renderConversationList();
+        mettreAJourBadgeApplication();
+      },
+    });
+  }
 
   if (garderScroll) {
     messageList.scrollTop = scrollAvant;

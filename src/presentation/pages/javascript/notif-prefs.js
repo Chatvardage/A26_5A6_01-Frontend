@@ -112,6 +112,7 @@
   const compteurs = { salon: new Map(), prive: new Map() };
   const lecturesEnCours = { salon: new Set(), prive: new Set() };
   const rechargementsEnAttente = { salon: new Set(), prive: new Set() };
+  const rendusLectures = { salon: new Map(), prive: new Map() };
   let generationChargement = 0;
   let revisionCompteurs = 0;
 
@@ -168,14 +169,22 @@
    * que chaque nouvel affichage ne coûte pas une requête.
    */
   function marquerLu(api, type, conversationId, options = {}) {
+    rendusLectures[type].set(conversationId, options);
+    const messageId = options.messageId;
     const nombre = nombreNonLus(type, conversationId);
-    if (!nombre || lecturesEnCours[type].has(conversationId)) return;
+    if (lecturesEnCours[type].has(conversationId)) return;
+    if (!nombre) {
+      rendusLectures[type].delete(conversationId);
+      return;
+    }
     revisionCompteurs += 1;
     lecturesEnCours[type].add(conversationId);
     compteurs[type].delete(conversationId);
     let reussi = false;
     Promise.resolve()
-      .then(() => api.marquerConversationLue({ type, conversationId }))
+      .then(() => api.marquerConversationLue({
+        type, conversationId, ...(messageId ? { messageId } : {}),
+      }))
       .then((reponse) => {
         reussi = true;
         revisionCompteurs += 1;
@@ -198,7 +207,9 @@
         lecturesEnCours[type].delete(conversationId);
         const rechargementDemande =
           rechargementsEnAttente[type].delete(conversationId);
-        const estAffichee = options.estAffichee?.() ?? false;
+        const dernierRendu = rendusLectures[type].get(conversationId) ?? options;
+        rendusLectures[type].delete(conversationId);
+        const estAffichee = dernierRendu.estAffichee?.() ?? false;
         // La réponse du PUT et les incréments locaux ne permettent pas de
         // savoir si un message reçu pendant la requête a été inclus par le
         // serveur. Relire sa valeur autoritaire évite aussi bien de le perdre
@@ -210,9 +221,10 @@
         if (
           reussi &&
           nombreNonLus(type, conversationId) &&
-          options.estAffichee?.()
+          dernierRendu.estAffichee?.() &&
+          (!messageId || dernierRendu.messageId !== messageId)
         ) {
-          marquerLu(api, type, conversationId, options);
+          marquerLu(api, type, conversationId, dernierRendu);
         }
       });
   }

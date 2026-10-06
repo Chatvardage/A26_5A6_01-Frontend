@@ -476,7 +476,7 @@ describe('page des messages privés', () => {
         `.conversation[data-conversation-id="${id}"] .notif-count`
       );
     await vi.waitFor(() =>
-      expect(marques).toEqual([{ type: 'prive', conversationId: 'bob:moi' }])
+      expect(marques).toEqual([{ type: 'prive', conversationId: 'bob:moi', messageId: 'm1' }])
     );
     expect(compteur('bob:moi')?.hidden).toBe(true);
     expect(compteur('carla:moi')?.textContent).toBe('4');

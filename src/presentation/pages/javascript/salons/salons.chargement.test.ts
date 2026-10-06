@@ -451,7 +451,7 @@ describe('page des salons (scripts découpés)', () => {
 
     // Le salon affiché (général) est lu dès son affichage.
     await vi.waitFor(() =>
-      expect(marques).toEqual([{ type: 'salon', conversationId: 'general' }])
+      expect(marques).toEqual([{ type: 'salon', conversationId: 'general', messageId: 'm1' }])
     );
     expect(compteur('général')?.hidden).toBe(true);
     expect(compteur('autre')?.textContent).toBe('99+');
@@ -507,7 +507,7 @@ describe('page des salons (scripts découpés)', () => {
       ).toBe('1')
     );
     await vi.waitFor(() =>
-      expect(marques).toEqual([{ type: 'salon', conversationId: 'general' }])
+      expect(marques).toEqual([{ type: 'salon', conversationId: 'general', messageId: 'm3' }])
     );
     expect(
       document.querySelector<HTMLElement>('#message-prive-btn .notif-dot')

@@ -401,15 +401,6 @@ function afficherMessages(options = {}) {
   // "déjà lue en direct" — voir showMessageNotification). Les deux
   // indicateurs (rond de notification ici, notification système côté
   // main.js) doivent rester d'accord entre eux.
-  if (fenetreEstFocusee) {
-    NotifPrefs.marquerLu(window.electronAPI, 'salon', salon.id, {
-      estAffichee: () => fenetreEstFocusee && salonActifId === salon.id,
-      surChangement: () => {
-        afficherSalons();
-        mettreAJourBadgeApplication();
-      },
-    });
-  }
   // La conversation "active" que main.js ne doit pas notifier (voir
   // showMessageNotification côté main.js) reste définie qu'on ait le focus
   // ou non : c'est ce salon qui est affiché à l'écran, peu importe si la
@@ -472,6 +463,8 @@ function afficherMessages(options = {}) {
 
   el.messages.replaceChildren();
 
+  const dernierLivre = tousLesMessages.filter((message) => !message.nonLivre).at(-1);
+
   if (!tousLesMessages.length) {
     // Conversation réellement vide (rien à charger, ni de récent ni
     // d'ancien) : la barre d'historique ("Fin de l'historique"/bouton)
@@ -495,10 +488,6 @@ function afficherMessages(options = {}) {
       separateurSalon,
       utilisateurActuelId
     );
-    // « Vu par » sous le dernier message enregistré du salon.
-    const dernierLivre = tousLesMessages
-      .filter((message) => !message.nonLivre)
-      .at(-1);
     tousLesMessages.forEach((message, index) => {
       if (index === indexNonLu) {
         el.messages.appendChild(ChatUiShared.creerSeparateurNonLus(t));
@@ -599,6 +588,17 @@ function afficherMessages(options = {}) {
         if (vuPar) texteEl.after(ChatUiShared.creerLigneLecture(vuPar));
       }
       el.messages.appendChild(article);
+    });
+  }
+
+  if (fenetreEstFocusee && dernierLivre?.id) {
+    NotifPrefs.marquerLu(window.electronAPI, 'salon', salon.id, {
+      messageId: dernierLivre.id,
+      estAffichee: () => fenetreEstFocusee && salonActifId === salon.id,
+      surChangement: () => {
+        afficherSalons();
+        mettreAJourBadgeApplication();
+      },
     });
   }
 

@@ -759,20 +759,26 @@ describe('RealGatewayRuntime', () => {
         await runtime.marquerConversationLue({
           type: 'salon',
           conversationId: 'salon 1',
+          messageId: 'm1',
         })
       ).toEqual({ nonLus: 1 });
       expect(
         await runtime.marquerConversationLue({
           type: 'prive',
           conversationId: 'moi:u2',
+          messageId: 'm2',
         })
       ).toEqual({ nonLus: 0 });
       expect(
         await runtime.marquerConversationLue({
           type: 'prive',
           conversationId: 'moi:u2',
+          messageId: 'm2',
         })
       ).toEqual({ nonLus: 0 });
+
+      await expect(runtime.marquerConversationLue({ type: 'salon', conversationId: 'salon 1' })).rejects.toThrow('ERR_MESSAGE_INTROUVABLE');
+      expect(fetchMock).toHaveBeenCalledTimes(3);
 
       const appels = fetchMock.mock.calls.map(([url, init]) => [
         String(url),
@@ -782,12 +788,12 @@ describe('RealGatewayRuntime', () => {
       expect(appels[0]).toEqual([
         'http://gateway.test/api/messages/rooms/salon%201/read',
         'PUT',
-        '{}',
+        '{"messageId":"m1"}',
       ]);
       expect(appels[1]).toEqual([
         'http://gateway.test/api/messages/conversations/u2/read',
         'PUT',
-        '{}',
+        '{"messageId":"m2"}',
       ]);
     });
 

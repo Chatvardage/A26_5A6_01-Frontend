@@ -413,3 +413,35 @@ it('ne relance pas une lecture si le focus est perdu pendant la relecture des co
   expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(1);
   expect(NotifPrefs.nombreNonLus('salon', 'attente')).toBe(1);
 });
+
+it.each(['salon', 'prive'])(
+  'borne la lecture %s au rendu et attend un nouveau rendu avant de relancer',
+  async (type) => {
+    const serveur = api();
+    const conversationId = `rendu-${type}`;
+    let resoudre!: (valeur: { nonLus: number }) => void;
+    serveur.marquerConversationLue.mockImplementationOnce(() => new Promise((r) => { resoudre = r; }));
+    NotifPrefs.ajouterNonLu(type, conversationId);
+    const options = { messageId: 'affiche-1', estAffichee: () => true };
+    NotifPrefs.marquerLu(serveur, type, conversationId, options);
+    await vi.waitFor(() => expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(1));
+    expect(serveur.marquerConversationLue).toHaveBeenLastCalledWith({ type, conversationId, messageId: 'affiche-1' });
+    // Le compteur peut connaître un message dont le rendu n'a pas encore eu lieu.
+    NotifPrefs.ajouterNonLu(type, conversationId);
+    resoudre({ nonLus: 1 });
+    await vi.waitFor(() => expect(NotifPrefs.nombreNonLus(type, conversationId)).toBe(1));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(1);
+    // Le rendu suivant fournit une nouvelle borne, même pendant le PUT.
+    let terminer!: (valeur: { nonLus: number }) => void;
+    serveur.marquerConversationLue.mockImplementationOnce(() => new Promise((r) => { terminer = r; }));
+    NotifPrefs.marquerLu(serveur, type, conversationId, { ...options, messageId: 'affiche-2' });
+    await vi.waitFor(() => expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(2));
+    NotifPrefs.ajouterNonLu(type, conversationId);
+    NotifPrefs.marquerLu(serveur, type, conversationId, { ...options, messageId: 'affiche-3' });
+    terminer({ nonLus: 1 });
+    await vi.waitFor(() => expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(3));
+    expect(serveur.marquerConversationLue).toHaveBeenLastCalledWith({ type, conversationId, messageId: 'affiche-3' });
+    await vi.waitFor(() => expect(NotifPrefs.nombreNonLus(type, conversationId)).toBe(0));
+  }
+);

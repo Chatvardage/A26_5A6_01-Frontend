@@ -223,13 +223,14 @@ module.exports = {
     return nonLus;
   },
 
-  /** Marque une conversation comme lue jusqu'à son dernier message. */
-  async marquerConversationLue({ type, conversationId }) {
+  /** Marque une conversation lue jusqu’au dernier message rendu. */
+  async marquerConversationLue({ type, conversationId, messageId }) {
+    if (!messageId) throw new Error('ERR_MESSAGE_INTROUVABLE');
     const chemin =
       type === 'salon'
         ? `/api/messages/rooms/${encodeURIComponent(conversationId)}/read`
         : `/api/messages/conversations/${encodeURIComponent(this.autreParticipantDm(conversationId))}/read`;
-    const etat = await this.appelHttp(chemin, { methode: 'PUT', corps: {} });
+    const etat = await this.appelHttp(chemin, { methode: 'PUT', corps: { messageId } });
     return { nonLus: etat?.unreadCount ?? 0 };
   },
 
