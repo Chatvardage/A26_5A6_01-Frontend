@@ -220,7 +220,6 @@ async function actualiser(options = {}) {
     etatCharge = true;
     serveurActifId = etat.serveurActif?.id ?? null;
     ecrireStockage(localStorage, CLEF_SERVEUR_ACTIF, serveurActifId);
-    if (serveursNonLus.delete(serveurActifId)) memoriserServeursNonLus();
     if (!etat.salons.some((salon) => salon.id === salonActifId)) {
       salonActifId = etat.salons[0]?.id ?? null;
     }
@@ -231,82 +230,50 @@ async function actualiser(options = {}) {
   }
   // Note : mettreAJourBadgeApplication() n'est PAS rappelée ici, elle est
   // déjà déclenchée par afficherTout() (voir plus bas) sur le chemin de
-  // succès. Un appel ici en plus doublait le recalcul du badge (et l'appel
-  // IPC obtenirResumesConversationsPrivees sous-jacent) à chaque actualiser() réussi.
+  // succès.
   actualiserBadgeMessagesPrives();
 }
 
 /**
- * Recalcule le nombre total de conversations non lues (salons + messages
- * privés) pour l'utilisateur courant, et met à jour le badge de l'icône de
- * l'app en conséquence (voir mettreAJourBadgeApplication côté main.js).
- * Respecte NotifPrefs.afficheRonds() : en mode "aucune", le badge disparaît
- * comme les ronds de notification. Best-effort et silencieux, comme
- * actualiserBadgeMessagesPrives().
- *
- * Le calcul du compte et le dessin de l'icône de badge vivent dans
- * NotifPrefs (notif-prefs.js), partagés avec message-prive.js — voir son
- * en-tête pour le pourquoi (évite la divergence entre deux copies).
+ * Badge de l'icône de l'app : total des messages non lus (salons + messages
+ * privés, compteurs tenus par Message-Service, voir NotifPrefs). Masqué en
+ * mode de notification « aucune », comme les compteurs.
  */
-async function mettreAJourBadgeApplication() {
+function mettreAJourBadgeApplication() {
   if (typeof serviceNotifications?.setBadgeCount !== 'function') return;
-  if (!NotifPrefs.afficheRonds(utilisateurActuelId)) {
-    NotifPrefs.appliquerBadge(serviceNotifications, 0);
-    return;
-  }
-  let nombre = NotifPrefs.compterSalonsNonLus(utilisateurActuelId, etat.salons);
-  try {
-    const conversations =
-      await window.electronAPI.obtenirResumesConversationsPrivees();
-    nombre += NotifPrefs.compterConversationsNonLues(
-      utilisateurActuelId,
-      conversations
-    );
-  } catch {
-    // Badge best-effort, voir commentaire ci-dessus.
-  }
-  NotifPrefs.appliquerBadge(serviceNotifications, nombre);
+  NotifPrefs.appliquerBadge(
+    serviceNotifications,
+    NotifPrefs.afficheRonds(utilisateurActuelId) ? NotifPrefs.totalNonLus() : 0
+  );
 }
 
 /**
- * Le bouton d'accès aux messages privés (#message-prive-btn) vit sur CETTE
- * page (index.html) mais doit refléter l'état des conversations privées
- * (autre page). Best-effort et silencieux : un badge qui ne se met pas à
- * jour n'est pas une raison de perturber le reste de l'app.
+ * Rond du bouton des messages privés (#message-prive-btn) : au moins un
+ * message privé non lu.
  */
-async function actualiserBadgeMessagesPrives() {
-  const dots = document.querySelectorAll('#message-prive-btn .notif-dot');
-  if (!dots.length) return;
-  if (!NotifPrefs.afficheRonds(utilisateurActuelId)) {
-    dots.forEach((dot) => (dot.hidden = true));
-    return;
-  }
-  try {
-    const conversations =
-      await window.electronAPI.obtenirResumesConversationsPrivees();
-    const nonLu = conversations.some((conversation) =>
-      NotifPrefs.estNonLu(
-        utilisateurActuelId,
-        conversation.id,
-        conversation.lastMessage
-          ? {
-              auteurId: conversation.lastMessage.auteurId,
-              timestamp: conversation.lastMessage.envoi,
-            }
-          : null
-      )
-    );
-    dots.forEach((dot) => (dot.hidden = !nonLu));
-  } catch {
-    // Badge best-effort, voir commentaire ci-dessus.
-  }
+function actualiserBadgeMessagesPrives() {
+  const nonLu =
+    NotifPrefs.afficheRonds(utilisateurActuelId) &&
+    NotifPrefs.totalNonLus({ type: 'prive' }) > 0;
+  document
+    .querySelectorAll('#message-prive-btn .notif-dot')
+    .forEach((dot) => (dot.hidden = !nonLu));
 }
 
-/** Le dernier message d'un salon, normalisé pour NotifPrefs.estNonLu(). */
-function derniereActiviteSalon(salon) {
-  if (!salon.messages.length) return null;
-  const dernier = salon.messages[salon.messages.length - 1];
-  return { auteurId: dernier.auteurId, timestamp: dernier.date };
+/** Serveurs du rail ayant au moins un salon non lu. */
+function serveursAvecNonLus() {
+  if (!NotifPrefs.afficheRonds(utilisateurActuelId)) return new Set();
+  return new Set(
+    etat.serveurs
+      .filter(
+        (serveur) =>
+          NotifPrefs.totalNonLus({
+            type: 'salon',
+            conversationIds: serveur.salonIds ?? [],
+          }) > 0
+      )
+      .map((serveur) => serveur.id)
+  );
 }
 
 function afficherSalons() {
@@ -314,7 +281,6 @@ function afficherSalons() {
     creerEl('li', { classe: 'category', texte: t('channels.categorySalons') })
   );
   const afficherRonds = NotifPrefs.afficheRonds(utilisateurActuelId);
-  let auMoinsUnSalonNonLu = false;
 
   etat.salons.forEach((salon) => {
     const item = document.createElement('li');
@@ -322,20 +288,15 @@ function afficherSalons() {
     bouton.className = salon.id === salonActifId ? 'active' : '';
     remplirLabelSalon(bouton, salon);
 
-    const nonLu =
-      afficherRonds &&
-      NotifPrefs.estNonLu(
-        utilisateurActuelId,
-        salon.id,
-        derniereActiviteSalon(salon)
-      );
-    if (nonLu) auMoinsUnSalonNonLu = true;
-    bouton.appendChild(
-      creerEl('span', {
-        classe: 'notif-dot notif-dot--channel',
-        attrs: nonLu ? {} : { hidden: '' },
-      })
+    const compteur = creerEl('span', {
+      classe: 'notif-count notif-count--channel',
+    });
+    NotifPrefs.remplirCompteur(
+      compteur,
+      NotifPrefs.nombreNonLus('salon', salon.id),
+      afficherRonds
     );
+    bouton.appendChild(compteur);
 
     bouton.addEventListener('click', () => {
       salonActifId = salon.id;
@@ -347,8 +308,7 @@ function afficherSalons() {
 
   if (el.nomServeur) el.nomServeur.textContent = etat.serveurActif?.nom ?? '';
   if (!etatCharge) return;
-  const pastilles = new Set(serveursNonLus);
-  if (auMoinsUnSalonNonLu && serveurActifId) pastilles.add(serveurActifId);
+  const pastilles = serveursAvecNonLus();
   ChatUiShared.afficherRailServeurs({
     conteneur: el.rail,
     avant: el.creerRail,
@@ -412,6 +372,12 @@ function afficherMessages(options = {}) {
   // la page récente tout juste reçue (salon.finHistorique, voir
   // RealGatewayRuntime.js).
   if (etatHistoriqueSalon.salonId !== salon.id) {
+    // Avant le marquage comme lu plus bas, qui remet le compteur à zéro.
+    separateurSalon = {
+      salonId: salon.id,
+      nonLus: NotifPrefs.nombreNonLus('salon', salon.id),
+    };
+    void chargerLecturesSalon(salon.id);
     etatHistoriqueSalon = {
       salonId: salon.id,
       messagesAnciens: [],
@@ -435,9 +401,6 @@ function afficherMessages(options = {}) {
   // "déjà lue en direct" — voir showMessageNotification). Les deux
   // indicateurs (rond de notification ici, notification système côté
   // main.js) doivent rester d'accord entre eux.
-  if (fenetreEstFocusee) {
-    NotifPrefs.marquerCommeLu(utilisateurActuelId, salon.id, Date.now());
-  }
   // La conversation "active" que main.js ne doit pas notifier (voir
   // showMessageNotification côté main.js) reste définie qu'on ait le focus
   // ou non : c'est ce salon qui est affiché à l'écran, peu importe si la
@@ -500,6 +463,8 @@ function afficherMessages(options = {}) {
 
   el.messages.replaceChildren();
 
+  const dernierLivre = tousLesMessages.filter((message) => !message.nonLivre).at(-1);
+
   if (!tousLesMessages.length) {
     // Conversation réellement vide (rien à charger, ni de récent ni
     // d'ancien) : la barre d'historique ("Fin de l'historique"/bouton)
@@ -518,7 +483,15 @@ function afficherMessages(options = {}) {
         chargerMessagesPlusAnciensSalon
       )
     );
-    tousLesMessages.forEach((message) => {
+    const indexNonLu = LogiqueInterface.indexSeparateur(
+      tousLesMessages,
+      separateurSalon,
+      utilisateurActuelId
+    );
+    tousLesMessages.forEach((message, index) => {
+      if (index === indexNonLu) {
+        el.messages.appendChild(ChatUiShared.creerSeparateurNonLus(t));
+      }
       const auteur =
         ChatUiShared.nomAffiche(utilisateur(message.auteurId)) ||
         t('channels.system');
@@ -597,7 +570,35 @@ function afficherMessages(options = {}) {
             creerActionsMessage(message, texteEl, estMessagePersonnel)
           );
       }
+      article.dataset.messageId = message.id;
+      if (ChatUiShared.estMessageCible(message.id)) {
+        article.classList.add('message-cible');
+      }
+      if (message === dernierLivre && lecturesSalon.salonId === salon.id) {
+        const vuPar = ChatUiShared.texteVuPar(
+          LogiqueInterface.lecteursJusqua(
+            lecturesSalon.lecteurs,
+            message.date,
+            [message.auteurId, utilisateurActuelId],
+            message.id
+          ),
+          t
+        );
+        // Juste sous le message, au-dessus de Modifier / Supprimer.
+        if (vuPar) texteEl.after(ChatUiShared.creerLigneLecture(vuPar));
+      }
       el.messages.appendChild(article);
+    });
+  }
+
+  if (fenetreEstFocusee && dernierLivre?.id) {
+    NotifPrefs.marquerLu(window.electronAPI, 'salon', salon.id, {
+      messageId: dernierLivre.id,
+      estAffichee: () => fenetreEstFocusee && salonActifId === salon.id,
+      surChangement: () => {
+        afficherSalons();
+        mettreAJourBadgeApplication();
+      },
     });
   }
 
@@ -628,7 +629,22 @@ function afficherMessages(options = {}) {
  * défilement automatique près du haut de la liste (voir l'écouteur 'scroll'
  * plus bas).
  */
-async function chargerMessagesPlusAnciensSalon() {
+const paginationsEnCoursSalon = new Map();
+
+function chargerMessagesPlusAnciensSalon(options = {}) {
+  const historique = etatHistoriqueSalon;
+  const enCours = paginationsEnCoursSalon.get(historique);
+  if (enCours) return enCours;
+  const requete = executerPaginationSalon(options).finally(() => {
+    if (paginationsEnCoursSalon.get(historique) === requete)
+      paginationsEnCoursSalon.delete(historique);
+  });
+  paginationsEnCoursSalon.set(historique, requete);
+  return requete;
+}
+
+async function executerPaginationSalon({ taille } = {}) {
+  const historique = etatHistoriqueSalon;
   const salon = salonActif();
   if (
     !salon ||
@@ -636,7 +652,7 @@ async function chargerMessagesPlusAnciensSalon() {
     etatHistoriqueSalon.enChargement ||
     etatHistoriqueSalon.finHistorique
   ) {
-    return;
+    return false;
   }
 
   const plusAncienCharge =
@@ -650,9 +666,10 @@ async function chargerMessagesPlusAnciensSalon() {
       salonId: salon.id,
       utilisateurId: utilisateurActuelId,
       avantId: plusAncienCharge?.id,
+      ...(taille ? { taille } : {}),
     });
-    if (etatHistoriqueSalon.salonId !== salon.id) {
-      return;
+    if (etatHistoriqueSalon !== historique) {
+      return false;
     }
     etatHistoriqueSalon.messagesAnciens = fusionnerHistorique(
       etatHistoriqueSalon.messagesAnciens,
@@ -660,10 +677,13 @@ async function chargerMessagesPlusAnciensSalon() {
       'date'
     );
     etatHistoriqueSalon.finHistorique = resultat.finHistorique;
+    return true;
   } catch (erreur) {
+    if (etatHistoriqueSalon !== historique) return false;
     notifier(messageErreur(erreur), true);
+    return false;
   } finally {
-    if (etatHistoriqueSalon.salonId === salon.id) {
+    if (etatHistoriqueSalon === historique) {
       etatHistoriqueSalon.enChargement = false;
       afficherMessages({ conserverPositionScroll: true });
     }
@@ -724,3 +744,120 @@ function afficherTout(options = {}) {
 // fois avec un utilisateurActuelId potentiellement pas encore résolu, avant
 // d'être aussitôt écrasé par le second appel (double fetch + flash possible).
 
+/**
+ * Lecteurs du salon `salonId` (« Vu par »), puis nouveau rendu s'il est
+ * toujours affiché. Best-effort : sans réponse, rien n'est affiché.
+ */
+async function chargerLecturesSalon(salonId) {
+  const generation = ++generationLecturesSalon;
+  if (lecturesSalon.salonId !== salonId)
+    lecturesSalon = { salonId, lecteurs: [] };
+  try {
+    const { lecteurs } = await window.electronAPI.obtenirLectures({
+      type: 'salon',
+      conversationId: salonId,
+    });
+    if (
+      generation !== generationLecturesSalon ||
+      salonActifId !== salonId ||
+      lecturesSalon.salonId !== salonId
+    )
+      return;
+    const fusion = new Map(
+      lecturesSalon.lecteurs.map((l) => [l.utilisateurId, l])
+    );
+    for (const lecteur of lecteurs) {
+      const precedent = fusion.get(lecteur.utilisateurId);
+      fusion.set(
+        lecteur.utilisateurId,
+        precedent
+          ? LogiqueInterface.fusionnerLecture(precedent, lecteur)
+          : lecteur
+      );
+    }
+    lecturesSalon = { salonId, lecteurs: [...fusion.values()] };
+    afficherMessages({ garderScroll: true });
+  } catch (erreur) {
+    console.warn('[lectures] lecteurs du salon indisponibles :', erreur);
+  }
+}
+
+/**
+ * Accusé de lecture reçu en temps réel. Lu depuis un de mes autres
+ * appareils : les compteurs sont relus. Lu par quelqu'un d'autre dans le
+ * salon affiché : « Vu par » est mis à jour.
+ */
+async function appliquerLecture(lecture) {
+  if (lecture?.deMoi) {
+    await NotifPrefs.chargerNonLus(window.electronAPI);
+    afficherSalons();
+    actualiserBadgeMessagesPrives();
+    mettreAJourBadgeApplication();
+    return;
+  }
+  if (
+    lecture?.type !== 'salon' ||
+    lecture.conversationId !== salonActifId ||
+    lecturesSalon.salonId !== lecture.conversationId
+  ) {
+    return;
+  }
+  const autres = lecturesSalon.lecteurs.filter(
+    (lecteur) => lecteur.utilisateurId !== lecture.utilisateurId
+  );
+  const precedent = lecturesSalon.lecteurs.find(
+    (lecteur) => lecteur.utilisateurId === lecture.utilisateurId
+  );
+  lecturesSalon = {
+    salonId: lecture.conversationId,
+    lecteurs: [
+      {
+        utilisateurId: lecture.utilisateurId,
+        nom: lecture.nom,
+        ...LogiqueInterface.fusionnerLecture(
+          precedent ?? { luJusqua: null },
+          lecture
+        ),
+      },
+      ...autres,
+    ],
+  };
+  afficherMessages({ garderScroll: true });
+}
+
+// Saut vers un message ancien (résultat de recherche) : pages plus grandes
+// que la pagination normale, et un plafond pour un très long historique.
+const TAILLE_PAGE_SAUT = 100;
+const PAGES_MAX_SAUT = 20;
+
+/**
+ * Affiche le message `messageId` du salon affiché : charge l'historique
+ * plus ancien jusqu'à lui (sans trou, comme « Charger plus »), puis défile
+ * jusqu'à lui et le met en évidence.
+ */
+async function allerAuMessageSalon(messageId) {
+  const conversationInitiale = salonActifId;
+  if (!conversationInitiale) return;
+  const historiqueInitial = etatHistoriqueSalon;
+  const estCharge = () => {
+    const salon = salonActif();
+    return Boolean(
+      salon &&
+      (LogiqueInterface.contientMessage(salon.messages, messageId) ||
+        (etatHistoriqueSalon.salonId === salon.id &&
+          LogiqueInterface.contientMessage(
+            etatHistoriqueSalon.messagesAnciens,
+            messageId
+          )))
+    );
+  };
+  for (let page = 0; !estCharge() && page < PAGES_MAX_SAUT; page += 1) {
+    if (salonActifId !== conversationInitiale || etatHistoriqueSalon !== historiqueInitial) return;
+    if (!(await chargerMessagesPlusAnciensSalon({ taille: TAILLE_PAGE_SAUT })))
+      break;
+  }
+  if (salonActifId !== conversationInitiale || etatHistoriqueSalon !== historiqueInitial) return;
+  if (!ChatUiShared.allerAuMessageAffiche(el.messages, messageId)) {
+    notifier(t('search.messageNotFound'), true);
+  }
+}

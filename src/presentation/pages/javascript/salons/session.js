@@ -176,6 +176,9 @@ async function initialiser() {
       'ajout-serveur',
     ]);
     if (cible?.type === 'salon' && cible.id) salonActifId = cible.id;
+    // Avant le premier rendu : il affiche les compteurs, et marque lu le
+    // salon affiché.
+    await NotifPrefs.chargerNonLus(window.electronAPI);
     await actualiser();
     if (cible?.type === 'ajout-serveur') el.creerRail.click();
   } catch (erreur) {

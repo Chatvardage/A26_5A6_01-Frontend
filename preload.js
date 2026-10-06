@@ -164,7 +164,7 @@ contextBridge.exposeInMainWorld('notifications', {
   // isWindowFocused() donne l'état au moment de l'appel (utile à
   // l'initialisation d'une page, avant qu'un premier événement ait pu être
   // reçu), onFocusChange() abonne à ses changements par la suite. Utilisé
-  // pour ne marquer une conversation comme "lue" (NotifPrefs.marquerCommeLu)
+  // pour ne marquer une conversation comme "lue" (NotifPrefs.marquerLu)
   // que si la fenêtre a réellement le focus au moment où elle est affichée.
   isWindowFocused: () => ipcRenderer.invoke('window:is-focused'),
   onFocusChange: (callback) => {
@@ -275,6 +275,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('presence:change', ecouteur);
     return () => ipcRenderer.removeListener('presence:change', ecouteur);
   },
+  // Accusé de lecture : `{ type, conversationId, utilisateurId, nom,
+  // luJusqua, deMoi }` (voir traiterLectureEntrante).
+  onLectureChange: (rappel) => {
+    const ecouteur = (_event, lecture) => rappel(lecture);
+    ipcRenderer.on('messages:lecture-change', ecouteur);
+    return () =>
+      ipcRenderer.removeListener('messages:lecture-change', ecouteur);
+  },
   onMessageModifieChange: (rappel) => {
     const ecouteur = (_event, message) => rappel(message);
     ipcRenderer.on('messages:modifie-change', ecouteur);
@@ -380,10 +388,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('utilisateurs:rechercher', { texte }),
   obtenirConversationsPrivees: (utilisateurId) =>
     ipcRenderer.invoke('obtenir-conversations-privees', { utilisateurId }),
-  // Pastilles « non lu » : { id, lastMessage } par conversation, en un seul
-  // appel réseau (sans l'historique de chaque conversation).
-  obtenirResumesConversationsPrivees: () =>
-    ipcRenderer.invoke('resumes-conversations-privees'),
   // Pagination "charger plus ancien" de l'historique d'une conversation
   // privée (voir obtenirMessagesPriveesAvant dans RealGatewayRuntime.js) :
   // obtenir-conversations-privees ci-dessus ne renvoie déjà plus que la page
@@ -392,6 +396,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('obtenir-messages-prive-avant', donnees),
   envoyerMessagePrive: (donnees) =>
     ipcRenderer.invoke('envoyer-message-prive', donnees),
+  // Messages non lus, tenus par Message-Service : { [conversationId]: n }.
+  obtenirNonLus: () => ipcRenderer.invoke('messages:non-lus'),
+  // { type: 'salon' | 'prive', conversationId } -> { nonLus }.
+  marquerConversationLue: (donnees) =>
+    ipcRenderer.invoke('messages:marquer-lu', donnees),
+  // { type, conversationId } -> { lecteurs: [{ utilisateurId, nom, luJusqua }] } :
+  // jusqu'où les autres ont lu (✓✓ des messages privés, « Vu par » des salons).
+  obtenirLectures: (donnees) =>
+    ipcRenderer.invoke('messages:lectures', donnees),
+  // { texte, type, conversationId, curseur? } -> { resultats, curseurSuivant } :
+  // recherche dans le salon ou la conversation privée affichée.
+  rechercherMessages: (donnees) =>
+    ipcRenderer.invoke('messages:rechercher', donnees),
   demarrerConversationPrivee: (donnees) =>
     ipcRenderer.invoke('demarrer-conversation-privee', donnees),
   modifierEtatSaisie: (donnees) =>

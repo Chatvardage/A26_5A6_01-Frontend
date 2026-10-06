@@ -161,3 +161,160 @@ describe('logique-interface', () => {
     });
   });
 });
+
+describe('recherche de messages', () => {
+  it('accepte de 2 à 100 caractères, espaces retirés', () => {
+    expect(L.peutRechercher(' a ')).toBe(false);
+    expect(L.peutRechercher(' ab ')).toBe(true);
+    expect(L.peutRechercher('x'.repeat(100))).toBe(true);
+    expect(L.peutRechercher('x'.repeat(101))).toBe(false);
+    expect(L.peutRechercher(undefined)).toBe(false);
+    expect([L.LONGUEUR_MIN_RECHERCHE, L.LONGUEUR_MAX_RECHERCHE]).toEqual([
+      2, 100,
+    ]);
+  });
+
+  it('extrait le texte autour du terme, avec « … » aux coupures', () => {
+    expect(L.extraitAutour('court', 'ou')).toBe('court');
+    expect(L.extraitAutour(null, 'x')).toBe('');
+    const long = `${'a'.repeat(100)}PROJET${'b'.repeat(100)}`;
+    expect(L.extraitAutour(long, 'projet', 5)).toBe('…aaaaaPROJETbbbbb…');
+    expect(L.extraitAutour(long, 'absent', 5)).toBe('aaaaaaaaaaaaaaaa…');
+    expect(L.extraitAutour(`PROJET${'b'.repeat(100)}`, 'projet', 5)).toBe(
+      'PROJETbbbbbbbbbb…'
+    );
+    expect(L.extraitAutour(`${'a'.repeat(100)}PROJET`, 'projet', 5)).toBe(
+      '…aaaaaPROJET'
+    );
+    expect(L.extraitAutour('x'.repeat(200), undefined, 5)).toBe('xxxxxxxxxx…');
+  });
+
+  it('découpe le texte en segments surlignés, sans tenir compte de la casse', () => {
+    expect(L.decouperSurligne('Le Projet et le projet', 'projet')).toEqual([
+      { texte: 'Le ', surligne: false },
+      { texte: 'Projet', surligne: true },
+      { texte: ' et le ', surligne: false },
+      { texte: 'projet', surligne: true },
+    ]);
+    expect(L.decouperSurligne('un projet ici', 'PROJET')).toEqual([
+      { texte: 'un ', surligne: false },
+      { texte: 'projet', surligne: true },
+      { texte: ' ici', surligne: false },
+    ]);
+    expect(L.decouperSurligne('projet', 'projet')).toEqual([
+      { texte: 'projet', surligne: true },
+    ]);
+    expect(L.decouperSurligne('texte', '')).toEqual([
+      { texte: 'texte', surligne: false },
+    ]);
+    expect(L.decouperSurligne(undefined, undefined)).toEqual([]);
+  });
+});
+
+describe('non-lus et accusés de lecture', () => {
+  const m = (id: string, auteurId: string, extra = {}) => ({
+    id,
+    auteurId,
+    ...extra,
+  });
+
+  it('place le séparateur au premier message non lu d’autrui', () => {
+    const messages = [
+      m('a', 'bob'),
+      m('b', 'moi'),
+      m('c', 'bob'),
+      m('d', 'carla'),
+      m('e', 'moi', { nonLivre: true }),
+    ];
+    expect(L.indexPremierNonLu(messages, 2, 'moi')).toBe(2);
+    expect(L.indexPremierNonLu(messages, 1, 'moi')).toBe(3);
+    // Plus de non-lus que de messages chargés : premier message d'autrui.
+    expect(L.indexPremierNonLu(messages, 10, 'moi')).toBe(0);
+    expect(L.indexPremierNonLu(messages, 0, 'moi')).toBe(-1);
+    expect(L.indexPremierNonLu(messages, undefined, 'moi')).toBe(-1);
+    expect(L.indexPremierNonLu([m('x', 'moi')], 1, 'moi')).toBe(-1);
+  });
+
+  it('statut d’un message : lu si l’autre a lu jusqu’à lui', () => {
+    expect(L.statutLecture(10, 10)).toBe('lu');
+    expect(L.statutLecture(10, 20)).toBe('lu');
+    expect(L.statutLecture(10, 5)).toBe('distribue');
+    expect(L.statutLecture(10, null)).toBe('distribue');
+    expect(L.statutLecture(10, undefined)).toBe('distribue');
+  });
+
+  it('lecteurs d’un message, sans exclus ni nom vide', () => {
+    const lecteurs = [
+      { utilisateurId: 'a', nom: 'alice', luJusqua: 20 },
+      { utilisateurId: 'b', nom: 'bob', luJusqua: 5 },
+      { utilisateurId: 'c', nom: 'carla', luJusqua: 10 },
+      { utilisateurId: 'd', nom: null, luJusqua: 30 },
+      { utilisateurId: 'e', nom: 'eve', luJusqua: null },
+      { utilisateurId: 'moi', nom: 'moi', luJusqua: 30 },
+    ];
+    expect(L.lecteursJusqua(lecteurs, 10, ['moi'])).toEqual(['alice', 'carla']);
+    expect(L.lecteursJusqua(lecteurs, 10)).toEqual(['alice', 'carla', 'moi']);
+    expect(L.lecteursJusqua(undefined, 10)).toEqual([]);
+  });
+
+  it('résume « Vu par » : trois noms au plus, puis le nombre d’autres', () => {
+    expect(L.resumeNoms(['a', 'b'])).toEqual({ noms: ['a', 'b'], autres: 0 });
+    expect(L.resumeNoms(['a', 'b', 'c', 'd', 'e'])).toEqual({
+      noms: ['a', 'b', 'c'],
+      autres: 2,
+    });
+    expect(L.resumeNoms(['a', 'b'], 1)).toEqual({ noms: ['a'], autres: 1 });
+  });
+});
+
+describe('positions de lecture et frontière des non-lus', () => {
+  const position = (
+    luJusqua: number | null,
+    dernierMessageLuId: string | null
+  ) => ({ luJusqua, dernierMessageLuId });
+  it('distingue deux messages dans la même milliseconde, avec compatibilité de l’ancien contrat', () => {
+    expect(L.statutLecture(1, 1, 'a', 'a')).toBe('lu');
+    expect(L.statutLecture(1, 1, 'b', 'a')).toBe('distribue');
+    expect(L.statutLecture(1, 1, 'b', null)).toBe('lu');
+    expect(
+      L.lecteursJusqua(
+        [{ utilisateurId: 'u', nom: 'U', ...position(1, 'a') }],
+        1,
+        [],
+        'b'
+      )
+    ).toEqual([]);
+  });
+  it('fusionne sans recul, même si les réponses HTTP et événements arrivent dans le désordre', () => {
+    for (const [a, b, attendu] of [
+      [position(1, 'b'), position(null, null), position(1, 'b')],
+      [position(null, null), position(1, 'a'), position(1, 'a')],
+      [position(1, 'b'), position(2, 'a'), position(2, 'a')],
+      [position(2, 'a'), position(1, 'b'), position(2, 'a')],
+      [position(1, 'b'), position(1, 'a'), position(1, 'b')],
+      [position(1, 'a'), position(1, 'b'), position(1, 'b')],
+      [position(1, 'a'), position(1, null), position(1, null)],
+      [position(1, null), position(1, 'b'), position(1, null)],
+    ])
+      expect(L.fusionnerLecture(a, b)).toEqual(attendu);
+  });
+  it('garde le premier non-lu après arrivée de messages ou chargement d’historique', () => {
+    const separateur = { nonLus: 2 };
+    const messages = [
+      msg('a', 1, { auteurId: 'autre' }),
+      msg('b', 2, { auteurId: 'autre' }),
+    ];
+    expect(L.indexSeparateur(messages, separateur, 'moi')).toBe(0);
+    expect(
+      L.indexSeparateur(
+        [...messages, msg('c', 3, { auteurId: 'autre' })],
+        separateur,
+        'moi'
+      )
+    ).toBe(0);
+    expect(
+      L.indexSeparateur([msg('ancien', 0), ...messages], separateur, 'moi')
+    ).toBe(1);
+    expect(L.indexSeparateur(messages, { nonLus: 0 }, 'moi')).toBe(-1);
+  });
+});

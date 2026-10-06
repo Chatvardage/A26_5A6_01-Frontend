@@ -99,10 +99,6 @@ exposerCanal('messages:modifier', (donnees) =>
 exposerCanal('messages:supprimer', (donnees) =>
   chatGateway.supprimerMessage(donnees)
 );
-// Pastilles « non lu » : dernier message de chaque conversation seulement.
-exposerCanal('resumes-conversations-privees', () =>
-  chatGateway.obtenirResumesConversationsPrivees()
-);
 exposerCanal('obtenir-conversations-privees', () =>
   chatGateway.obtenirConversationsPrivees()
 );
@@ -112,6 +108,18 @@ exposerCanal('obtenir-conversations-privees', () =>
 // dans RealGatewayRuntime.js).
 exposerCanal('obtenir-messages-prive-avant', (donnees) =>
   chatGateway.obtenirMessagesPriveesAvant(donnees)
+);
+
+// Messages non lus (état tenu par Message-Service) et recherche.
+exposerCanal('messages:non-lus', () => chatGateway.obtenirNonLus());
+exposerCanal('messages:marquer-lu', (donnees) =>
+  chatGateway.marquerConversationLue(donnees)
+);
+exposerCanal('messages:rechercher', (donnees) =>
+  chatGateway.rechercherMessages(donnees)
+);
+exposerCanal('messages:lectures', (donnees) =>
+  chatGateway.obtenirLectures(donnees)
 );
 
 exposerCanal('envoyer-message-prive', (donnees) =>

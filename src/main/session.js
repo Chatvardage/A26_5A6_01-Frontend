@@ -130,6 +130,14 @@ chatGateway.on('message-recu', (payload) => {
   }
 });
 
+// Accusé de lecture (voir traiterLectureEntrante) : ✓✓ des messages privés,
+// « Vu par » des salons, non-lus lus depuis un autre appareil.
+chatGateway.on('lecture', (lecture) => {
+  if (etat.mainWindow && !etat.mainWindow.isDestroyed()) {
+    etat.mainWindow.webContents.send('messages:lecture-change', lecture);
+  }
+});
+
 chatGateway.on('synchronisation-requise', () => {
   if (etat.mainWindow && !etat.mainWindow.isDestroyed()) {
     etat.mainWindow.webContents.send('reseau:synchronisation-requise');

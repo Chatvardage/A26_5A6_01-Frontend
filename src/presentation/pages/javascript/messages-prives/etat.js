@@ -41,7 +41,9 @@ const t = I18n.t;
 const appliquerTraductionsStatiques = I18n.appliquerTraductionsStatiques;
 const ChatUiShared = window.ChatUiShared;
 if (!ChatUiShared) {
-  throw new Error('chat-ui-shared.js doit être chargé avant messages-prives/etat.js');
+  throw new Error(
+    'chat-ui-shared.js doit être chargé avant messages-prives/etat.js'
+  );
 }
 const LogiqueInterface = window.LogiqueInterface;
 if (!LogiqueInterface) {
@@ -220,10 +222,14 @@ const NotifPrefs =
       obtenirMode: () => 'aucune',
       definirMode: () => {},
       afficheRonds: () => false,
-      marquerCommeLu: () => {},
-      estNonLu: () => false,
-      compterSalonsNonLus: () => 0,
-      compterConversationsNonLues: () => 0,
+      chargerNonLus: async () => {},
+      nombreNonLus: () => 0,
+      ajouterNonLu: () => {},
+      marquerLu: () => {},
+      totalNonLus: () => 0,
+      remplirCompteur: (element) => {
+        if (element) element.hidden = true;
+      },
       genererIconeBadge: () => null,
       appliquerBadge: () => {},
       traiterMessageRecu: async () => {},
@@ -237,6 +243,14 @@ const serviceNotifications = window.notifications;
 // renderActiveConversation() plus bas) — même raisonnement que dans
 // renderer.js (voir son commentaire équivalent pour le pourquoi).
 let fenetreEstFocusee = true;
+
+// Accusé de lecture de la conversation affichée : jusqu'où l'interlocuteur
+// l'a lue (✓✓, « Lu »), voir chargerLecturesDm.
+let lecturesDm = { conversationId: null, luJusqua: null };
+// Non-lus au moment d'ouvrir la conversation affichée : position de la
+// ligne « Nouveaux messages » (gardée tant qu'on y reste, alors que le
+// compteur, lui, retombe à zéro dès l'affichage).
+let separateurDm = { conversationId: null, nonLus: 0 };
 
 function definirConversationActivePourNotifs(conversationId) {
   if (typeof serviceNotifications?.setActiveConversation === 'function') {
@@ -358,3 +372,5 @@ function brancherPresence() {
     }
   });
 }
+
+let generationLecturesDm = 0;

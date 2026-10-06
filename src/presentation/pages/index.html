@@ -270,6 +270,18 @@
         </div>
         <div class="topbar-actions">
           <button
+            id="open-search"
+            class="network-test-button search-open"
+            type="button"
+            title="Rechercher dans cette conversation"
+            aria-label="Rechercher dans cette conversation"
+            data-i18n-title="search.buttonTitle"
+            data-i18n-aria-label="search.buttonTitle"
+          >
+            <span aria-hidden="true">⌕</span>
+            <span data-i18n="search.button">Rechercher</span>
+          </button>
+          <button
             id="open-members"
             class="network-test-button"
             disabled
@@ -361,6 +373,45 @@
         </div>
         <div id="dialog-content"></div>
       </form>
+    </dialog>
+
+    <!-- Recherche de messages (ChatUiShared.brancherRechercheMessages) :
+         dans le salon ou la conversation privée affichée. -->
+    <dialog id="search-dialog" class="search-dialog">
+      <div class="search-panel">
+        <div class="dialog-header">
+          <!-- Rempli à l'ouverture : « Rechercher dans <conversation> ». -->
+          <h2 class="search-title">Rechercher dans les messages</h2>
+          <button
+            type="button"
+            class="close-button search-close"
+            aria-label="Fermer"
+            data-i18n-aria-label="channels.close"
+          >
+            ×
+          </button>
+        </div>
+        <input
+          type="search"
+          class="search-input"
+          maxlength="100"
+          autocomplete="off"
+          placeholder="Texte à chercher…"
+          aria-label="Texte à chercher"
+          data-i18n-placeholder="search.placeholder"
+          data-i18n-aria-label="search.placeholder"
+        />
+        <p class="search-status" role="status" aria-live="polite"></p>
+        <ul class="search-results"></ul>
+        <button
+          type="button"
+          class="secondary-button full-width search-more"
+          hidden
+          data-i18n="search.more"
+        >
+          Plus de résultats
+        </button>
+      </div>
     </dialog>
 
     <div id="toast" role="status" aria-live="polite"></div>

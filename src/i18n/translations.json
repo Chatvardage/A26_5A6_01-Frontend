@@ -174,6 +174,7 @@
       "ERR_COURRIEL_DEJA_UTILISE": "Ce courriel est déjà associé à un compte.",
       "ERR_SESSION_FERMEE": "La session a été fermée. Reconnecte-toi.",
       "ERR_RESEAU_INDISPONIBLE": "Impossible de joindre le serveur pour le moment. Réessayez plus tard.",
+      "ERR_HTTP_400": "Requête invalide.",
       "ERR_HTTP_409": "Ce pseudo est déjà pris, choisissez-en un autre.",
       "ERR_HTTP_429": "Trop de messages ou de tentatives en peu de temps. Patiente quelques secondes, puis réessaie.",
       "ERR_HTTP_500": "Le serveur ne répond pas pour le moment. Réessaie dans quelques instants.",
@@ -326,6 +327,27 @@
       "maximize": "Agrandir",
       "restore": "Restaurer",
       "close": "Fermer"
+    },
+    "search": {
+      "button": "Rechercher",
+      "buttonTitle": "Rechercher dans cette conversation",
+      "title": "Rechercher dans les messages",
+      "titleIn": "Rechercher dans {name}",
+      "placeholder": "Texte à chercher…",
+      "prompt": "Tape au moins 2 caractères pour chercher dans cette conversation.",
+      "noConversation": "Ouvre un salon ou une conversation pour y chercher.",
+      "searching": "Recherche…",
+      "noResults": "Aucun message trouvé.",
+      "more": "Plus de résultats",
+      "messageNotFound": "Ce message n'est plus dans l'historique (supprimé ou trop ancien)."
+    },
+    "readReceipts": {
+      "newMessages": "Nouveaux messages",
+      "delivered": "Distribué",
+      "read": "Lu",
+      "seenBy": "Vu par {names}",
+      "seenByOneMore": "Vu par {names} et 1 autre",
+      "seenByMore": "Vu par {names} et {count} autres"
     }
   },
   "en": {
@@ -503,6 +525,7 @@
       "ERR_COURRIEL_DEJA_UTILISE": "This email is already associated with an account.",
       "ERR_SESSION_FERMEE": "The session was closed. Please log in again.",
       "ERR_RESEAU_INDISPONIBLE": "Couldn't reach the server right now. Please try again later.",
+      "ERR_HTTP_400": "Invalid request.",
       "ERR_HTTP_409": "This username is already taken, choose another one.",
       "ERR_HTTP_429": "Too many messages or attempts in a short time. Wait a few seconds, then try again.",
       "ERR_HTTP_500": "The server isn't responding right now. Try again in a moment.",
@@ -655,6 +678,27 @@
       "maximize": "Maximize",
       "restore": "Restore",
       "close": "Close"
+    },
+    "search": {
+      "button": "Search",
+      "buttonTitle": "Search this conversation",
+      "title": "Search messages",
+      "titleIn": "Search in {name}",
+      "placeholder": "Text to search…",
+      "prompt": "Type at least 2 characters to search this conversation.",
+      "noConversation": "Open a channel or a conversation to search it.",
+      "searching": "Searching…",
+      "noResults": "No messages found.",
+      "more": "More results",
+      "messageNotFound": "This message is no longer in the history (deleted or too old)."
+    },
+    "readReceipts": {
+      "newMessages": "New messages",
+      "delivered": "Delivered",
+      "read": "Read",
+      "seenBy": "Seen by {names}",
+      "seenByOneMore": "Seen by {names} and 1 other",
+      "seenByMore": "Seen by {names} and {count} others"
     }
   }
 }

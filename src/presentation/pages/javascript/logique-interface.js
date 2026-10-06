@@ -147,6 +147,152 @@
       : null;
   }
 
+  // --- Recherche de messages ---------------------------------------------
+
+  /** Longueurs acceptées par Message-Service (GET /api/messages/search). */
+  const LONGUEUR_MIN_RECHERCHE = 2;
+  const LONGUEUR_MAX_RECHERCHE = 100;
+
+  /** Vrai si `texte` (espaces retirés) peut être cherché. */
+  function peutRechercher(texte) {
+    const longueur = String(texte ?? '').trim().length;
+    return (
+      longueur >= LONGUEUR_MIN_RECHERCHE && longueur <= LONGUEUR_MAX_RECHERCHE
+    );
+  }
+
+  /**
+   * Extrait de `texte` centré sur la première occurrence de `terme` (casse
+   * ignorée), d'au plus `rayon` caractères de chaque côté, avec « … » aux
+   * coupures. Texte entier s'il est court ou si le terme est absent (début).
+   */
+  function extraitAutour(texte, terme, rayon = 60) {
+    const source = String(texte ?? '');
+    if (source.length <= rayon * 2) return source;
+    const position = source
+      .toLocaleLowerCase()
+      .indexOf(String(terme ?? '').toLocaleLowerCase());
+    const debut = Math.max(0, (position < 0 ? 0 : position) - rayon);
+    const fin = Math.min(
+      source.length,
+      debut + rayon * 2 + String(terme ?? '').length
+    );
+    return `${debut > 0 ? '…' : ''}${source.slice(debut, fin)}${fin < source.length ? '…' : ''}`;
+  }
+
+  /**
+   * Découpe `texte` en segments `{ texte, surligne }` : chaque occurrence de
+   * `terme` (casse ignorée) est surlignée. Les pages en font des nœuds texte
+   * et <mark>, jamais du HTML.
+   */
+  function decouperSurligne(texte, terme) {
+    const source = String(texte ?? '');
+    const cherche = String(terme ?? '').toLocaleLowerCase();
+    if (!cherche) return source ? [{ texte: source, surligne: false }] : [];
+    const minuscule = source.toLocaleLowerCase();
+    const segments = [];
+    let depuis = 0;
+    let position = minuscule.indexOf(cherche);
+    while (position >= 0) {
+      if (position > depuis) {
+        segments.push({
+          texte: source.slice(depuis, position),
+          surligne: false,
+        });
+      }
+      segments.push({
+        texte: source.slice(position, position + cherche.length),
+        surligne: true,
+      });
+      depuis = position + cherche.length;
+      position = minuscule.indexOf(cherche, depuis);
+    }
+    if (depuis < source.length) {
+      segments.push({ texte: source.slice(depuis), surligne: false });
+    }
+    return segments;
+  }
+
+  // --- Non-lus et accusés de lecture --------------------------------------
+
+  /**
+   * Index du premier message non lu de `messages` (triés du plus ancien au
+   * plus récent) : le `nonLus`-ième message d'autrui en partant de la fin,
+   * ou le premier message d'autrui chargé s'il y a plus de non-lus que de
+   * messages affichés. -1 s'il n'y a aucun non-lu (pas de séparateur).
+   * Les brouillons non livrés (`nonLivre`) sont toujours les miens.
+   */
+  function indexPremierNonLu(messages, nonLus, moiId) {
+    if (!(nonLus > 0)) return -1;
+    let restants = nonLus;
+    let index = -1;
+    for (let i = messages.length - 1; i >= 0 && restants > 0; i -= 1) {
+      if (messages[i].auteurId !== moiId && !messages[i].nonLivre) {
+        index = i;
+        restants -= 1;
+      }
+    }
+    return index;
+  }
+
+  /** Statut d'un de mes messages : 'lu' si l'autre a lu jusqu'à lui (ou
+   * plus loin), sinon 'distribue' (enregistré par le serveur). */
+  function statutLecture(dateMessage, luJusqua, messageId, dernierMessageLuId) {
+    const lu =
+      luJusqua != null &&
+      (luJusqua > dateMessage ||
+        (luJusqua === dateMessage &&
+          (dernierMessageLuId == null || messageId <= dernierMessageLuId)));
+    return lu ? 'lu' : 'distribue';
+  }
+
+  /** Position maximale, y compris pour deux messages de même date.
+   * Sans identifiant (ancien contrat), toute la milliseconde est lue. */
+  function fusionnerLecture(precedente, entrante) {
+    if (entrante.luJusqua == null) return precedente;
+    if (precedente.luJusqua == null || entrante.luJusqua > precedente.luJusqua)
+      return entrante;
+    if (entrante.luJusqua < precedente.luJusqua) return precedente;
+    if (precedente.dernierMessageLuId == null) return precedente;
+    if (
+      entrante.dernierMessageLuId == null ||
+      entrante.dernierMessageLuId > precedente.dernierMessageLuId
+    )
+      return entrante;
+    return precedente;
+  }
+
+  /** Fixe la frontière à un identifiant : les nouveaux messages ne la déplacent pas. */
+  function indexSeparateur(messages, separateur, moiId) {
+    if (!Object.prototype.hasOwnProperty.call(separateur, 'premierId')) {
+      const index = indexPremierNonLu(messages, separateur.nonLus, moiId);
+      separateur.premierId = messages[index]?.id ?? null;
+    }
+    return messages.findIndex((message) => message.id === separateur.premierId);
+  }
+
+  /** Noms des lecteurs qui ont lu jusqu'à `dateMessage` (ou plus loin),
+   * sauf `exclus` (l'auteur du message, soi-même), sans nom vide. */
+  function lecteursJusqua(lecteurs, dateMessage, exclus = [], messageId) {
+    return (lecteurs ?? [])
+      .filter(
+        (lecteur) =>
+          statutLecture(
+            dateMessage,
+            lecteur.luJusqua,
+            messageId,
+            lecteur.dernierMessageLuId
+          ) === 'lu' && !exclus.includes(lecteur.utilisateurId)
+      )
+      .map((lecteur) => lecteur.nom)
+      .filter(Boolean);
+  }
+
+  /** « Vu par » : les `max` premiers noms, et combien d'autres. */
+  function resumeNoms(noms, max = 3) {
+    return { noms: noms.slice(0, max), autres: Math.max(0, noms.length - max) };
+  }
+
   racine.LogiqueInterface = Object.freeze({
     fusionnerHistorique,
     fusionnerAvecMessagesEnAttente,
@@ -162,5 +308,16 @@
     MESSAGE_BIENVENUE_ID,
     cleNomSalon,
     cleContenuMessage,
+    LONGUEUR_MIN_RECHERCHE,
+    LONGUEUR_MAX_RECHERCHE,
+    peutRechercher,
+    extraitAutour,
+    decouperSurligne,
+    indexPremierNonLu,
+    indexSeparateur,
+    fusionnerLecture,
+    statutLecture,
+    lecteursJusqua,
+    resumeNoms,
   });
 })(globalThis);

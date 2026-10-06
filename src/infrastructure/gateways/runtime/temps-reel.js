@@ -92,6 +92,9 @@ module.exports = {
     socket.on('presence.changed', (evt) => this.traiterPresenceEntrante(evt));
     socket.on('profil.changed', (evt) => this.traiterProfilEntrant(evt));
     socket.on('serveur.change', (evt) => this.traiterServeurEntrant(evt));
+    socket.on('read-state.updated', (evt) => {
+      void this.traiterLectureEntrante(evt);
+    });
     // Accès à un salon perdu (expulsion, salon réservé…) : Message-Service a
     // retiré ce socket de la room. On l'oublie pour pouvoir la rejoindre de
     // nouveau si l'accès revient (voir rejoindreSocketSalon).

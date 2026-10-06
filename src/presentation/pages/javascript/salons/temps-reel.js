@@ -74,28 +74,52 @@ function notifierMessageSysteme(message) {
 // est déjà sur la bonne page (index.html) ; si c'est une conversation
 // privée, on mémorise la cible et on navigue vers message-prive.html, qui
 // la consommera à son chargement.
-if (typeof serviceNotifications?.onNavigateToConversation === 'function') {
-  serviceNotifications.onNavigateToConversation(async (cible) => {
-    const conversationId = cible?.conversationId;
-    if (!conversationId) return;
-    if (cible.type === 'salon') {
-      salonActifId = conversationId;
-      // Salon d'un autre serveur que celui affiché : on recharge, et
-      // obtenirEtat choisit le serveur qui contient ce salon.
-      if (etat.salons.some((salon) => salon.id === conversationId)) {
-        afficherTout();
-      } else {
-        void actualiser();
-      }
-    } else if (cible.type === 'prive') {
-      await window.electronAPI.definirCibleNavigation({
-        type: 'prive',
-        id: conversationId,
-      });
-      window.electronAPI.navigate('message-prive.html');
+/** Ouvre un salon (sur cette page) ou une conversation privée (page des
+ * messages privés) : clic sur une notification ou sur un résultat de
+ * recherche, `{ type: 'salon' | 'prive', conversationId }`. */
+async function ouvrirConversation(cible) {
+  const conversationId = cible?.conversationId;
+  if (!conversationId) return;
+  if (cible.type === 'salon') {
+    salonActifId = conversationId;
+    // Salon d'un autre serveur que celui affiché : on recharge, et
+    // obtenirEtat choisit le serveur qui contient ce salon.
+    if (etat.salons.some((salon) => salon.id === conversationId)) {
+      afficherTout();
+    } else {
+      await actualiser();
     }
-  });
+    // Résultat de recherche : jusqu'au message lui-même.
+    if (cible.messageId) await allerAuMessageSalon(cible.messageId);
+  } else if (cible.type === 'prive') {
+    await window.electronAPI.definirCibleNavigation({
+      type: 'prive',
+      id: conversationId,
+    });
+    window.electronAPI.navigate('message-prive.html');
+  }
 }
+
+if (typeof serviceNotifications?.onNavigateToConversation === 'function') {
+  serviceNotifications.onNavigateToConversation(ouvrirConversation);
+}
+
+// --- Recherche de messages ------------------------------------------------
+ChatUiShared.brancherRechercheMessages({
+  bouton: document.querySelector('#open-search'),
+  dialogue: document.querySelector('#search-dialog'),
+  api: window.electronAPI,
+  t,
+  messageErreur,
+  // Recherche dans le salon affiché.
+  conversationActive: () => {
+    const salon = etat.salons.find((item) => item.id === salonActifId);
+    return salon
+      ? { type: 'salon', conversationId: salon.id, nom: `# ${nomSalon(salon)}` }
+      : null;
+  },
+  surChoix: ouvrirConversation,
+});
 
 // --- Nouveaux messages en temps réel (salon ou DM) --------------------------
 // Le WebSocket du Serveur-API pousse un événement à chaque nouveau message,
@@ -207,20 +231,24 @@ if (typeof window.electronAPI?.onNouveauMessage === 'function') {
         ? payload.salonId
         : payload.message.conversationId,
     };
-    // Message d'un salon d'un AUTRE serveur : pastille sur son icône du rail
-    // (le rail n'affiche le détail "non lu" que pour le serveur actif).
-    if (
-      estSalon &&
-      payload.serveurId &&
-      payload.serveurId !== serveurActifId &&
-      payload.message.auteurId !== utilisateurActuelId &&
-      NotifPrefs.afficheRonds(utilisateurActuelId)
-    ) {
-      serveursNonLus.add(payload.serveurId);
-      memoriserServeursNonLus();
+    // Message d'autrui : un non-lu de plus. S'il arrive dans le salon
+    // affiché, fenêtre au premier plan, son affichage le marque aussitôt lu
+    // (voir afficherMessages) ; sinon il reste compté (salon, serveur du
+    // rail, badge).
+    if (payload.message.auteurId !== utilisateurActuelId) {
+      NotifPrefs.ajouterNonLu(
+        messageNormalise.type,
+        messageNormalise.conversationId
+      );
     }
     NotifPrefs.traiterMessageRecu(messageNormalise, {
       utilisateurId: utilisateurActuelId,
+      api: window.electronAPI,
+      surNonLusActualises: () => {
+        afficherSalons();
+        actualiserBadgeMessagesPrives();
+        mettreAJourBadgeApplication();
+      },
       surSalon: () => integrerMessageSalonRecu(payload),
       surPrive: async () => {
         await actualiserBadgeMessagesPrives();
@@ -471,14 +499,27 @@ window.electronAPI.onMessageModifieChange((message) => {
   appliquerMessageSalonModifie(message);
 });
 
-window.electronAPI.onMessageSupprimeChange((message) => {
+window.electronAPI.onMessageSupprimeChange(async (message) => {
   ChatUiShared.oublierEtatActionMessage(message?.messageId);
   appliquerMessageSalonSupprime(message?.messageId);
+  // Le message peut appartenir à une conversation absente du cache local.
+  await NotifPrefs.chargerNonLus(window.electronAPI);
+  afficherSalons();
+  actualiserBadgeMessagesPrives();
+  mettreAJourBadgeApplication();
+});
+
+// Accusés de lecture (« Vu par ») et non-lus lus depuis un autre appareil.
+window.electronAPI.onLectureChange?.((lecture) => {
+  void appliquerLecture(lecture);
 });
 
 window.electronAPI.onSynchronisationRequise?.(async () => {
   try {
+    // Messages reçus pendant la coupure : compteurs relus sur le serveur.
+    await NotifPrefs.chargerNonLus(window.electronAPI);
     await actualiser({ conserverPositionScroll: true });
+    if (salonActifId) await chargerLecturesSalon(salonActifId);
     await actualiserBadgeMessagesPrives();
   } catch (erreur) {
     notifier(messageErreur(erreur), true);

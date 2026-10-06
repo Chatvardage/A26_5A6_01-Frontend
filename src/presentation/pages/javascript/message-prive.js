@@ -43,24 +43,51 @@ window.addEventListener('DOMContentLoaded', async () => {
   // conversation privée, on est déjà sur la bonne page ; si c'est un salon,
   // on mémorise la cible et on navigue vers index.html, qui la consommera à
   // son chargement (voir son onNavigateToConversation).
+  // Même chemin pour un résultat de recherche (voir plus bas).
+  const ouvrirConversation = async (cible) => {
+    const conversationId = cible?.conversationId;
+    if (!conversationId) return;
+    if (cible.type === 'prive') {
+      state.activeConversationId = conversationId;
+      await renderActiveConversation();
+      if (state.activeConversationId !== conversationId) return;
+      renderConversationList();
+      mettreAJourBadgeApplication();
+      // Résultat de recherche : jusqu'au message lui-même.
+      if (cible.messageId) await allerAuMessageDm(cible.messageId);
+    } else if (cible.type === 'salon') {
+      await window.electronAPI.definirCibleNavigation({
+        type: 'salon',
+        id: conversationId,
+      });
+      window.electronAPI.navigate('index.html');
+    }
+  };
   if (typeof serviceNotifications?.onNavigateToConversation === 'function') {
-    serviceNotifications.onNavigateToConversation(async (cible) => {
-      const conversationId = cible?.conversationId;
-      if (!conversationId) return;
-      if (cible.type === 'prive') {
-        state.activeConversationId = conversationId;
-        await renderActiveConversation();
-        renderConversationList();
-        mettreAJourBadgeApplication();
-      } else if (cible.type === 'salon') {
-        await window.electronAPI.definirCibleNavigation({
-          type: 'salon',
-          id: conversationId,
-        });
-        window.electronAPI.navigate('index.html');
-      }
-    });
+    serviceNotifications.onNavigateToConversation(ouvrirConversation);
   }
+
+  ChatUiShared.brancherRechercheMessages({
+    bouton: document.getElementById('open-search'),
+    dialogue: document.getElementById('search-dialog'),
+    api: window.electronAPI,
+    t,
+    messageErreur,
+    // Recherche dans la conversation privée affichée.
+    conversationActive: () => {
+      const conversation = trouverConversation(state.activeConversationId);
+      return conversation
+        ? {
+            type: 'prive',
+            conversationId: conversation.id,
+            nom:
+              ChatUiShared.nomAffiche(conversation.otherUser) ||
+              t('dm.defaultUser'),
+          }
+        : null;
+    },
+    surChoix: ouvrirConversation,
+  });
 
   profilBtn?.addEventListener('click', () => {
     window.electronAPI.navigate('profil.html');
@@ -184,9 +211,18 @@ window.addEventListener('DOMContentLoaded', async () => {
     notifierErreur: (erreur) => notifier(messageErreur(erreur), true),
   });
 
+  // Accusés de lecture (✓✓) et non-lus lus depuis un autre appareil.
+  window.electronAPI.onLectureChange?.((lecture) => {
+    void appliquerLecture(lecture);
+  });
+
   window.electronAPI.onSynchronisationRequise?.(async () => {
     try {
+      // Messages reçus pendant la coupure : compteurs relus sur le serveur.
+      await NotifPrefs.chargerNonLus(window.electronAPI);
       await refreshConversations({ conserverPositionScroll: true });
+      if (state.activeConversationId)
+        await chargerLecturesDm(state.activeConversationId);
       await actualiserBadgeSalons();
     } catch (erreur) {
       notifier(messageErreur(erreur), true);
@@ -208,6 +244,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   window.electronAPI.onMessageSupprimeChange(async (message) => {
     ChatUiShared.oublierEtatActionMessage(message?.messageId);
     await appliquerMessageSupprime(message?.messageId);
+    // Relire même si la conversation supprimée n'est pas chargée ici.
+    await NotifPrefs.chargerNonLus(window.electronAPI);
+    renderConversationList();
+    await actualiserBadgeSalons({ recharger: false });
+    mettreAJourBadgeApplication();
   });
 
   // Rail affiché tout de suite depuis le cache (voir chat-ui-shared.js),
@@ -216,7 +257,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     conteneur: document.getElementById('server-rail'),
     avant: document.getElementById('open-create-channel-rail'),
     serveurActifId: null,
-    nonLus: serveursNonLus(),
+    // Pastilles : avec les compteurs de non-lus, voir actualiserBadgeSalons.
+    nonLus: new Set(),
     surChoix: (serveur) => {
       ecrireStockage(localStorage, CLEF_SERVEUR_ACTIF, serveur.id);
       window.electronAPI.navigate('index.html');
@@ -225,6 +267,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   try {
     await initialiserUtilisateurCourant();
     await chargerEtatReseauEtPresences();
+    // Avant le premier rendu : il affiche les compteurs, et marque lue la
+    // conversation affichée.
+    await NotifPrefs.chargerNonLus(window.electronAPI);
     await refreshConversations();
   } finally {
     // Premier rendu terminé : le contenu apparaît en fondu (voir

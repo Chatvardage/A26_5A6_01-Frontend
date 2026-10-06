@@ -338,7 +338,12 @@
 
   /** Bouton "Réessayer" de l'indicateur réseau (la présence se modifie
    * désormais depuis la page profil). */
-  function brancherBoutonReessayer({ api, element, getEtatReseau, notifierErreur }) {
+  function brancherBoutonReessayer({
+    api,
+    element,
+    getEtatReseau,
+    notifierErreur,
+  }) {
     element?.addEventListener('click', async () => {
       if (getEtatReseau()?.statut === 'connecte') return;
       try {
@@ -501,7 +506,9 @@
         image.src = serveur.icone;
         bouton.appendChild(image);
       } else {
-        bouton.appendChild(document.createTextNode(initialesServeur(serveur.nom)));
+        bouton.appendChild(
+          document.createTextNode(initialesServeur(serveur.nom))
+        );
       }
       const pastille = document.createElement('span');
       pastille.className = 'notif-dot notif-dot--rail';
@@ -849,7 +856,275 @@
     return conteneur;
   }
 
+  // --- Recherche de messages (dialogue partagé par les deux pages) ---------
+  // Le dialogue #search-dialog est écrit dans index.html et
+  // message-prive.html. La recherche porte sur la conversation affichée (le
+  // salon, ou la conversation privée), fournie par la page
+  // (`conversationActive`) ; `surChoix` ouvre la conversation d'un résultat.
+  const DELAI_RECHERCHE_MS = 300;
+
+  function creerResultatRecherche({ resultat, terme, t, surChoix }) {
+    const { LogiqueInterface } = window;
+    const bouton = document.createElement('button');
+    bouton.type = 'button';
+    bouton.classList.add('search-result');
+
+    const message = resultat.message;
+    const meta = document.createElement('span');
+    meta.classList.add('search-result-meta');
+    meta.textContent = `${resultat.auteurNom ?? t('dm.defaultUser')} · ${new Date(
+      message.date ?? message.envoi
+    ).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}`;
+
+    const cleContenu = LogiqueInterface.cleContenuMessage(message);
+    const contenu = cleContenu ? t(cleContenu) : message.contenu;
+    const extrait = document.createElement('span');
+    extrait.classList.add('search-result-excerpt');
+    for (const segment of LogiqueInterface.decouperSurligne(
+      LogiqueInterface.extraitAutour(contenu, terme),
+      terme
+    )) {
+      if (segment.surligne) {
+        const marque = document.createElement('mark');
+        marque.textContent = segment.texte;
+        extrait.appendChild(marque);
+      } else {
+        extrait.appendChild(document.createTextNode(segment.texte));
+      }
+    }
+
+    bouton.append(meta, extrait);
+    bouton.addEventListener('click', () =>
+      surChoix({
+        type: resultat.type,
+        conversationId: resultat.conversationId,
+        messageId: message.id,
+      })
+    );
+    const item = document.createElement('li');
+    item.appendChild(bouton);
+    return item;
+  }
+
+  /**
+   * Branche le bouton `bouton` et le dialogue de recherche `dialogue`.
+   * `conversationActive()` : `{ type, conversationId, nom }` de la
+   * conversation affichée, ou null. Recherche lancée après une courte pause
+   * de frappe (ou Entrée), à partir de 2 caractères ; « Plus de résultats »
+   * suit le curseur du serveur. Une réponse arrivée après une saisie plus
+   * récente (ou pour une autre conversation) est ignorée.
+   */
+  function brancherRechercheMessages({
+    bouton,
+    dialogue,
+    api,
+    t,
+    messageErreur,
+    conversationActive,
+    surChoix,
+  }) {
+    if (!bouton || !dialogue) return;
+    const titre = dialogue.querySelector('.search-title');
+    const champ = dialogue.querySelector('.search-input');
+    const liste = dialogue.querySelector('.search-results');
+    const statut = dialogue.querySelector('.search-status');
+    const plus = dialogue.querySelector('.search-more');
+    let numeroRequete = 0;
+    let portee = null;
+    let texte = '';
+    let curseur = null;
+    let minuteur = null;
+
+    const choisir = (cible) => {
+      dialogue.close();
+      surChoix(cible);
+    };
+
+    function vider() {
+      window.clearTimeout(minuteur);
+      numeroRequete += 1; // une réponse en cours est désormais périmée
+      liste.replaceChildren();
+      plus.hidden = true;
+    }
+
+    async function chercher({ suite = false } = {}) {
+      const numero = ++numeroRequete;
+      const terme = texte;
+      if (!suite) {
+        liste.replaceChildren();
+        curseur = null;
+      }
+      plus.hidden = true;
+      statut.textContent = t('search.searching');
+      try {
+        const page = await api.rechercherMessages({
+          texte: terme,
+          type: portee.type,
+          conversationId: portee.conversationId,
+          ...(suite && curseur ? { curseur } : {}),
+        });
+        if (numero !== numeroRequete) return;
+        for (const resultat of page.resultats) {
+          liste.appendChild(
+            creerResultatRecherche({
+              resultat,
+              terme,
+              t,
+              surChoix: choisir,
+            })
+          );
+        }
+        curseur = page.curseurSuivant;
+        plus.hidden = !curseur;
+        statut.textContent = liste.children.length ? '' : t('search.noResults');
+      } catch (erreur) {
+        if (numero !== numeroRequete) return;
+        statut.textContent = messageErreur(erreur);
+      }
+    }
+
+    function relancer({ immediat = false } = {}) {
+      vider();
+      curseur = null;
+      texte = champ.value.trim();
+      if (!portee || !window.LogiqueInterface.peutRechercher(texte)) {
+        vider();
+        statut.textContent = t(
+          portee ? 'search.prompt' : 'search.noConversation'
+        );
+        return;
+      }
+      if (immediat) void chercher();
+      else
+        minuteur = window.setTimeout(() => void chercher(), DELAI_RECHERCHE_MS);
+    }
+
+    bouton.addEventListener('click', () => {
+      const active = conversationActive();
+      // Autre conversation qu'à la dernière ouverture : on repart de zéro.
+      if (
+        active?.type !== portee?.type ||
+        active?.conversationId !== portee?.conversationId
+      ) {
+        vider();
+        champ.value = '';
+      }
+      portee = active;
+      titre.textContent = active
+        ? t('search.titleIn', { name: active.nom })
+        : t('search.title');
+      champ.disabled = !active;
+      if (!dialogue.open) dialogue.showModal();
+      champ.focus();
+      champ.select();
+      if (!champ.value.trim() || !active) {
+        statut.textContent = t(
+          active ? 'search.prompt' : 'search.noConversation'
+        );
+      }
+    });
+    champ.addEventListener('input', () => relancer());
+    champ.addEventListener('keydown', (evenement) => {
+      if (evenement.key !== 'Enter') return;
+      evenement.preventDefault();
+      relancer({ immediat: true });
+    });
+    plus.addEventListener('click', () => void chercher({ suite: true }));
+    dialogue
+      .querySelector('.search-close')
+      ?.addEventListener('click', () => dialogue.close());
+  }
+
+  // --- Non-lus et accusés de lecture (affichage commun aux deux pages) -----
+
+  /** Ligne « Nouveaux messages », au-dessus du premier non-lu. */
+  function creerSeparateurNonLus(t) {
+    const separateur = document.createElement('div');
+    separateur.classList.add('unread-separator');
+    separateur.setAttribute('role', 'separator');
+    const libelle = document.createElement('span');
+    libelle.textContent = t('readReceipts.newMessages');
+    separateur.appendChild(libelle);
+    return separateur;
+  }
+
+  /** ✓ (distribué) ou ✓✓ (lu) d'un de mes messages privés. */
+  function creerStatutLecture(statut, t) {
+    const marque = document.createElement('span');
+    marque.classList.add('read-status', `read-status--${statut}`);
+    marque.textContent = statut === 'lu' ? '✓✓' : '✓';
+    const libelle = t(
+      statut === 'lu' ? 'readReceipts.read' : 'readReceipts.delivered'
+    );
+    marque.title = libelle;
+    marque.setAttribute('aria-label', libelle);
+    return marque;
+  }
+
+  /** Texte sous un message : « Lu », « Vu par … ». */
+  function creerLigneLecture(texte) {
+    const ligne = document.createElement('p');
+    ligne.classList.add('read-receipt');
+    ligne.textContent = texte;
+    return ligne;
+  }
+
+  // --- Aller à un message (résultat de recherche) ---------------------------
+  // Message mis en évidence quelques secondes ; gardé ici pour que les
+  // rendus suivants (accusés de lecture, message reçu) le conservent.
+  const DUREE_MISE_EN_EVIDENCE_MS = 2500;
+  let messageCible = { id: null, jusqua: 0 };
+
+  /** Vrai si la ligne du message `messageId` doit être mise en évidence. */
+  function estMessageCible(messageId) {
+    return messageCible.id === messageId && Date.now() < messageCible.jusqua;
+  }
+
+  /**
+   * Fait défiler `conteneur` jusqu'au message `messageId` (lignes marquées
+   * `data-message-id`) et le met en évidence. Faux s'il n'est pas affiché.
+   */
+  function allerAuMessageAffiche(conteneur, messageId) {
+    const ligne = [...conteneur.querySelectorAll('[data-message-id]')].find(
+      (element) => element.dataset.messageId === messageId
+    );
+    if (!ligne) return false;
+    messageCible = {
+      id: messageId,
+      jusqua: Date.now() + DUREE_MISE_EN_EVIDENCE_MS,
+    };
+    ligne.classList.add('message-cible');
+    ligne.scrollIntoView?.({ block: 'center' });
+    window.setTimeout(() => {
+      conteneur
+        .querySelectorAll('.message-cible')
+        .forEach((element) => element.classList.remove('message-cible'));
+    }, DUREE_MISE_EN_EVIDENCE_MS);
+    return true;
+  }
+
+  /** « Vu par alice, bob et 3 autres » (null si personne). */
+  function texteVuPar(noms, t) {
+    if (!noms.length) return null;
+    const resume = window.LogiqueInterface.resumeNoms(noms);
+    const liste = resume.noms.join(', ');
+    if (!resume.autres) return t('readReceipts.seenBy', { names: liste });
+    return t(
+      resume.autres === 1
+        ? 'readReceipts.seenByOneMore'
+        : 'readReceipts.seenByMore',
+      { names: liste, count: resume.autres }
+    );
+  }
+
   window.ChatUiShared = Object.freeze({
+    estMessageCible,
+    allerAuMessageAffiche,
+    creerSeparateurNonLus,
+    creerStatutLecture,
+    creerLigneLecture,
+    texteVuPar,
+    brancherRechercheMessages,
     afficherEtatReseau,
     afficherAvatarCourant,
     remplirAvatar,

@@ -37,23 +37,6 @@ function renderConversationList() {
     }
     ChatUiShared.remplirAvatar(avatar, otherUser?.avatar);
 
-    const nonLu =
-      afficherRonds &&
-      NotifPrefs.estNonLu(
-        state.currentUserId,
-        conversation.id,
-        conversation.lastMessage
-          ? {
-              auteurId: conversation.lastMessage.auteurId,
-              timestamp: conversation.lastMessage.envoi,
-            }
-          : null
-      );
-    const dot = document.createElement('span');
-    dot.classList.add('notif-dot', 'notif-dot--avatar');
-    dot.hidden = !nonLu;
-    avatar.appendChild(dot);
-
     const info = document.createElement('div');
     info.classList.add('conversation-info');
 
@@ -67,7 +50,15 @@ function renderConversationList() {
     lastMessageEl.textContent = subtitle;
 
     info.append(username, lastMessageEl);
-    li.append(avatar, info);
+    // Messages non lus (compteurs de Message-Service, voir NotifPrefs).
+    const compteur = document.createElement('span');
+    compteur.classList.add('notif-count', 'notif-count--conversation');
+    NotifPrefs.remplirCompteur(
+      compteur,
+      NotifPrefs.nombreNonLus('prive', conversation.id),
+      afficherRonds
+    );
+    li.append(avatar, info, compteur);
 
     li.addEventListener('click', async () => {
       state.activeConversationId = conversation.id;
@@ -168,6 +159,12 @@ async function renderActiveConversation(options = {}) {
   // RealGatewayRuntime.js) — même logique que etatHistoriqueSalon dans
   // renderer.js (voir son commentaire équivalent).
   if (etatHistoriqueDm.conversationId !== conversation.id) {
+    // Avant le marquage comme lu plus bas, qui remet le compteur à zéro.
+    separateurDm = {
+      conversationId: conversation.id,
+      nonLus: NotifPrefs.nombreNonLus('prive', conversation.id),
+    };
+    void chargerLecturesDm(conversation.id);
     etatHistoriqueDm = {
       conversationId: conversation.id,
       messagesAnciens: [],
@@ -184,9 +181,6 @@ async function renderActiveConversation(options = {}) {
   // pourquoi (sinon ce rond de notification et la vraie notification
   // système de main.js, qui exige déjà le focus pour la même décision,
   // finissent en désaccord).
-  if (fenetreEstFocusee) {
-    NotifPrefs.marquerCommeLu(state.currentUserId, conversation.id, Date.now());
-  }
   // La conversation "active" que main.js ne doit pas notifier (voir
   // showMessageNotification côté main.js) reste définie qu'on ait le
   // focus ou non : c'est elle qui est affichée à l'écran.
@@ -282,7 +276,26 @@ async function renderActiveConversation(options = {}) {
     )
   );
 
-  messages.forEach((message) => {
+  const indexNonLu = LogiqueInterface.indexSeparateur(
+    messages,
+    separateurDm,
+    state.currentUserId
+  );
+  // Jusqu'où l'interlocuteur a lu (connu une fois les lectures chargées).
+  const lecturesConnues = lecturesDm.conversationId === conversation.id;
+  const luJusqua = lecturesConnues ? lecturesDm.luJusqua : null;
+  // « Distribué » / « Lu » sous mon dernier message, s'il est le dernier
+  // de la conversation (comme iMessage).
+  const dernierLivre = messages.filter((message) => !message.nonLivre).at(-1);
+  const ligneSous =
+    lecturesConnues && dernierLivre?.auteurId === state.currentUserId
+      ? dernierLivre.id
+      : null;
+
+  messages.forEach((message, index) => {
+    if (index === indexNonLu) {
+      messageList.appendChild(ChatUiShared.creerSeparateurNonLus(t));
+    }
     const row = document.createElement('article');
     const isOwn = message.auteurId === state.currentUserId;
     const author = isOwn
@@ -294,6 +307,10 @@ async function renderActiveConversation(options = {}) {
     });
 
     row.classList.add('message-row');
+    row.dataset.messageId = message.id;
+    if (ChatUiShared.estMessageCible(message.id)) {
+      row.classList.add('message-cible');
+    }
     if (isOwn) {
       row.classList.add('own-message');
     }
@@ -333,7 +350,23 @@ async function renderActiveConversation(options = {}) {
       edited.textContent = `(${t('messages.edited')})`;
       meta.appendChild(edited);
     }
+    const statut = LogiqueInterface.statutLecture(
+      message.envoi,
+      luJusqua,
+      message.id,
+      lecturesDm.dernierMessageLuId
+    );
+    if (isOwn && !message.nonLivre) {
+      meta.appendChild(ChatUiShared.creerStatutLecture(statut, t));
+    }
     body.append(meta, text);
+    if (message.id === ligneSous) {
+      body.appendChild(
+        ChatUiShared.creerLigneLecture(
+          statut === 'lu' ? t('readReceipts.read') : t('readReceipts.delivered')
+        )
+      );
+    }
     if (message.nonLivre) {
       body.appendChild(creerActionsMessageNonLivre(message));
     } else if (isOwn) {
@@ -342,6 +375,18 @@ async function renderActiveConversation(options = {}) {
     row.append(avatar, body);
     messageList.appendChild(row);
   });
+
+  if (fenetreEstFocusee && dernierLivre?.id) {
+    NotifPrefs.marquerLu(window.electronAPI, 'prive', conversation.id, {
+      messageId: dernierLivre.id,
+      estAffichee: () =>
+        fenetreEstFocusee && state.activeConversationId === conversation.id,
+      surChangement: () => {
+        renderConversationList();
+        mettreAJourBadgeApplication();
+      },
+    });
+  }
 
   if (garderScroll) {
     messageList.scrollTop = scrollAvant;
@@ -390,7 +435,22 @@ function creerActionsMessageNonLivre(message) {
   });
 }
 
-async function chargerMessagesPlusAnciensDm() {
+const paginationsEnCoursDm = new Map();
+
+function chargerMessagesPlusAnciensDm(options = {}) {
+  const historique = etatHistoriqueDm;
+  const enCours = paginationsEnCoursDm.get(historique);
+  if (enCours) return enCours;
+  const requete = executerPaginationDm(options).finally(() => {
+    if (paginationsEnCoursDm.get(historique) === requete)
+      paginationsEnCoursDm.delete(historique);
+  });
+  paginationsEnCoursDm.set(historique, requete);
+  return requete;
+}
+
+async function executerPaginationDm({ taille } = {}) {
+  const historique = etatHistoriqueDm;
   const conversation = state.conversations.find(
     (entry) => entry.id === state.activeConversationId
   );
@@ -400,7 +460,7 @@ async function chargerMessagesPlusAnciensDm() {
     etatHistoriqueDm.enChargement ||
     etatHistoriqueDm.finHistorique
   ) {
-    return;
+    return false;
   }
 
   const plusAncienCharge =
@@ -410,25 +470,130 @@ async function chargerMessagesPlusAnciensDm() {
   await renderActiveConversation({ conserverPositionScroll: true });
 
   try {
+    if (etatHistoriqueDm !== historique) return false;
     const resultat = await window.electronAPI.obtenirMessagesPriveesAvant({
       conversationId: conversation.id,
       utilisateurId: state.currentUserId,
       avantId: plusAncienCharge?.id,
+      ...(taille ? { taille } : {}),
     });
-    if (etatHistoriqueDm.conversationId !== conversation.id) {
-      return;
+    if (etatHistoriqueDm !== historique) {
+      return false;
     }
     etatHistoriqueDm.messagesAnciens = fusionnerHistoriqueDm(
       etatHistoriqueDm.messagesAnciens,
       resultat.messages
     );
     etatHistoriqueDm.finHistorique = resultat.finHistorique;
+    return true;
   } catch (erreur) {
+    if (etatHistoriqueDm !== historique) return false;
     notifier(messageErreur(erreur), true);
+    return false;
   } finally {
-    if (etatHistoriqueDm.conversationId === conversation.id) {
+    if (etatHistoriqueDm === historique) {
       etatHistoriqueDm.enChargement = false;
       await renderActiveConversation({ conserverPositionScroll: true });
     }
+  }
+}
+
+/**
+ * Accusé de lecture de la conversation `conversationId` (jusqu'où
+ * l'interlocuteur l'a lue), puis nouveau rendu si elle est toujours
+ * affichée. Best-effort : sans réponse, les messages restent « distribués ».
+ */
+async function chargerLecturesDm(conversationId) {
+  const generation = ++generationLecturesDm;
+  const etat =
+    lecturesDm.conversationId === conversationId
+      ? lecturesDm
+      : { conversationId, luJusqua: null };
+  lecturesDm = etat;
+  try {
+    const { lecteurs } = await window.electronAPI.obtenirLectures({
+      type: 'prive',
+      conversationId,
+    });
+    if (
+      generation !== generationLecturesDm ||
+      state.activeConversationId !== conversationId ||
+      lecturesDm.conversationId !== conversationId
+    )
+      return;
+    lecturesDm = {
+      conversationId,
+      ...LogiqueInterface.fusionnerLecture(lecturesDm, lecteurs[0] ?? etat),
+    };
+    await renderActiveConversation({ garderScroll: true });
+  } catch (erreur) {
+    console.warn('[lectures] accusé de lecture indisponible :', erreur);
+  }
+}
+
+/**
+ * Accusé de lecture reçu en temps réel. Lu depuis un de mes autres
+ * appareils : les compteurs sont relus. Lu par l'interlocuteur de la
+ * conversation affichée : ses ✓ passent à ✓✓.
+ */
+async function appliquerLecture(lecture) {
+  if (lecture?.deMoi) {
+    await NotifPrefs.chargerNonLus(window.electronAPI);
+    renderConversationList();
+    await actualiserBadgeSalons({ recharger: false });
+    mettreAJourBadgeApplication();
+    return;
+  }
+  if (
+    lecture?.type !== 'prive' ||
+    lecture.conversationId !== state.activeConversationId ||
+    lecturesDm.conversationId !== lecture.conversationId
+  ) {
+    return;
+  }
+  lecturesDm = {
+    conversationId: lecture.conversationId,
+    ...LogiqueInterface.fusionnerLecture(lecturesDm, lecture),
+  };
+  await renderActiveConversation({ garderScroll: true });
+}
+
+// Saut vers un message ancien (résultat de recherche) : pages plus grandes
+// que la pagination normale, et un plafond pour un très long historique.
+const TAILLE_PAGE_SAUT_DM = 100;
+const PAGES_MAX_SAUT_DM = 20;
+
+/**
+ * Affiche le message `messageId` de la conversation affichée : charge
+ * l'historique plus ancien jusqu'à lui (sans trou, comme « Charger plus »),
+ * puis défile jusqu'à lui et le met en évidence.
+ */
+async function allerAuMessageDm(messageId) {
+  const conversationInitiale = state.activeConversationId;
+  if (!conversationInitiale) return;
+  const historiqueInitial = etatHistoriqueDm;
+  const estCharge = () => {
+    const conversation = trouverConversation(state.activeConversationId);
+    return Boolean(
+      conversation &&
+      (LogiqueInterface.contientMessage(
+        conversation.messages ?? [],
+        messageId
+      ) ||
+        (etatHistoriqueDm.conversationId === conversation.id &&
+          LogiqueInterface.contientMessage(
+            etatHistoriqueDm.messagesAnciens,
+            messageId
+          )))
+    );
+  };
+  for (let page = 0; !estCharge() && page < PAGES_MAX_SAUT_DM; page += 1) {
+    if (state.activeConversationId !== conversationInitiale || etatHistoriqueDm !== historiqueInitial) return;
+    if (!(await chargerMessagesPlusAnciensDm({ taille: TAILLE_PAGE_SAUT_DM })))
+      break;
+  }
+  if (state.activeConversationId !== conversationInitiale || etatHistoriqueDm !== historiqueInitial) return;
+  if (!ChatUiShared.allerAuMessageAffiche(messageList, messageId)) {
+    notifier(t('search.messageNotFound'), true);
   }
 }

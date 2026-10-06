@@ -512,6 +512,99 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
       expect(runtime.indexMessages.has('r1')).toBe(false);
     });
 
+    it('relaie les accusés de lecture sous les identifiants de l’app', async () => {
+      const { runtime, socket } = runtimeConnecte();
+      runtime.utilisateursConnus.set('u2', { id: 'u2', pseudo: 'bob' });
+      vi.spyOn(runtime, 'resoudrePseudos').mockResolvedValue(undefined);
+      runtime.connecterSocket();
+      const lectures: unknown[] = [];
+      runtime.on('lecture', (lecture: unknown) => lectures.push(lecture));
+      const date = '2026-01-01T00:00:00.000Z';
+      const ms = new Date(date).getTime();
+      const s = socket();
+
+      // Bob a lu ma conversation avec lui.
+      s._declencher('read-state.updated', {
+        kind: 'dm',
+        targetId: 'moi',
+        userId: 'u2',
+        lastReadAt: date,
+        lastReadMessageId: 'm1',
+      });
+      // Lu depuis un de mes autres appareils.
+      s._declencher('read-state.updated', {
+        kind: 'dm',
+        targetId: 'u2',
+        userId: 'moi',
+        lastReadAt: date,
+      });
+      // Salon lu par bob.
+      s._declencher('read-state.updated', {
+        kind: 'room',
+        targetId: 'salon',
+        userId: 'u2',
+        lastReadAt: date,
+      });
+      // Ignorés : conversation d'autres personnes, forme inconnue, invalides.
+      for (const invalide of [
+        { kind: 'dm', targetId: 'u3', userId: 'u2', lastReadAt: date },
+        { kind: 'groupe', targetId: 'g', userId: 'u2', lastReadAt: date },
+        { kind: 'dm', targetId: 'moi', userId: 3, lastReadAt: date },
+        { kind: 'dm', targetId: null, userId: 'u2', lastReadAt: date },
+        { kind: 'dm', targetId: 'moi', userId: 'u2', lastReadAt: 1 },
+        { kind: 'dm', targetId: 'moi', userId: 'u2', lastReadAt: '' },
+        { kind: 'dm', targetId: 'moi', userId: 'u2', lastReadAt: 'abc' },
+        { kind: 'room', targetId: 'salon', userId: 'u2', lastReadAt: '+999999-01-01T00:00:00Z' },
+        null,
+      ]) {
+        s._declencher('read-state.updated', invalide);
+      }
+
+      await vi.waitFor(() => expect(lectures).toHaveLength(3));
+      // Ordre libre : le nom d'un autre lecteur est résolu avant l'envoi.
+      expect(lectures).toEqual(
+        expect.arrayContaining([
+          {
+            type: 'prive',
+            conversationId: 'moi:u2',
+            utilisateurId: 'u2',
+            nom: 'bob',
+            luJusqua: ms,
+            dernierMessageLuId: 'm1',
+            deMoi: false,
+          },
+          {
+            type: 'prive',
+            conversationId: 'moi:u2',
+            utilisateurId: 'moi',
+            nom: null,
+            luJusqua: ms,
+            dernierMessageLuId: null,
+            deMoi: true,
+          },
+          {
+            type: 'salon',
+            conversationId: 'salon',
+            utilisateurId: 'u2',
+            nom: 'bob',
+            luJusqua: ms,
+            dernierMessageLuId: null,
+            deMoi: false,
+          },
+        ])
+      );
+
+      // Sans session : rien n'est relayé.
+      runtime.utilisateurConnecte = null;
+      await runtime.traiterLectureEntrante({
+        kind: 'room',
+        targetId: 'salon',
+        userId: 'u2',
+        lastReadAt: date,
+      });
+      expect(lectures).toHaveLength(3);
+    });
+
     it("ignore les événements d'un ancien socket", () => {
       const { runtime, sockets } = runtimeConnecte();
       runtime.connecterSocket();
@@ -756,7 +849,6 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
       await runtime.chargerProfilsPublics(['u2']);
       expect(runtime.presences.u2).toBe('hors-ligne');
       expect(await runtime.rechercherUtilisateurs('bo')).toEqual([]);
-      expect(await runtime.obtenirResumesConversationsPrivees()).toEqual([]);
 
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(reponseJson({}, 500)));
       await runtime.chargerProfilsPublics(['u3']);
