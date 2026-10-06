@@ -41,7 +41,9 @@
       "register": "Créer le compte",
       "registering": "Création du compte…",
       "defaultPseudoHint": "Un pseudo par défaut vous sera attribué ; vous pourrez le changer plus tard dans votre profil.",
-      "sessionExpired": "Ta session a expiré. Reconnecte-toi pour continuer."
+      "sessionExpired": "Ta session a expiré. Reconnecte-toi pour continuer.",
+      "sessionInactive": "Ta session a été fermée automatiquement après 30 minutes d'inactivité. Confirme pour revenir à l'écran de connexion.",
+      "confirm": "Confirmer"
     },
     "nav": {
       "servers": "Serveurs",
@@ -370,7 +372,9 @@
       "register": "Create account",
       "registering": "Creating account…",
       "defaultPseudoHint": "A default username will be assigned to you; you can change it later in your profile.",
-      "sessionExpired": "Your session has expired. Please sign in again."
+      "sessionExpired": "Your session has expired. Please sign in again.",
+      "sessionInactive": "Your session was closed automatically after 30 minutes of inactivity. Confirm to return to the sign-in screen.",
+      "confirm": "Confirm"
     },
     "nav": {
       "servers": "Servers",

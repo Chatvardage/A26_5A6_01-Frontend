@@ -208,6 +208,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // persisté), appelé au démarrage de la page de connexion.
   restaurerSession: () => ipcRenderer.invoke('session:restaurer'),
   deconnexionSession: () => ipcRenderer.invoke('session:deconnexion'),
+  definirMotifRetourConnexion: (motif) =>
+    ipcRenderer.invoke('session:definir-motif-retour', { motif }),
   // Invalide aussi les jetons des autres appareils (voir page profil).
   deconnexionPartout: () => ipcRenderer.invoke('session:deconnexion-partout'),
   obtenirUtilisateurConnecte: () =>

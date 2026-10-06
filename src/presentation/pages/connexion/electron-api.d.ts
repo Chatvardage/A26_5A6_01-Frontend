@@ -44,6 +44,8 @@ declare global {
       } | null>;
       /** Déconnexion explicite (voir page profil). */
       deconnexionSession: () => Promise<void>;
+      /** Enregistre le motif de retour automatique vers l’écran de connexion. */
+      definirMotifRetourConnexion: (motif: string) => Promise<string | null>;
       /** Déconnexion de tous les appareils : invalide tous les jetons. */
       deconnexionPartout: () => Promise<void>;
       /**
