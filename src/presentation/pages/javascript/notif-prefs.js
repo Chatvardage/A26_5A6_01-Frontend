@@ -111,6 +111,7 @@
   // serveur, et un message reçu en arrière-plan reste compté.
   const compteurs = { salon: new Map(), prive: new Map() };
   const lecturesEnCours = { salon: new Set(), prive: new Set() };
+  const rechargementsEnAttente = { salon: new Set(), prive: new Set() };
   let generationChargement = 0;
   let revisionCompteurs = 0;
 
@@ -131,9 +132,15 @@
           ['salon', nonLus?.salons],
           ['prive', nonLus?.prives],
         ]) {
-          compteurs[type].clear();
+          for (const id of lecturesEnCours[type]) {
+            rechargementsEnAttente[type].add(id);
+          }
+          for (const id of compteurs[type].keys()) {
+            if (!lecturesEnCours[type].has(id)) compteurs[type].delete(id);
+          }
           for (const [id, nombre] of Object.entries(source ?? {})) {
-            if (nombre > 0) compteurs[type].set(id, nombre);
+            if (nombre > 0 && !lecturesEnCours[type].has(id))
+              compteurs[type].set(id, nombre);
           }
         }
         return;
@@ -187,8 +194,11 @@
         );
         console.warn('[non-lus] marquage comme lu impossible :', erreur);
       })
-      .finally(() => {
+      .finally(async () => {
         lecturesEnCours[type].delete(conversationId);
+        if (rechargementsEnAttente[type].delete(conversationId)) {
+          await chargerNonLus(api);
+        }
         options.surChangement?.();
         if (
           reussi &&

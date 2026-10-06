@@ -61,3 +61,8 @@ Validation locale sous Node 24 : audit high, types (Frontend), lint, tests avec 
 Une réponse de non-lus dépassée par une autre requête est ignorée. Une réception ou un marquage local pendant le chargement impose une relecture serveur, bornée à une relance; si les deux réponses deviennent périmées, les compteurs locaux sont conservés jusqu’à la synchronisation suivante. Après reconnexion, la conversation active recharge aussi ses accusés de lecture, en conservant sa position monotone pendant la requête.
 
 Validation de cette suite : audit high, types, lint, 277 tests avec couverture 100 % et build passent sous Node 24. Validation manuelle Electron non effectuée.
+
+
+### Suite de revue du 6 octobre — concurrence et contrat PUT
+
+Les chargements de non-lus préservent les conversations dont le PUT de lecture est en cours. Si un chargement a exclu une conversation, son état est rechargé après la résolution du PUT, avant de rafraîchir les badges ou de retenter une lecture. Régressions couvertes : succès et échec après réception d’un message et abandon de la conversation. Validation : audit high, types, lint, build et 279 tests à couverture 100 % passent sous Node 24. Test manuel Electron non exécuté.

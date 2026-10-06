@@ -303,3 +303,43 @@ it('préserve les changements locaux si les deux réponses sont périmées', asy
   expect(NotifPrefs.nombreNonLus('prive', 'active')).toBe(2);
   expect(serveur.obtenirNonLus).toHaveBeenCalledTimes(3);
 });
+
+describe('chargement pendant un marquage', () => {
+  it.each([true, false])(
+    'ignore le compteur antérieur au PUT (succès : %s)',
+    async (reussi) => {
+      const serveur = api({ salons: { conflit: 4, autre: 2 }, prives: {} });
+      await NotifPrefs.chargerNonLus(serveur);
+      let finir!: (valeur: { nonLus: number }) => void;
+      let echouer!: (erreur: Error) => void;
+      serveur.marquerConversationLue.mockImplementationOnce(
+        () =>
+          new Promise((r, j) => {
+            finir = r;
+            echouer = j;
+          })
+      );
+      const surChangement = vi.fn();
+      NotifPrefs.marquerLu(serveur, 'salon', 'conflit', {
+        estAffichee: () => false,
+        surChangement,
+      });
+      await vi.waitFor(() =>
+        expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(1)
+      );
+      NotifPrefs.ajouterNonLu('salon', 'conflit');
+      await NotifPrefs.chargerNonLus(serveur);
+      expect(NotifPrefs.nombreNonLus('salon', 'conflit')).toBe(1);
+      expect(NotifPrefs.nombreNonLus('salon', 'autre')).toBe(2);
+      serveur.obtenirNonLus.mockResolvedValue({
+        salons: { conflit: reussi ? 1 : 5 },
+        prives: {},
+      });
+      if (reussi) finir({ nonLus: 1 });
+      else echouer(new Error('réseau'));
+      await vi.waitFor(() => expect(surChangement).toHaveBeenCalled());
+      expect(NotifPrefs.nombreNonLus('salon', 'conflit')).toBe(reussi ? 1 : 5);
+      expect(serveur.obtenirNonLus).toHaveBeenCalledTimes(3);
+    }
+  );
+});
