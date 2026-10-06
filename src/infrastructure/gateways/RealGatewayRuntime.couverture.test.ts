@@ -529,6 +529,7 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
         targetId: 'moi',
         userId: 'u2',
         lastReadAt: date,
+        lastReadMessageId: 'm1',
       });
       // Lu depuis un de mes autres appareils.
       s._declencher('read-state.updated', {
@@ -566,6 +567,7 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
             utilisateurId: 'u2',
             nom: 'bob',
             luJusqua: ms,
+            dernierMessageLuId: 'm1',
             deMoi: false,
           },
           {
@@ -574,6 +576,7 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
             utilisateurId: 'moi',
             nom: null,
             luJusqua: ms,
+            dernierMessageLuId: null,
             deMoi: true,
           },
           {
@@ -582,6 +585,7 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
             utilisateurId: 'u2',
             nom: 'bob',
             luJusqua: ms,
+            dernierMessageLuId: null,
             deMoi: false,
           },
         ])

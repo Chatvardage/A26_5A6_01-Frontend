@@ -765,3 +765,69 @@ describe('page des messages privés', () => {
     expect(textes(document)).toEqual(['un vieux message', 'salut']);
   });
 });
+
+it('fusionne un accusé reçu pendant le chargement initial, sans confondre deux messages de même date', async () => {
+  let resoudre!: (valeur: unknown) => void;
+  const cs = conversations();
+  cs[0].messages = [
+    dm('m1', 'moi', 'premier', 1),
+    dm('m2', 'moi', 'second', 1),
+  ];
+  const { document, rappels, appels } = await chargerPage({
+    attendreMessages: false,
+    autresReponses: {
+      obtenirConversationsPrivees: cs,
+      obtenirLectures: () =>
+        new Promise((r) => {
+          resoudre = r;
+        }),
+    },
+  });
+  await vi.waitFor(() => expect(appels.obtenirLectures).toBe(1));
+  await vi.waitFor(() =>
+    expect(document.querySelectorAll('.read-status')).toHaveLength(2)
+  );
+  await rappels.onLectureChange({
+    type: 'prive',
+    conversationId: 'bob:moi',
+    utilisateurId: 'bob',
+    nom: 'bob',
+    luJusqua: 1,
+    dernierMessageLuId: 'm1',
+    deMoi: false,
+  });
+  const statuts = () =>
+    [...document.querySelectorAll('.read-status')].map((e) => e.textContent);
+  expect(statuts()).toEqual(['✓✓', '✓']);
+  resoudre({
+    lecteurs: [
+      {
+        utilisateurId: 'bob',
+        nom: 'bob',
+        luJusqua: 0,
+        dernierMessageLuId: 'ancien',
+      },
+    ],
+  });
+  await vi.waitFor(() => expect(statuts()).toEqual(['✓✓', '✓']));
+  await rappels.onLectureChange({
+    type: 'prive',
+    conversationId: 'bob:moi',
+    utilisateurId: 'bob',
+    nom: 'bob',
+    luJusqua: 1,
+    dernierMessageLuId: 'm2',
+    deMoi: false,
+  });
+  expect(statuts()).toEqual(['✓✓', '✓✓']);
+  await rappels.onLectureChange({
+    type: 'prive',
+    conversationId: 'bob:moi',
+    utilisateurId: 'bob',
+    nom: 'bob',
+    luJusqua: 1,
+    dernierMessageLuId: 'm1',
+    deMoi: false,
+  });
+  expect(statuts()).toEqual(['✓✓', '✓✓']);
+});

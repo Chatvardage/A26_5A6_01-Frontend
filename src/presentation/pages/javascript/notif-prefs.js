@@ -147,13 +147,22 @@
    * par le serveur. Rien n'est envoyé si elle n'avait aucun non-lu, pour
    * que chaque nouvel affichage ne coûte pas une requête.
    */
-  function marquerLu(api, type, conversationId) {
+  function marquerLu(api, type, conversationId, options = {}) {
     const nombre = nombreNonLus(type, conversationId);
     if (!nombre || lecturesEnCours[type].has(conversationId)) return;
     lecturesEnCours[type].add(conversationId);
     compteurs[type].delete(conversationId);
+    let reussi = false;
     Promise.resolve()
       .then(() => api.marquerConversationLue({ type, conversationId }))
+      .then((reponse) => {
+        reussi = true;
+        const restants = Math.max(
+          nombreNonLus(type, conversationId),
+          reponse?.nonLus ?? 0
+        );
+        if (restants) compteurs[type].set(conversationId, restants);
+      })
       .catch((erreur) => {
         // Restaurer aussi les messages arrivés pendant la requête.
         compteurs[type].set(
@@ -162,7 +171,17 @@
         );
         console.warn('[non-lus] marquage comme lu impossible :', erreur);
       })
-      .finally(() => lecturesEnCours[type].delete(conversationId));
+      .finally(() => {
+        lecturesEnCours[type].delete(conversationId);
+        options.surChangement?.();
+        if (
+          reussi &&
+          nombreNonLus(type, conversationId) &&
+          options.estAffichee?.()
+        ) {
+          marquerLu(api, type, conversationId, options);
+        }
+      });
   }
 
   /** Total des non-lus : tous types si `type` est absent, seulement

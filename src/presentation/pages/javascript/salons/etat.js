@@ -252,3 +252,6 @@ async function chargerEtatReseauEtPresences() {
 
 const salonActif = () => etat.salons.find((salon) => salon.id === salonActifId);
 const utilisateur = (id) => etat.utilisateurs.find((item) => item.id === id);
+
+
+let generationLecturesSalon = 0;

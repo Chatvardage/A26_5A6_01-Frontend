@@ -182,7 +182,14 @@ async function renderActiveConversation(options = {}) {
   // système de main.js, qui exige déjà le focus pour la même décision,
   // finissent en désaccord).
   if (fenetreEstFocusee) {
-    NotifPrefs.marquerLu(window.electronAPI, 'prive', conversation.id);
+    NotifPrefs.marquerLu(window.electronAPI, 'prive', conversation.id, {
+      estAffichee: () =>
+        fenetreEstFocusee && state.activeConversationId === conversation.id,
+      surChangement: () => {
+        renderConversationList();
+        mettreAJourBadgeApplication();
+      },
+    });
   }
   // La conversation "active" que main.js ne doit pas notifier (voir
   // showMessageNotification côté main.js) reste définie qu'on ait le
@@ -279,9 +286,9 @@ async function renderActiveConversation(options = {}) {
     )
   );
 
-  const indexNonLu = LogiqueInterface.indexPremierNonLu(
+  const indexNonLu = LogiqueInterface.indexSeparateur(
     messages,
-    separateurDm.conversationId === conversation.id ? separateurDm.nonLus : 0,
+    separateurDm,
     state.currentUserId
   );
   // Jusqu'où l'interlocuteur a lu (connu une fois les lectures chargées).
@@ -353,7 +360,12 @@ async function renderActiveConversation(options = {}) {
       edited.textContent = `(${t('messages.edited')})`;
       meta.appendChild(edited);
     }
-    const statut = LogiqueInterface.statutLecture(message.envoi, luJusqua);
+    const statut = LogiqueInterface.statutLecture(
+      message.envoi,
+      luJusqua,
+      message.id,
+      lecturesDm.dernierMessageLuId
+    );
     if (isOwn && !message.nonLivre) {
       meta.appendChild(ChatUiShared.creerStatutLecture(statut, t));
     }
@@ -480,13 +492,24 @@ async function chargerMessagesPlusAnciensDm({ taille } = {}) {
  * affichée. Best-effort : sans réponse, les messages restent « distribués ».
  */
 async function chargerLecturesDm(conversationId) {
+  const generation = ++generationLecturesDm;
+  const etat = { conversationId, luJusqua: null };
+  lecturesDm = etat;
   try {
     const { lecteurs } = await window.electronAPI.obtenirLectures({
       type: 'prive',
       conversationId,
     });
-    if (state.activeConversationId !== conversationId) return;
-    lecturesDm = { conversationId, luJusqua: lecteurs[0]?.luJusqua ?? null };
+    if (
+      generation !== generationLecturesDm ||
+      state.activeConversationId !== conversationId ||
+      lecturesDm.conversationId !== conversationId
+    )
+      return;
+    lecturesDm = {
+      conversationId,
+      ...LogiqueInterface.fusionnerLecture(lecturesDm, lecteurs[0] ?? etat),
+    };
     await renderActiveConversation({ garderScroll: true });
   } catch (erreur) {
     console.warn('[lectures] accusé de lecture indisponible :', erreur);
@@ -515,7 +538,7 @@ async function appliquerLecture(lecture) {
   }
   lecturesDm = {
     conversationId: lecture.conversationId,
-    luJusqua: Math.max(lecturesDm.luJusqua ?? 0, lecture.luJusqua),
+    ...LogiqueInterface.fusionnerLecture(lecturesDm, lecture),
   };
   await renderActiveConversation({ garderScroll: true });
 }

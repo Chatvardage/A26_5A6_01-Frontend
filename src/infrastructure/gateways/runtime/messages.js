@@ -321,6 +321,7 @@ module.exports = {
         utilisateurId: brut.userId,
         nom: this.nomLecteur(brut.userId),
         luJusqua: brut.lastReadAt ? new Date(brut.lastReadAt).getTime() : null,
+        dernierMessageLuId: brut.lastReadMessageId ?? null,
       })),
     };
   },
@@ -358,6 +359,7 @@ module.exports = {
       utilisateurId: evt.userId,
       nom: this.nomLecteur(evt.userId),
       luJusqua: new Date(evt.lastReadAt).getTime(),
+      dernierMessageLuId: evt.lastReadMessageId ?? null,
       deMoi,
     });
   },

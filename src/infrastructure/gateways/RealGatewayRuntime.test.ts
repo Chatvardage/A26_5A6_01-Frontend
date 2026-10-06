@@ -932,7 +932,13 @@ describe('RealGatewayRuntime', () => {
       const date = '2026-01-01T00:00:00.000Z';
       const fetchMock = vi
         .fn()
-        .mockResolvedValueOnce(reponseJson({ userId: 'u2', lastReadAt: date }))
+        .mockResolvedValueOnce(
+          reponseJson({
+            userId: 'u2',
+            lastReadAt: date,
+            lastReadMessageId: 'm1',
+          })
+        )
         .mockResolvedValueOnce(
           reponseJson({
             lecteurs: [
@@ -951,6 +957,7 @@ describe('RealGatewayRuntime', () => {
             utilisateurId: 'u2',
             nom: 'bob',
             luJusqua: new Date(date).getTime(),
+            dernierMessageLuId: 'm1',
           },
         ],
       });
@@ -966,8 +973,14 @@ describe('RealGatewayRuntime', () => {
             utilisateurId: 'u3',
             nom: 'Carla A.',
             luJusqua: new Date(date).getTime(),
+            dernierMessageLuId: null,
           },
-          { utilisateurId: 'u9', nom: null, luJusqua: null },
+          {
+            utilisateurId: 'u9',
+            nom: null,
+            luJusqua: null,
+            dernierMessageLuId: null,
+          },
         ],
       });
       expect(String(fetchMock.mock.calls[1][0])).toBe(

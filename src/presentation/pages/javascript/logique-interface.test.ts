@@ -266,3 +266,55 @@ describe('non-lus et accusés de lecture', () => {
     expect(L.resumeNoms(['a', 'b'], 1)).toEqual({ noms: ['a'], autres: 1 });
   });
 });
+
+describe('positions de lecture et frontière des non-lus', () => {
+  const position = (
+    luJusqua: number | null,
+    dernierMessageLuId: string | null
+  ) => ({ luJusqua, dernierMessageLuId });
+  it('distingue deux messages dans la même milliseconde, avec compatibilité de l’ancien contrat', () => {
+    expect(L.statutLecture(1, 1, 'a', 'a')).toBe('lu');
+    expect(L.statutLecture(1, 1, 'b', 'a')).toBe('distribue');
+    expect(L.statutLecture(1, 1, 'b', null)).toBe('lu');
+    expect(
+      L.lecteursJusqua(
+        [{ utilisateurId: 'u', nom: 'U', ...position(1, 'a') }],
+        1,
+        [],
+        'b'
+      )
+    ).toEqual([]);
+  });
+  it('fusionne sans recul, même si les réponses HTTP et événements arrivent dans le désordre', () => {
+    for (const [a, b, attendu] of [
+      [position(1, 'b'), position(null, null), position(1, 'b')],
+      [position(null, null), position(1, 'a'), position(1, 'a')],
+      [position(1, 'b'), position(2, 'a'), position(2, 'a')],
+      [position(2, 'a'), position(1, 'b'), position(2, 'a')],
+      [position(1, 'b'), position(1, 'a'), position(1, 'b')],
+      [position(1, 'a'), position(1, 'b'), position(1, 'b')],
+      [position(1, 'a'), position(1, null), position(1, null)],
+      [position(1, null), position(1, 'b'), position(1, null)],
+    ])
+      expect(L.fusionnerLecture(a, b)).toEqual(attendu);
+  });
+  it('garde le premier non-lu après arrivée de messages ou chargement d’historique', () => {
+    const separateur = { nonLus: 2 };
+    const messages = [
+      msg('a', 1, { auteurId: 'autre' }),
+      msg('b', 2, { auteurId: 'autre' }),
+    ];
+    expect(L.indexSeparateur(messages, separateur, 'moi')).toBe(0);
+    expect(
+      L.indexSeparateur(
+        [...messages, msg('c', 3, { auteurId: 'autre' })],
+        separateur,
+        'moi'
+      )
+    ).toBe(0);
+    expect(
+      L.indexSeparateur([msg('ancien', 0), ...messages], separateur, 'moi')
+    ).toBe(1);
+    expect(L.indexSeparateur(messages, { nonLus: 0 }, 'moi')).toBe(-1);
+  });
+});

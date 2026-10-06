@@ -237,19 +237,52 @@
 
   /** Statut d'un de mes messages : 'lu' si l'autre a lu jusqu'à lui (ou
    * plus loin), sinon 'distribue' (enregistré par le serveur). */
-  function statutLecture(dateMessage, luJusqua) {
-    return luJusqua != null && luJusqua >= dateMessage ? 'lu' : 'distribue';
+  function statutLecture(dateMessage, luJusqua, messageId, dernierMessageLuId) {
+    const lu =
+      luJusqua != null &&
+      (luJusqua > dateMessage ||
+        (luJusqua === dateMessage &&
+          (dernierMessageLuId == null || messageId <= dernierMessageLuId)));
+    return lu ? 'lu' : 'distribue';
+  }
+
+  /** Position maximale, y compris pour deux messages de même date.
+   * Sans identifiant (ancien contrat), toute la milliseconde est lue. */
+  function fusionnerLecture(precedente, entrante) {
+    if (entrante.luJusqua == null) return precedente;
+    if (precedente.luJusqua == null || entrante.luJusqua > precedente.luJusqua)
+      return entrante;
+    if (entrante.luJusqua < precedente.luJusqua) return precedente;
+    if (precedente.dernierMessageLuId == null) return precedente;
+    if (
+      entrante.dernierMessageLuId == null ||
+      entrante.dernierMessageLuId > precedente.dernierMessageLuId
+    )
+      return entrante;
+    return precedente;
+  }
+
+  /** Fixe la frontière à un identifiant : les nouveaux messages ne la déplacent pas. */
+  function indexSeparateur(messages, separateur, moiId) {
+    if (!Object.prototype.hasOwnProperty.call(separateur, 'premierId')) {
+      const index = indexPremierNonLu(messages, separateur.nonLus, moiId);
+      separateur.premierId = messages[index]?.id ?? null;
+    }
+    return messages.findIndex((message) => message.id === separateur.premierId);
   }
 
   /** Noms des lecteurs qui ont lu jusqu'à `dateMessage` (ou plus loin),
    * sauf `exclus` (l'auteur du message, soi-même), sans nom vide. */
-  function lecteursJusqua(lecteurs, dateMessage, exclus = []) {
+  function lecteursJusqua(lecteurs, dateMessage, exclus = [], messageId) {
     return (lecteurs ?? [])
       .filter(
         (lecteur) =>
-          lecteur.luJusqua != null &&
-          lecteur.luJusqua >= dateMessage &&
-          !exclus.includes(lecteur.utilisateurId)
+          statutLecture(
+            dateMessage,
+            lecteur.luJusqua,
+            messageId,
+            lecteur.dernierMessageLuId
+          ) === 'lu' && !exclus.includes(lecteur.utilisateurId)
       )
       .map((lecteur) => lecteur.nom)
       .filter(Boolean);
@@ -281,6 +314,8 @@
     extraitAutour,
     decouperSurligne,
     indexPremierNonLu,
+    indexSeparateur,
+    fusionnerLecture,
     statutLecture,
     lecteursJusqua,
     resumeNoms,

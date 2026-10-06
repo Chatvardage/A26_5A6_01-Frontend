@@ -370,3 +370,6 @@ function brancherPresence() {
     }
   });
 }
+
+
+let generationLecturesDm = 0;

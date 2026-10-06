@@ -402,7 +402,13 @@ function afficherMessages(options = {}) {
   // indicateurs (rond de notification ici, notification système côté
   // main.js) doivent rester d'accord entre eux.
   if (fenetreEstFocusee) {
-    NotifPrefs.marquerLu(window.electronAPI, 'salon', salon.id);
+    NotifPrefs.marquerLu(window.electronAPI, 'salon', salon.id, {
+      estAffichee: () => fenetreEstFocusee && salonActifId === salon.id,
+      surChangement: () => {
+        afficherSalons();
+        mettreAJourBadgeApplication();
+      },
+    });
   }
   // La conversation "active" que main.js ne doit pas notifier (voir
   // showMessageNotification côté main.js) reste définie qu'on ait le focus
@@ -484,9 +490,9 @@ function afficherMessages(options = {}) {
         chargerMessagesPlusAnciensSalon
       )
     );
-    const indexNonLu = LogiqueInterface.indexPremierNonLu(
+    const indexNonLu = LogiqueInterface.indexSeparateur(
       tousLesMessages,
-      separateurSalon.salonId === salon.id ? separateurSalon.nonLus : 0,
+      separateurSalon,
       utilisateurActuelId
     );
     // « Vu par » sous le dernier message enregistré du salon.
@@ -584,7 +590,8 @@ function afficherMessages(options = {}) {
           LogiqueInterface.lecteursJusqua(
             lecturesSalon.lecteurs,
             message.date,
-            [message.auteurId, utilisateurActuelId]
+            [message.auteurId, utilisateurActuelId],
+            message.id
           ),
           t
         );
@@ -726,13 +733,32 @@ function afficherTout(options = {}) {
  * toujours affiché. Best-effort : sans réponse, rien n'est affiché.
  */
 async function chargerLecturesSalon(salonId) {
+  const generation = ++generationLecturesSalon;
+  lecturesSalon = { salonId, lecteurs: [] };
   try {
     const { lecteurs } = await window.electronAPI.obtenirLectures({
       type: 'salon',
       conversationId: salonId,
     });
-    if (salonActifId !== salonId) return;
-    lecturesSalon = { salonId, lecteurs };
+    if (
+      generation !== generationLecturesSalon ||
+      salonActifId !== salonId ||
+      lecturesSalon.salonId !== salonId
+    )
+      return;
+    const fusion = new Map(
+      lecturesSalon.lecteurs.map((l) => [l.utilisateurId, l])
+    );
+    for (const lecteur of lecteurs) {
+      const precedent = fusion.get(lecteur.utilisateurId);
+      fusion.set(
+        lecteur.utilisateurId,
+        precedent
+          ? LogiqueInterface.fusionnerLecture(precedent, lecteur)
+          : lecteur
+      );
+    }
+    lecturesSalon = { salonId, lecteurs: [...fusion.values()] };
     afficherMessages({ garderScroll: true });
   } catch (erreur) {
     console.warn('[lectures] lecteurs du salon indisponibles :', erreur);
@@ -771,7 +797,10 @@ async function appliquerLecture(lecture) {
       {
         utilisateurId: lecture.utilisateurId,
         nom: lecture.nom,
-        luJusqua: Math.max(precedent?.luJusqua ?? 0, lecture.luJusqua),
+        ...LogiqueInterface.fusionnerLecture(
+          precedent ?? { luJusqua: null },
+          lecture
+        ),
       },
       ...autres,
     ],

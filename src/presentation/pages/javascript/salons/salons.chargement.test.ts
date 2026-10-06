@@ -911,3 +911,56 @@ describe('page des salons (scripts découpés)', () => {
     });
   });
 });
+
+it('conserve les lecteurs reçus pendant la réponse HTTP initiale et compare leur position complète', async () => {
+  let resoudre!: (valeur: unknown) => void;
+  const { document, rappels } = await chargerPage({
+    autresReponses: {
+      obtenirLectures: () =>
+        new Promise((r) => {
+          resoudre = r;
+        }),
+    },
+  });
+  await vi.waitFor(() => expect(resoudre).toBeTypeOf('function'));
+  await rappels.onLectureChange({
+    type: 'salon',
+    conversationId: 'general',
+    utilisateurId: 'alice',
+    nom: 'alice',
+    luJusqua: 1,
+    dernierMessageLuId: 'm1',
+    deMoi: false,
+  });
+  expect(document.querySelector('.read-receipt')?.textContent).toBe(
+    'Vu par alice'
+  );
+  resoudre({
+    lecteurs: [
+      { utilisateurId: 'alice', nom: 'alice', luJusqua: 0 },
+      {
+        utilisateurId: 'carla',
+        nom: 'carla',
+        luJusqua: 1,
+        dernierMessageLuId: 'm0',
+      },
+    ],
+  });
+  await vi.waitFor(() =>
+    expect(document.querySelector('.read-receipt')?.textContent).toBe(
+      'Vu par alice'
+    )
+  );
+  await rappels.onLectureChange({
+    type: 'salon',
+    conversationId: 'general',
+    utilisateurId: 'alice',
+    nom: 'alice',
+    luJusqua: 1,
+    dernierMessageLuId: 'm0',
+    deMoi: false,
+  });
+  expect(document.querySelector('.read-receipt')?.textContent).toBe(
+    'Vu par alice'
+  );
+});

@@ -85,12 +85,12 @@ describe('NotifPrefs : aperçu dans les notifications système', () => {
   });
 });
 
-describe('NotifPrefs : compteurs de non-lus (copie de Message-Service)', () => {
-  const api = (nonLus: unknown = { salons: {}, prives: {} }) => ({
-    obtenirNonLus: vi.fn().mockResolvedValue(nonLus),
-    marquerConversationLue: vi.fn().mockResolvedValue({ nonLus: 0 }),
-  });
+const api = (nonLus: unknown = { salons: {}, prives: {} }) => ({
+  obtenirNonLus: vi.fn().mockResolvedValue(nonLus),
+  marquerConversationLue: vi.fn().mockResolvedValue({ nonLus: 0 }),
+});
 
+describe('NotifPrefs : compteurs de non-lus (copie de Message-Service)', () => {
   beforeEach(async () => {
     await NotifPrefs.chargerNonLus(api());
   });
@@ -206,5 +206,46 @@ describe('NotifPrefs : compteurs de non-lus (copie de Message-Service)', () => {
     expect(element.hidden).toBe(true);
     NotifPrefs.remplirCompteur(null, 3); // sans élément : rien
     expect(NotifPrefs.libelleNonLus(99)).toBe('99');
+  });
+});
+
+describe('marquage pendant une réception', () => {
+  it('réconcilie la réponse et marque les messages arrivés en cours de requête', async () => {
+    let resoudre!: (valeur: { nonLus: number }) => void;
+    const serveur = api();
+    serveur.marquerConversationLue.mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resoudre = r;
+        })
+    );
+    const surChangement = vi.fn();
+    NotifPrefs.ajouterNonLu('salon', 'arrivee');
+    NotifPrefs.marquerLu(serveur, 'salon', 'arrivee', {
+      estAffichee: () => true,
+      surChangement,
+    });
+    await vi.waitFor(() =>
+      expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(1)
+    );
+    NotifPrefs.ajouterNonLu('salon', 'arrivee');
+    resoudre({ nonLus: 1 });
+    await vi.waitFor(() =>
+      expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(2)
+    );
+    expect(NotifPrefs.nombreNonLus('salon', 'arrivee')).toBe(0);
+    expect(surChangement).toHaveBeenCalled();
+  });
+  it('conserve les non-lus si la conversation a été quittée ou le focus perdu', async () => {
+    const serveur = api();
+    serveur.marquerConversationLue.mockResolvedValueOnce({ nonLus: 2 });
+    NotifPrefs.ajouterNonLu('prive', 'quittee');
+    NotifPrefs.marquerLu(serveur, 'prive', 'quittee', {
+      estAffichee: () => false,
+    });
+    await vi.waitFor(() =>
+      expect(NotifPrefs.nombreNonLus('prive', 'quittee')).toBe(2)
+    );
+    expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(1);
   });
 });
