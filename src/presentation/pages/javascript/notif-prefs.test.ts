@@ -229,6 +229,10 @@ describe('marquage pendant une réception', () => {
       expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(1)
     );
     NotifPrefs.ajouterNonLu('salon', 'arrivee');
+    serveur.obtenirNonLus.mockResolvedValueOnce({
+      salons: { arrivee: 1 },
+      prives: {},
+    });
     resoudre({ nonLus: 1 });
     await vi.waitFor(() =>
       expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(2)
@@ -243,10 +247,38 @@ describe('marquage pendant une réception', () => {
     NotifPrefs.marquerLu(serveur, 'prive', 'quittee', {
       estAffichee: () => false,
     });
+    serveur.obtenirNonLus.mockResolvedValueOnce({
+      salons: {},
+      prives: { quittee: 2 },
+    });
     await vi.waitFor(() =>
       expect(NotifPrefs.nombreNonLus('prive', 'quittee')).toBe(2)
     );
     expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(1);
+  });
+
+  it('retire un non-lu local déjà inclus par le PUT après avoir quitté la conversation', async () => {
+    let resoudre!: (valeur: { nonLus: number }) => void;
+    const serveur = api();
+    serveur.marquerConversationLue.mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resoudre = r;
+        })
+    );
+    NotifPrefs.ajouterNonLu('prive', 'deja-lu');
+    NotifPrefs.marquerLu(serveur, 'prive', 'deja-lu', {
+      estAffichee: () => false,
+    });
+    await vi.waitFor(() =>
+      expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(1)
+    );
+    NotifPrefs.ajouterNonLu('prive', 'deja-lu');
+    resoudre({ nonLus: 0 });
+    await vi.waitFor(() =>
+      expect(serveur.obtenirNonLus).toHaveBeenCalledTimes(1)
+    );
+    expect(NotifPrefs.nombreNonLus('prive', 'deja-lu')).toBe(0);
   });
 });
 

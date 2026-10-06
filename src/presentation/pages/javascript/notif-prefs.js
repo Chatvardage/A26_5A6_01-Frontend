@@ -196,15 +196,18 @@
       })
       .finally(async () => {
         lecturesEnCours[type].delete(conversationId);
-        if (rechargementsEnAttente[type].delete(conversationId)) {
+        const rechargementDemande =
+          rechargementsEnAttente[type].delete(conversationId);
+        const estAffichee = options.estAffichee?.() ?? false;
+        // La réponse du PUT et les incréments locaux ne permettent pas de
+        // savoir si un message reçu pendant la requête a été inclus par le
+        // serveur. Relire sa valeur autoritaire évite aussi bien de le perdre
+        // que de conserver un badge pour un message déjà marqué.
+        if ((reussi && !estAffichee) || rechargementDemande) {
           await chargerNonLus(api);
         }
         options.surChangement?.();
-        if (
-          reussi &&
-          nombreNonLus(type, conversationId) &&
-          options.estAffichee?.()
-        ) {
+        if (reussi && nombreNonLus(type, conversationId) && estAffichee) {
           marquerLu(api, type, conversationId, options);
         }
       });

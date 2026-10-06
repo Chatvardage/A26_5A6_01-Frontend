@@ -596,7 +596,7 @@ describe('page des messages privés', () => {
           : (element.querySelector('.text')?.textContent ?? '')
       );
 
-    it('✓ distribué puis ✓✓ lu en temps réel, « Lu à … » sous mon dernier message', async () => {
+    it('✓ distribué puis ✓✓ lu en temps réel, « Lu » sous mon dernier message', async () => {
       const { document, rappels } = await chargerPage({
         attendreMessages: false,
         autresReponses: {
@@ -637,7 +637,7 @@ describe('page des messages privés', () => {
         deMoi: false,
       });
       await vi.waitFor(() => expect(statuts()).toEqual(['✓✓', '✓✓']));
-      expect(ligne()).toMatch(/^Lu à /);
+      expect(ligne()).toBe(traductions.fr.readReceipts.read);
 
       // Lecture d'une autre conversation : sans effet ici.
       await rappels.onLectureChange({
@@ -675,7 +675,7 @@ describe('page des messages privés', () => {
           'et toi ?',
         ])
       );
-      // Pas encore de ligne « Lu à … » : le dernier message n'est pas le mien.
+      // Pas encore de ligne « Lu » : le dernier message n'est pas le mien.
       expect(document.querySelector('.read-receipt')).toBeNull();
     });
 
@@ -692,7 +692,7 @@ describe('page des messages privés', () => {
       await vi.waitFor(() => expect(appels.obtenirNonLus).toBe(avant + 1));
     });
 
-    it('« Lu à … » juste sous le message, au-dessus de Modifier / Supprimer', async () => {
+    it('« Lu » juste sous le message, au-dessus de Modifier / Supprimer', async () => {
       const { document } = await chargerPage({
         attendreMessages: false,
         autresReponses: {

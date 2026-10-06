@@ -41,7 +41,9 @@ const t = I18n.t;
 const appliquerTraductionsStatiques = I18n.appliquerTraductionsStatiques;
 const ChatUiShared = window.ChatUiShared;
 if (!ChatUiShared) {
-  throw new Error('chat-ui-shared.js doit être chargé avant messages-prives/etat.js');
+  throw new Error(
+    'chat-ui-shared.js doit être chargé avant messages-prives/etat.js'
+  );
 }
 const LogiqueInterface = window.LogiqueInterface;
 if (!LogiqueInterface) {
@@ -243,7 +245,7 @@ const serviceNotifications = window.notifications;
 let fenetreEstFocusee = true;
 
 // Accusé de lecture de la conversation affichée : jusqu'où l'interlocuteur
-// l'a lue (✓✓, « Lu à … »), voir chargerLecturesDm.
+// l'a lue (✓✓, « Lu »), voir chargerLecturesDm.
 let lecturesDm = { conversationId: null, luJusqua: null };
 // Non-lus au moment d'ouvrir la conversation affichée : position de la
 // ligne « Nouveaux messages » (gardée tant qu'on y reste, alors que le
@@ -370,6 +372,5 @@ function brancherPresence() {
     }
   });
 }
-
 
 let generationLecturesDm = 0;

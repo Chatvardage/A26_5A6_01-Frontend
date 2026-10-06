@@ -1061,7 +1061,7 @@
     return marque;
   }
 
-  /** Texte sous un message : « Lu à 14:32 », « Vu par … ». */
+  /** Texte sous un message : « Lu », « Vu par … ». */
   function creerLigneLecture(texte) {
     const ligne = document.createElement('p');
     ligne.classList.add('read-receipt');

@@ -294,7 +294,7 @@ async function renderActiveConversation(options = {}) {
   // Jusqu'où l'interlocuteur a lu (connu une fois les lectures chargées).
   const lecturesConnues = lecturesDm.conversationId === conversation.id;
   const luJusqua = lecturesConnues ? lecturesDm.luJusqua : null;
-  // « Distribué » / « Lu à … » sous mon dernier message, s'il est le dernier
+  // « Distribué » / « Lu » sous mon dernier message, s'il est le dernier
   // de la conversation (comme iMessage).
   const dernierLivre = messages.filter((message) => !message.nonLivre).at(-1);
   const ligneSous =
@@ -373,14 +373,7 @@ async function renderActiveConversation(options = {}) {
     if (message.id === ligneSous) {
       body.appendChild(
         ChatUiShared.creerLigneLecture(
-          statut === 'lu'
-            ? t('readReceipts.readAt', {
-                time: new Date(luJusqua).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                }),
-              })
-            : t('readReceipts.delivered')
+          statut === 'lu' ? t('readReceipts.read') : t('readReceipts.delivered')
         )
       );
     }
