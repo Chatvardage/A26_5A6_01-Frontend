@@ -820,6 +820,8 @@ const PAGES_MAX_SAUT = 20;
  * jusqu'à lui et le met en évidence.
  */
 async function allerAuMessageSalon(messageId) {
+  const conversationInitiale = salonActifId;
+  if (!conversationInitiale) return;
   const estCharge = () => {
     const salon = salonActif();
     return Boolean(
@@ -833,9 +835,11 @@ async function allerAuMessageSalon(messageId) {
     );
   };
   for (let page = 0; !estCharge() && page < PAGES_MAX_SAUT; page += 1) {
+    if (salonActifId !== conversationInitiale) return;
     if (!(await chargerMessagesPlusAnciensSalon({ taille: TAILLE_PAGE_SAUT })))
       break;
   }
+  if (salonActifId !== conversationInitiale) return;
   if (!ChatUiShared.allerAuMessageAffiche(el.messages, messageId)) {
     notifier(t('search.messageNotFound'), true);
   }

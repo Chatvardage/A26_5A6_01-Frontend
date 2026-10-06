@@ -73,3 +73,7 @@ Après un PUT réussi pour une conversation qui n’est plus affichée, les non-
 
 Validation : audit high, types, lint, build et 280 tests avec couverture 100 % passent sous Node 24. Test manuel Electron non exécuté.
 \n\n
+
+### Navigation pendant les attentes
+
+La relance d’un PUT de lecture réévalue le focus et la conversation affichée après la relecture HTTP. Un saut vers un résultat de recherche conserve l’identifiant initial et s’arrête sans notification si la conversation change pendant la pagination, pour les DM comme les salons. Trois régressions simulent ces changements pendant les requêtes. Validation : audit high, types, lint, build et 283 tests avec couverture 100 % passent sous Node 24; validation manuelle Electron non effectuée.

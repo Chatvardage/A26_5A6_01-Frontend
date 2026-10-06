@@ -550,6 +550,8 @@ const PAGES_MAX_SAUT_DM = 20;
  * puis défile jusqu'à lui et le met en évidence.
  */
 async function allerAuMessageDm(messageId) {
+  const conversationInitiale = state.activeConversationId;
+  if (!conversationInitiale) return;
   const estCharge = () => {
     const conversation = trouverConversation(state.activeConversationId);
     return Boolean(
@@ -566,9 +568,11 @@ async function allerAuMessageDm(messageId) {
     );
   };
   for (let page = 0; !estCharge() && page < PAGES_MAX_SAUT_DM; page += 1) {
+    if (state.activeConversationId !== conversationInitiale) return;
     if (!(await chargerMessagesPlusAnciensDm({ taille: TAILLE_PAGE_SAUT_DM })))
       break;
   }
+  if (state.activeConversationId !== conversationInitiale) return;
   if (!ChatUiShared.allerAuMessageAffiche(messageList, messageId)) {
     notifier(t('search.messageNotFound'), true);
   }

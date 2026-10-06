@@ -375,3 +375,41 @@ describe('chargement pendant un marquage', () => {
     }
   );
 });
+
+it('ne relance pas une lecture si le focus est perdu pendant la relecture des compteurs', async () => {
+  const serveur = api({ salons: { attente: 1 }, prives: {} });
+  await NotifPrefs.chargerNonLus(serveur);
+  let finirPut!: (valeur: { nonLus: number }) => void;
+  serveur.marquerConversationLue.mockImplementationOnce(
+    () =>
+      new Promise((r) => {
+        finirPut = r;
+      })
+  );
+  let affichee = true;
+  const changement = vi.fn();
+  NotifPrefs.marquerLu(serveur, 'salon', 'attente', {
+    estAffichee: () => affichee,
+    surChangement: changement,
+  });
+  await vi.waitFor(() =>
+    expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(1)
+  );
+  await NotifPrefs.chargerNonLus(serveur);
+  let finirGet!: (valeur: unknown) => void;
+  serveur.obtenirNonLus.mockImplementationOnce(
+    () =>
+      new Promise((r) => {
+        finirGet = r;
+      })
+  );
+  finirPut({ nonLus: 1 });
+  await vi.waitFor(() =>
+    expect(serveur.obtenirNonLus).toHaveBeenCalledTimes(3)
+  );
+  affichee = false;
+  finirGet({ salons: { attente: 1 }, prives: {} });
+  await vi.waitFor(() => expect(changement).toHaveBeenCalled());
+  expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(1);
+  expect(NotifPrefs.nombreNonLus('salon', 'attente')).toBe(1);
+});

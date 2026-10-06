@@ -207,7 +207,11 @@
           await chargerNonLus(api);
         }
         options.surChangement?.();
-        if (reussi && nombreNonLus(type, conversationId) && estAffichee) {
+        if (
+          reussi &&
+          nombreNonLus(type, conversationId) &&
+          options.estAffichee?.()
+        ) {
           marquerLu(api, type, conversationId, options);
         }
       });
