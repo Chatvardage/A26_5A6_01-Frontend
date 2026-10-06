@@ -275,6 +275,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('presence:change', ecouteur);
     return () => ipcRenderer.removeListener('presence:change', ecouteur);
   },
+  // Accusé de lecture : `{ type, conversationId, utilisateurId, nom,
+  // luJusqua, deMoi }` (voir traiterLectureEntrante).
+  onLectureChange: (rappel) => {
+    const ecouteur = (_event, lecture) => rappel(lecture);
+    ipcRenderer.on('messages:lecture-change', ecouteur);
+    return () =>
+      ipcRenderer.removeListener('messages:lecture-change', ecouteur);
+  },
   onMessageModifieChange: (rappel) => {
     const ecouteur = (_event, message) => rappel(message);
     ipcRenderer.on('messages:modifie-change', ecouteur);
@@ -393,6 +401,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // { type: 'salon' | 'prive', conversationId } -> { nonLus }.
   marquerConversationLue: (donnees) =>
     ipcRenderer.invoke('messages:marquer-lu', donnees),
+  // { type, conversationId } -> { lecteurs: [{ utilisateurId, nom, luJusqua }] } :
+  // jusqu'où les autres ont lu (✓✓ des messages privés, « Vu par » des salons).
+  obtenirLectures: (donnees) =>
+    ipcRenderer.invoke('messages:lectures', donnees),
   // { texte, type, conversationId, curseur? } -> { resultats, curseurSuivant } :
   // recherche dans le salon ou la conversation privée affichée.
   rechercherMessages: (donnees) =>

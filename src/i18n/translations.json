@@ -339,6 +339,15 @@
       "searching": "Recherche…",
       "noResults": "Aucun message trouvé.",
       "more": "Plus de résultats"
+    },
+    "readReceipts": {
+      "newMessages": "Nouveaux messages",
+      "delivered": "Distribué",
+      "read": "Lu",
+      "readAt": "Lu à {time}",
+      "seenBy": "Vu par {names}",
+      "seenByOneMore": "Vu par {names} et 1 autre",
+      "seenByMore": "Vu par {names} et {count} autres"
     }
   },
   "en": {
@@ -681,6 +690,15 @@
       "searching": "Searching…",
       "noResults": "No messages found.",
       "more": "More results"
+    },
+    "readReceipts": {
+      "newMessages": "New messages",
+      "delivered": "Delivered",
+      "read": "Read",
+      "readAt": "Read at {time}",
+      "seenBy": "Seen by {names}",
+      "seenByOneMore": "Seen by {names} and 1 other",
+      "seenByMore": "Seen by {names} and {count} others"
     }
   }
 }

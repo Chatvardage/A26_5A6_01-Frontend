@@ -118,6 +118,9 @@ exposerCanal('messages:marquer-lu', (donnees) =>
 exposerCanal('messages:rechercher', (donnees) =>
   chatGateway.rechercherMessages(donnees)
 );
+exposerCanal('messages:lectures', (donnees) =>
+  chatGateway.obtenirLectures(donnees)
+);
 
 exposerCanal('envoyer-message-prive', (donnees) =>
   chatGateway.envoyerMessagePrive(donnees)

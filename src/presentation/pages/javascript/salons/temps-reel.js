@@ -496,6 +496,11 @@ window.electronAPI.onMessageSupprimeChange((message) => {
   appliquerMessageSalonSupprime(message?.messageId);
 });
 
+// Accusés de lecture (« Vu par ») et non-lus lus depuis un autre appareil.
+window.electronAPI.onLectureChange?.((lecture) => {
+  void appliquerLecture(lecture);
+});
+
 window.electronAPI.onSynchronisationRequise?.(async () => {
   try {
     // Messages reçus pendant la coupure : compteurs relus sur le serveur.

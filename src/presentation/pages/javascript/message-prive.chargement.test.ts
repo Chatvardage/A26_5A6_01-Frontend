@@ -584,4 +584,112 @@ describe('page des messages privés', () => {
     );
     expect(appels.rechercherMessages).toBeUndefined();
   });
+
+  describe('non-lus et accusés de lecture', () => {
+    const conversationAvec = (messages: ReturnType<typeof dm>[]) => [
+      { ...conversations()[0], messages, lastMessage: messages.at(-1) },
+    ];
+    const lignes = (document: Document) =>
+      [...document.querySelectorAll('#message-list > *')].map((element) =>
+        element.classList.contains('unread-separator')
+          ? '---'
+          : (element.querySelector('.text')?.textContent ?? '')
+      );
+
+    it('✓ distribué puis ✓✓ lu en temps réel, « Lu à … » sous mon dernier message', async () => {
+      const { document, rappels } = await chargerPage({
+        attendreMessages: false,
+        autresReponses: {
+          obtenirConversationsPrivees: conversationAvec([
+            dm('m1', 'bob', 'salut', 1),
+            dm('m2', 'moi', 'ça va ?', 2),
+            dm('m3', 'moi', 'et toi ?', 3),
+          ]),
+          obtenirLectures: {
+            lecteurs: [{ utilisateurId: 'bob', nom: 'bob', luJusqua: 2 }],
+          },
+        },
+      });
+      await vi.waitFor(() =>
+        expect(document.querySelectorAll('.read-status')).toHaveLength(2)
+      );
+      const statuts = () =>
+        [...document.querySelectorAll('.read-status')].map(
+          (e) => e.textContent
+        );
+      const ligne = () => document.querySelector('.read-receipt')?.textContent;
+      expect(statuts()).toEqual(['✓✓', '✓']);
+      expect(ligne()).toBe(traductions.fr.readReceipts.delivered);
+      // La ligne est sous mon dernier message.
+      expect(
+        document
+          .querySelector('.read-receipt')
+          ?.closest('.message-row')
+          ?.querySelector('.text')?.textContent
+      ).toBe('et toi ?');
+
+      await rappels.onLectureChange({
+        type: 'prive',
+        conversationId: 'bob:moi',
+        utilisateurId: 'bob',
+        nom: 'bob',
+        luJusqua: 3,
+        deMoi: false,
+      });
+      await vi.waitFor(() => expect(statuts()).toEqual(['✓✓', '✓✓']));
+      expect(ligne()).toMatch(/^Lu à /);
+
+      // Lecture d'une autre conversation : sans effet ici.
+      await rappels.onLectureChange({
+        type: 'prive',
+        conversationId: 'carla:moi',
+        utilisateurId: 'carla',
+        luJusqua: 1,
+        deMoi: false,
+      });
+      expect(statuts()).toEqual(['✓✓', '✓✓']);
+    });
+
+    it('séparateur « Nouveaux messages » gardé après le marquage comme lu', async () => {
+      const { document, appels } = await chargerPage({
+        attendreMessages: false,
+        autresReponses: {
+          obtenirConversationsPrivees: conversationAvec([
+            dm('m1', 'bob', 'salut', 1),
+            dm('m2', 'moi', 'ça va ?', 2),
+            dm('m3', 'bob', 'oui', 3),
+            dm('m4', 'bob', 'et toi ?', 4),
+          ]),
+          obtenirNonLus: { salons: {}, prives: { 'bob:moi': 2 } },
+          obtenirLectures: { lecteurs: [] },
+        },
+      });
+      await vi.waitFor(() => expect(appels.marquerConversationLue).toBe(1));
+      await vi.waitFor(() =>
+        expect(lignes(document)).toEqual([
+          '',
+          'salut',
+          'ça va ?',
+          '---',
+          'oui',
+          'et toi ?',
+        ])
+      );
+      // Pas encore de ligne « Lu à … » : le dernier message n'est pas le mien.
+      expect(document.querySelector('.read-receipt')).toBeNull();
+    });
+
+    it('lu depuis un autre de mes appareils : les compteurs sont relus', async () => {
+      const { rappels, appels } = await chargerPage();
+      const avant = appels.obtenirNonLus;
+      await rappels.onLectureChange({
+        type: 'prive',
+        conversationId: 'bob:moi',
+        utilisateurId: 'moi',
+        luJusqua: 1,
+        deMoi: true,
+      });
+      await vi.waitFor(() => expect(appels.obtenirNonLus).toBe(avant + 1));
+    });
+  });
 });

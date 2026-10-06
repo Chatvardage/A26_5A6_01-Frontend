@@ -242,6 +242,14 @@ const serviceNotifications = window.notifications;
 // renderer.js (voir son commentaire équivalent pour le pourquoi).
 let fenetreEstFocusee = true;
 
+// Accusé de lecture de la conversation affichée : jusqu'où l'interlocuteur
+// l'a lue (✓✓, « Lu à … »), voir chargerLecturesDm.
+let lecturesDm = { conversationId: null, luJusqua: null };
+// Non-lus au moment d'ouvrir la conversation affichée : position de la
+// ligne « Nouveaux messages » (gardée tant qu'on y reste, alors que le
+// compteur, lui, retombe à zéro dès l'affichage).
+let separateurDm = { conversationId: null, nonLus: 0 };
+
 function definirConversationActivePourNotifs(conversationId) {
   if (typeof serviceNotifications?.setActiveConversation === 'function') {
     serviceNotifications.setActiveConversation(conversationId ?? null);

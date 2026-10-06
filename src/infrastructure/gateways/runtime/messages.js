@@ -285,4 +285,80 @@ module.exports = {
     });
     return { resultats, curseurSuivant: page?.nextCursor ?? null };
   },
+
+  // --- Accusés de lecture (Message-Service) ----------------------------------
+
+  /** Alias s'il y en a un, sinon pseudo (comme partout dans l'app). */
+  nomLecteur(id) {
+    return (
+      this.profilsPublics.get(id)?.alias ??
+      this.utilisateursConnus.get(id)?.pseudo ??
+      null
+    );
+  },
+
+  /**
+   * Jusqu'où les autres ont lu une conversation : l'interlocuteur d'un DM,
+   * ou les autres lecteurs d'un salon (« Vu par »). `luJusqua` : date (ms)
+   * du dernier message lu, ou null.
+   */
+  async obtenirLectures({ type, conversationId }) {
+    const bruts =
+      type === 'salon'
+        ? (
+            await this.appelHttp(
+              `/api/messages/rooms/${encodeURIComponent(conversationId)}/read-states`
+            )
+          ).lecteurs
+        : [
+            await this.appelHttp(
+              `/api/messages/conversations/${encodeURIComponent(this.autreParticipantDm(conversationId))}/read-state`
+            ),
+          ];
+    await this.resoudrePseudos(bruts.map((brut) => brut.userId));
+    return {
+      lecteurs: bruts.map((brut) => ({
+        utilisateurId: brut.userId,
+        nom: this.nomLecteur(brut.userId),
+        luJusqua: brut.lastReadAt ? new Date(brut.lastReadAt).getTime() : null,
+      })),
+    };
+  },
+
+  /**
+   * `read-state.updated` : quelqu'un a lu une conversation. Relayé aux pages
+   * ('lecture') sous les identifiants de l'app. `deMoi` : lue depuis un de
+   * mes autres appareils (les non-lus sont à relire).
+   */
+  async traiterLectureEntrante(evt) {
+    const moi = this.utilisateurConnecte?.id;
+    if (
+      !moi ||
+      typeof evt?.userId !== 'string' ||
+      typeof evt.targetId !== 'string' ||
+      typeof evt.lastReadAt !== 'string'
+    ) {
+      return;
+    }
+    const deMoi = evt.userId === moi;
+    let lecture;
+    if (evt.kind === 'room') {
+      lecture = { type: 'salon', conversationId: evt.targetId };
+    } else if (evt.kind === 'dm' && (deMoi || evt.targetId === moi)) {
+      lecture = {
+        type: 'prive',
+        conversationId: creerDmId(moi, deMoi ? evt.targetId : evt.userId),
+      };
+    } else {
+      return;
+    }
+    if (!deMoi) await this.resoudrePseudos([evt.userId]);
+    this.emettre('lecture', {
+      ...lecture,
+      utilisateurId: evt.userId,
+      nom: this.nomLecteur(evt.userId),
+      luJusqua: new Date(evt.lastReadAt).getTime(),
+      deMoi,
+    });
+  },
 };

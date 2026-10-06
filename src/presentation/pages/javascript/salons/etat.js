@@ -164,6 +164,13 @@ let etatReseau = { statut: 'inconnu', reconnexions: 0 };
 // afficherMessages()).
 let fenetreEstFocusee = true;
 
+// Lecteurs du salon affiché (« Vu par »), voir chargerLecturesSalon.
+let lecturesSalon = { salonId: null, lecteurs: [] };
+// Non-lus au moment d'ouvrir le salon affiché : position de la ligne
+// « Nouveaux messages » (gardée tant qu'on y reste, alors que le compteur,
+// lui, retombe à zéro dès l'affichage).
+let separateurSalon = { salonId: null, nonLus: 0 };
+
 const el = {
   salons: document.querySelector('#channel-list'),
   messages: document.querySelector('#message-list'),

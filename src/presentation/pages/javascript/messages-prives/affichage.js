@@ -159,6 +159,12 @@ async function renderActiveConversation(options = {}) {
   // RealGatewayRuntime.js) — même logique que etatHistoriqueSalon dans
   // renderer.js (voir son commentaire équivalent).
   if (etatHistoriqueDm.conversationId !== conversation.id) {
+    // Avant le marquage comme lu plus bas, qui remet le compteur à zéro.
+    separateurDm = {
+      conversationId: conversation.id,
+      nonLus: NotifPrefs.nombreNonLus('prive', conversation.id),
+    };
+    void chargerLecturesDm(conversation.id);
     etatHistoriqueDm = {
       conversationId: conversation.id,
       messagesAnciens: [],
@@ -273,7 +279,26 @@ async function renderActiveConversation(options = {}) {
     )
   );
 
-  messages.forEach((message) => {
+  const indexNonLu = LogiqueInterface.indexPremierNonLu(
+    messages,
+    separateurDm.conversationId === conversation.id ? separateurDm.nonLus : 0,
+    state.currentUserId
+  );
+  // Jusqu'où l'interlocuteur a lu (connu une fois les lectures chargées).
+  const lecturesConnues = lecturesDm.conversationId === conversation.id;
+  const luJusqua = lecturesConnues ? lecturesDm.luJusqua : null;
+  // « Distribué » / « Lu à … » sous mon dernier message, s'il est le dernier
+  // de la conversation (comme iMessage).
+  const dernierLivre = messages.filter((message) => !message.nonLivre).at(-1);
+  const ligneSous =
+    lecturesConnues && dernierLivre?.auteurId === state.currentUserId
+      ? dernierLivre.id
+      : null;
+
+  messages.forEach((message, index) => {
+    if (index === indexNonLu) {
+      messageList.appendChild(ChatUiShared.creerSeparateurNonLus(t));
+    }
     const row = document.createElement('article');
     const isOwn = message.auteurId === state.currentUserId;
     const author = isOwn
@@ -324,7 +349,25 @@ async function renderActiveConversation(options = {}) {
       edited.textContent = `(${t('messages.edited')})`;
       meta.appendChild(edited);
     }
+    const statut = LogiqueInterface.statutLecture(message.envoi, luJusqua);
+    if (isOwn && !message.nonLivre) {
+      meta.appendChild(ChatUiShared.creerStatutLecture(statut, t));
+    }
     body.append(meta, text);
+    if (message.id === ligneSous) {
+      body.appendChild(
+        ChatUiShared.creerLigneLecture(
+          statut === 'lu'
+            ? t('readReceipts.readAt', {
+                time: new Date(luJusqua).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                }),
+              })
+            : t('readReceipts.delivered')
+        )
+      );
+    }
     if (message.nonLivre) {
       body.appendChild(creerActionsMessageNonLivre(message));
     } else if (isOwn) {
@@ -422,4 +465,50 @@ async function chargerMessagesPlusAnciensDm() {
       await renderActiveConversation({ conserverPositionScroll: true });
     }
   }
+}
+
+/**
+ * Accusé de lecture de la conversation `conversationId` (jusqu'où
+ * l'interlocuteur l'a lue), puis nouveau rendu si elle est toujours
+ * affichée. Best-effort : sans réponse, les messages restent « distribués ».
+ */
+async function chargerLecturesDm(conversationId) {
+  try {
+    const { lecteurs } = await window.electronAPI.obtenirLectures({
+      type: 'prive',
+      conversationId,
+    });
+    if (state.activeConversationId !== conversationId) return;
+    lecturesDm = { conversationId, luJusqua: lecteurs[0]?.luJusqua ?? null };
+    await renderActiveConversation({ garderScroll: true });
+  } catch (erreur) {
+    console.warn('[lectures] accusé de lecture indisponible :', erreur);
+  }
+}
+
+/**
+ * Accusé de lecture reçu en temps réel. Lu depuis un de mes autres
+ * appareils : les compteurs sont relus. Lu par l'interlocuteur de la
+ * conversation affichée : ses ✓ passent à ✓✓.
+ */
+async function appliquerLecture(lecture) {
+  if (lecture?.deMoi) {
+    await NotifPrefs.chargerNonLus(window.electronAPI);
+    renderConversationList();
+    await actualiserBadgeSalons({ recharger: false });
+    mettreAJourBadgeApplication();
+    return;
+  }
+  if (
+    lecture?.type !== 'prive' ||
+    lecture.conversationId !== state.activeConversationId ||
+    lecturesDm.conversationId !== lecture.conversationId
+  ) {
+    return;
+  }
+  lecturesDm = {
+    conversationId: lecture.conversationId,
+    luJusqua: Math.max(lecturesDm.luJusqua ?? 0, lecture.luJusqua),
+  };
+  await renderActiveConversation({ garderScroll: true });
 }

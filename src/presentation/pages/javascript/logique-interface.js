@@ -213,6 +213,53 @@
     return segments;
   }
 
+  // --- Non-lus et accusés de lecture --------------------------------------
+
+  /**
+   * Index du premier message non lu de `messages` (triés du plus ancien au
+   * plus récent) : le `nonLus`-ième message d'autrui en partant de la fin,
+   * ou le premier message d'autrui chargé s'il y a plus de non-lus que de
+   * messages affichés. -1 s'il n'y a aucun non-lu (pas de séparateur).
+   * Les brouillons non livrés (`nonLivre`) sont toujours les miens.
+   */
+  function indexPremierNonLu(messages, nonLus, moiId) {
+    if (!(nonLus > 0)) return -1;
+    let restants = nonLus;
+    let index = -1;
+    for (let i = messages.length - 1; i >= 0 && restants > 0; i -= 1) {
+      if (messages[i].auteurId !== moiId && !messages[i].nonLivre) {
+        index = i;
+        restants -= 1;
+      }
+    }
+    return index;
+  }
+
+  /** Statut d'un de mes messages : 'lu' si l'autre a lu jusqu'à lui (ou
+   * plus loin), sinon 'distribue' (enregistré par le serveur). */
+  function statutLecture(dateMessage, luJusqua) {
+    return luJusqua != null && luJusqua >= dateMessage ? 'lu' : 'distribue';
+  }
+
+  /** Noms des lecteurs qui ont lu jusqu'à `dateMessage` (ou plus loin),
+   * sauf `exclus` (l'auteur du message, soi-même), sans nom vide. */
+  function lecteursJusqua(lecteurs, dateMessage, exclus = []) {
+    return (lecteurs ?? [])
+      .filter(
+        (lecteur) =>
+          lecteur.luJusqua != null &&
+          lecteur.luJusqua >= dateMessage &&
+          !exclus.includes(lecteur.utilisateurId)
+      )
+      .map((lecteur) => lecteur.nom)
+      .filter(Boolean);
+  }
+
+  /** « Vu par » : les `max` premiers noms, et combien d'autres. */
+  function resumeNoms(noms, max = 3) {
+    return { noms: noms.slice(0, max), autres: Math.max(0, noms.length - max) };
+  }
+
   racine.LogiqueInterface = Object.freeze({
     fusionnerHistorique,
     fusionnerAvecMessagesEnAttente,
@@ -233,5 +280,9 @@
     peutRechercher,
     extraitAutour,
     decouperSurligne,
+    indexPremierNonLu,
+    statutLecture,
+    lecteursJusqua,
+    resumeNoms,
   });
 })(globalThis);

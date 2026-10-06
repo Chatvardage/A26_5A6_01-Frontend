@@ -1029,7 +1029,59 @@
       ?.addEventListener('click', () => dialogue.close());
   }
 
+  // --- Non-lus et accusés de lecture (affichage commun aux deux pages) -----
+
+  /** Ligne « Nouveaux messages », au-dessus du premier non-lu. */
+  function creerSeparateurNonLus(t) {
+    const separateur = document.createElement('div');
+    separateur.classList.add('unread-separator');
+    separateur.setAttribute('role', 'separator');
+    const libelle = document.createElement('span');
+    libelle.textContent = t('readReceipts.newMessages');
+    separateur.appendChild(libelle);
+    return separateur;
+  }
+
+  /** ✓ (distribué) ou ✓✓ (lu) d'un de mes messages privés. */
+  function creerStatutLecture(statut, t) {
+    const marque = document.createElement('span');
+    marque.classList.add('read-status', `read-status--${statut}`);
+    marque.textContent = statut === 'lu' ? '✓✓' : '✓';
+    const libelle = t(
+      statut === 'lu' ? 'readReceipts.read' : 'readReceipts.delivered'
+    );
+    marque.title = libelle;
+    marque.setAttribute('aria-label', libelle);
+    return marque;
+  }
+
+  /** Texte sous un message : « Lu à 14:32 », « Vu par … ». */
+  function creerLigneLecture(texte) {
+    const ligne = document.createElement('p');
+    ligne.classList.add('read-receipt');
+    ligne.textContent = texte;
+    return ligne;
+  }
+
+  /** « Vu par alice, bob et 3 autres » (null si personne). */
+  function texteVuPar(noms, t) {
+    if (!noms.length) return null;
+    const resume = window.LogiqueInterface.resumeNoms(noms);
+    const liste = resume.noms.join(', ');
+    if (!resume.autres) return t('readReceipts.seenBy', { names: liste });
+    return t(
+      resume.autres === 1
+        ? 'readReceipts.seenByOneMore'
+        : 'readReceipts.seenByMore',
+      { names: liste, count: resume.autres }
+    );
+  }
+
   window.ChatUiShared = Object.freeze({
+    creerSeparateurNonLus,
+    creerStatutLecture,
+    creerLigneLecture,
+    texteVuPar,
     brancherRechercheMessages,
     afficherEtatReseau,
     afficherAvatarCourant,

@@ -895,6 +895,61 @@ describe('RealGatewayRuntime', () => {
       ).resolves.toEqual({ resultats: [], curseurSuivant: null });
     });
 
+    it('accusés de lecture : interlocuteur d’un DM, lecteurs d’un salon', async () => {
+      const { runtime } = creerRuntime();
+      runtime.utilisateurConnecte = { id: 'moi', pseudo: 'moi' };
+      runtime.utilisateursConnus.set('u2', { id: 'u2', pseudo: 'bob' });
+      runtime.profilsPublics.set('u3', { alias: 'Carla A.' });
+      const resoudre = vi
+        .spyOn(runtime, 'resoudrePseudos')
+        .mockResolvedValue(undefined);
+      const date = '2026-01-01T00:00:00.000Z';
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(reponseJson({ userId: 'u2', lastReadAt: date }))
+        .mockResolvedValueOnce(
+          reponseJson({
+            lecteurs: [
+              { userId: 'u3', lastReadAt: date },
+              { userId: 'u9', lastReadAt: null },
+            ],
+          })
+        );
+      vi.stubGlobal('fetch', fetchMock);
+
+      await expect(
+        runtime.obtenirLectures({ type: 'prive', conversationId: 'moi:u2' })
+      ).resolves.toEqual({
+        lecteurs: [
+          {
+            utilisateurId: 'u2',
+            nom: 'bob',
+            luJusqua: new Date(date).getTime(),
+          },
+        ],
+      });
+      expect(String(fetchMock.mock.calls[0][0])).toBe(
+        'http://gateway.test/api/messages/conversations/u2/read-state'
+      );
+
+      await expect(
+        runtime.obtenirLectures({ type: 'salon', conversationId: 'salon 1' })
+      ).resolves.toEqual({
+        lecteurs: [
+          {
+            utilisateurId: 'u3',
+            nom: 'Carla A.',
+            luJusqua: new Date(date).getTime(),
+          },
+          { utilisateurId: 'u9', nom: null, luJusqua: null },
+        ],
+      });
+      expect(String(fetchMock.mock.calls[1][0])).toBe(
+        'http://gateway.test/api/messages/rooms/salon%201/read-states'
+      );
+      expect(resoudre).toHaveBeenLastCalledWith(['u3', 'u9']);
+    });
+
     it('un message entrant indique son serveur (pastille du rail)', async () => {
       const { runtime, socket } = creerRuntime();
       runtime.utilisateurConnecte = { id: 'moi', pseudo: 'moi' };

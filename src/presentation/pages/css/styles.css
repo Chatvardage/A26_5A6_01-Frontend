@@ -1961,3 +1961,48 @@ dialog::backdrop {
   background: var(--primary);
   color: var(--on-primary);
 }
+
+/* --- Non-lus et accusés de lecture ------------------------------------- */
+/* Ligne « Nouveaux messages » au-dessus du premier non-lu. */
+.unread-separator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.unread-separator::before,
+.unread-separator::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--primary);
+}
+
+/* ✓ distribué / ✓✓ lu, dans la ligne meta de mes messages privés. */
+.read-status {
+  font-size: 0.72rem;
+  letter-spacing: -0.12em;
+  color: var(--text-muted);
+}
+
+.read-status--lu {
+  color: var(--primary);
+}
+
+/* « Lu à 14:32 », « Vu par … » sous le message concerné. */
+.read-receipt {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.own .read-receipt,
+.own-message .read-receipt {
+  text-align: right;
+}

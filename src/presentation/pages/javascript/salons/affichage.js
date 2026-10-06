@@ -372,6 +372,12 @@ function afficherMessages(options = {}) {
   // la page récente tout juste reçue (salon.finHistorique, voir
   // RealGatewayRuntime.js).
   if (etatHistoriqueSalon.salonId !== salon.id) {
+    // Avant le marquage comme lu plus bas, qui remet le compteur à zéro.
+    separateurSalon = {
+      salonId: salon.id,
+      nonLus: NotifPrefs.nombreNonLus('salon', salon.id),
+    };
+    void chargerLecturesSalon(salon.id);
     etatHistoriqueSalon = {
       salonId: salon.id,
       messagesAnciens: [],
@@ -478,7 +484,19 @@ function afficherMessages(options = {}) {
         chargerMessagesPlusAnciensSalon
       )
     );
-    tousLesMessages.forEach((message) => {
+    const indexNonLu = LogiqueInterface.indexPremierNonLu(
+      tousLesMessages,
+      separateurSalon.salonId === salon.id ? separateurSalon.nonLus : 0,
+      utilisateurActuelId
+    );
+    // « Vu par » sous le dernier message enregistré du salon.
+    const dernierLivre = tousLesMessages
+      .filter((message) => !message.nonLivre)
+      .at(-1);
+    tousLesMessages.forEach((message, index) => {
+      if (index === indexNonLu) {
+        el.messages.appendChild(ChatUiShared.creerSeparateurNonLus(t));
+      }
       const auteur =
         ChatUiShared.nomAffiche(utilisateur(message.auteurId)) ||
         t('channels.system');
@@ -556,6 +574,21 @@ function afficherMessages(options = {}) {
           ?.appendChild(
             creerActionsMessage(message, texteEl, estMessagePersonnel)
           );
+      }
+      if (message === dernierLivre && lecturesSalon.salonId === salon.id) {
+        const vuPar = ChatUiShared.texteVuPar(
+          LogiqueInterface.lecteursJusqua(
+            lecturesSalon.lecteurs,
+            message.date,
+            [message.auteurId, utilisateurActuelId]
+          ),
+          t
+        );
+        if (vuPar) {
+          article
+            .querySelector('.message-body')
+            ?.appendChild(ChatUiShared.creerLigneLecture(vuPar));
+        }
       }
       el.messages.appendChild(article);
     });
@@ -683,3 +716,61 @@ function afficherTout(options = {}) {
 // Un appel direct à actualiser() ici, en plus, chargeait l'état une première
 // fois avec un utilisateurActuelId potentiellement pas encore résolu, avant
 // d'être aussitôt écrasé par le second appel (double fetch + flash possible).
+
+/**
+ * Lecteurs du salon `salonId` (« Vu par »), puis nouveau rendu s'il est
+ * toujours affiché. Best-effort : sans réponse, rien n'est affiché.
+ */
+async function chargerLecturesSalon(salonId) {
+  try {
+    const { lecteurs } = await window.electronAPI.obtenirLectures({
+      type: 'salon',
+      conversationId: salonId,
+    });
+    if (salonActifId !== salonId) return;
+    lecturesSalon = { salonId, lecteurs };
+    afficherMessages({ garderScroll: true });
+  } catch (erreur) {
+    console.warn('[lectures] lecteurs du salon indisponibles :', erreur);
+  }
+}
+
+/**
+ * Accusé de lecture reçu en temps réel. Lu depuis un de mes autres
+ * appareils : les compteurs sont relus. Lu par quelqu'un d'autre dans le
+ * salon affiché : « Vu par » est mis à jour.
+ */
+async function appliquerLecture(lecture) {
+  if (lecture?.deMoi) {
+    await NotifPrefs.chargerNonLus(window.electronAPI);
+    afficherSalons();
+    actualiserBadgeMessagesPrives();
+    mettreAJourBadgeApplication();
+    return;
+  }
+  if (
+    lecture?.type !== 'salon' ||
+    lecture.conversationId !== salonActifId ||
+    lecturesSalon.salonId !== lecture.conversationId
+  ) {
+    return;
+  }
+  const autres = lecturesSalon.lecteurs.filter(
+    (lecteur) => lecteur.utilisateurId !== lecture.utilisateurId
+  );
+  const precedent = lecturesSalon.lecteurs.find(
+    (lecteur) => lecteur.utilisateurId === lecture.utilisateurId
+  );
+  lecturesSalon = {
+    salonId: lecture.conversationId,
+    lecteurs: [
+      {
+        utilisateurId: lecture.utilisateurId,
+        nom: lecture.nom,
+        luJusqua: Math.max(precedent?.luJusqua ?? 0, lecture.luJusqua),
+      },
+      ...autres,
+    ],
+  };
+  afficherMessages({ garderScroll: true });
+}

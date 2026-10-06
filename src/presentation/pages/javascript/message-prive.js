@@ -208,6 +208,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     notifierErreur: (erreur) => notifier(messageErreur(erreur), true),
   });
 
+  // Accusés de lecture (✓✓) et non-lus lus depuis un autre appareil.
+  window.electronAPI.onLectureChange?.((lecture) => {
+    void appliquerLecture(lecture);
+  });
+
   window.electronAPI.onSynchronisationRequise?.(async () => {
     try {
       // Messages reçus pendant la coupure : compteurs relus sur le serveur.

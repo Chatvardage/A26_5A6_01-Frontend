@@ -669,4 +669,97 @@ describe('page des salons (scripts découpés)', () => {
     dialogue.querySelector<HTMLElement>('.search-close')?.click();
     expect(dialogue.open).toBe(false);
   });
+
+  describe('non-lus et accusés de lecture', () => {
+    it('« Vu par » sous le dernier message, mis à jour en temps réel', async () => {
+      const { document, rappels } = await chargerPage({
+        autresReponses: {
+          obtenirLectures: {
+            lecteurs: [
+              { utilisateurId: 'alice', nom: 'alice', luJusqua: 1 },
+              { utilisateurId: 'carla', nom: 'carla', luJusqua: 1 },
+              { utilisateurId: 'dave', nom: 'dave', luJusqua: 0 },
+              // L'auteur du message n'est jamais listé.
+              { utilisateurId: 'bob', nom: 'bob', luJusqua: 1 },
+            ],
+          },
+        },
+      });
+      const vuPar = () => document.querySelector('.read-receipt')?.textContent;
+      await vi.waitFor(() => expect(vuPar()).toBe('Vu par alice, carla'));
+
+      rappels.onLectureChange({
+        type: 'salon',
+        conversationId: 'general',
+        utilisateurId: 'dave',
+        nom: 'dave',
+        luJusqua: 1,
+        deMoi: false,
+      });
+      rappels.onLectureChange({
+        type: 'salon',
+        conversationId: 'general',
+        utilisateurId: 'eve',
+        nom: 'eve',
+        luJusqua: 1,
+        deMoi: false,
+      });
+      await vi.waitFor(() =>
+        expect(vuPar()).toBe('Vu par eve, dave, alice et 1 autre')
+      );
+      rappels.onLectureChange({
+        type: 'salon',
+        conversationId: 'general',
+        utilisateurId: 'zoe',
+        nom: 'zoe',
+        luJusqua: 1,
+        deMoi: false,
+      });
+      await vi.waitFor(() =>
+        expect(vuPar()).toBe('Vu par zoe, eve, dave et 2 autres')
+      );
+
+      // Autre salon, ou lecture d'un message plus ancien : sans effet.
+      rappels.onLectureChange({
+        type: 'salon',
+        conversationId: 'autre',
+        utilisateurId: 'yann',
+        nom: 'yann',
+        luJusqua: 9,
+        deMoi: false,
+      });
+      expect(vuPar()).toBe('Vu par zoe, eve, dave et 2 autres');
+    });
+
+    it('séparateur « Nouveaux messages » au premier non-lu, pas de « Vu par » sans lecteur', async () => {
+      const { document } = await chargerPage({
+        autresReponses: {
+          obtenirNonLus: { salons: { general: 1 }, prives: {} },
+          obtenirLectures: { lecteurs: [] },
+        },
+      });
+      await vi.waitFor(() =>
+        expect(document.querySelector('.unread-separator')).not.toBeNull()
+      );
+      expect(
+        document
+          .querySelector('.unread-separator')
+          ?.nextElementSibling?.querySelector('.text')?.textContent
+      ).toBe('salut');
+      expect(document.querySelector('.read-receipt')).toBeNull();
+    });
+
+    it('lu depuis un autre de mes appareils : les compteurs sont relus', async () => {
+      const { rappels, appels } = await chargerPage();
+      const avant = appels.obtenirNonLus;
+      rappels.onLectureChange({
+        type: 'salon',
+        conversationId: 'autre',
+        utilisateurId: 'moi',
+        luJusqua: 1,
+        deMoi: true,
+      });
+      await vi.waitFor(() => expect(appels.obtenirNonLus).toBe(avant + 1));
+    });
+  });
 });
