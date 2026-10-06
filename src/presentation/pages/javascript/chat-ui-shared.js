@@ -949,6 +949,7 @@
 
     async function chercher({ suite = false } = {}) {
       const numero = ++numeroRequete;
+      const terme = texte;
       if (!suite) {
         liste.replaceChildren();
         curseur = null;
@@ -957,7 +958,7 @@
       statut.textContent = t('search.searching');
       try {
         const page = await api.rechercherMessages({
-          texte,
+          texte: terme,
           type: portee.type,
           conversationId: portee.conversationId,
           ...(suite && curseur ? { curseur } : {}),
@@ -967,7 +968,7 @@
           liste.appendChild(
             creerResultatRecherche({
               resultat,
-              terme: texte,
+              terme,
               t,
               surChoix: choisir,
             })
@@ -983,7 +984,8 @@
     }
 
     function relancer({ immediat = false } = {}) {
-      window.clearTimeout(minuteur);
+      vider();
+      curseur = null;
       texte = champ.value.trim();
       if (!portee || !window.LogiqueInterface.peutRechercher(texte)) {
         vider();

@@ -293,3 +293,9 @@ Infra est la référence du démarrage complet, des architectures, contrats et s
 - CSS :has() : conservé; Electron embarque une version de Chromium compatible (voir la version Electron de package.json).
 
 Validation : Node 22.23.2, npm ci --ignore-scripts, audit high, TypeScript, lint, 263 tests (couverture 100 %) et build passent. Le lockfile met à jour uniquement http-cache-semantics 4.2.0 vers 4.3.0 et source-map-js 1.2.1 vers 1.2.2 pour retirer les deux avis high. Il reste huit avis modérés. La première tentative de tests sous Node 18 échouait au chargement de Vitest; Node 22 est requis par le projet. Les changements concernent le runtime main testé, sans modification des pages; pas de validation manuelle Electron effectuée.
+
+### Nouvelle revue PR #100
+- Style des compteurs : préfixe #user-panel parasite retiré.
+- Recherche : réponses invalidées dès la saisie, pagination masquée et terme capturé par requête.
+- Marquage échoué : compteur restauré, messages arrivés pendant la requête conservés et tentative suivante permise; une seule requête en cours par conversation.
+Validation : audit high, types, lint, 265 tests, couverture 100 % et build passent sous Node 22. Les pages sont vérifiées par les tests jsdom; validation manuelle Electron non effectuée.

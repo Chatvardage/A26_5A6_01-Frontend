@@ -110,6 +110,7 @@
   // prévient le serveur. Ainsi, un message lu en direct est aussi lu côté
   // serveur, et un message reçu en arrière-plan reste compté.
   const compteurs = { salon: new Map(), prive: new Map() };
+  const lecturesEnCours = { salon: new Set(), prive: new Set() };
 
   /** Remplace les compteurs par ceux du serveur, `{ salons, prives }`
    * (best-effort : en cas d'échec, les compteurs actuels sont gardés). */
@@ -147,13 +148,21 @@
    * que chaque nouvel affichage ne coûte pas une requête.
    */
   function marquerLu(api, type, conversationId) {
-    if (!nombreNonLus(type, conversationId)) return;
+    const nombre = nombreNonLus(type, conversationId);
+    if (!nombre || lecturesEnCours[type].has(conversationId)) return;
+    lecturesEnCours[type].add(conversationId);
     compteurs[type].delete(conversationId);
     Promise.resolve()
       .then(() => api.marquerConversationLue({ type, conversationId }))
-      .catch((erreur) =>
-        console.warn('[non-lus] marquage comme lu impossible :', erreur)
-      );
+      .catch((erreur) => {
+        // Restaurer aussi les messages arrivés pendant la requête.
+        compteurs[type].set(
+          conversationId,
+          nombreNonLus(type, conversationId) + nombre
+        );
+        console.warn('[non-lus] marquage comme lu impossible :', erreur);
+      })
+      .finally(() => lecturesEnCours[type].delete(conversationId));
   }
 
   /** Total des non-lus : tous types si `type` est absent, seulement

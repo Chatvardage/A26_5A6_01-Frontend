@@ -743,7 +743,7 @@ img {
   text-overflow: ellipsis;
 }
 
-#user-panel /* Compteur de messages non lus (salons, conversations privées) : nombre
+/* Compteur de messages non lus (salons, conversations privées) : nombre
    tenu par Message-Service, « 99+ » au-delà (voir NotifPrefs.remplirCompteur). */
 .notif-count {
   display: inline-flex;

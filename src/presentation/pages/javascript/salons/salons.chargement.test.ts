@@ -531,6 +531,50 @@ describe('page des salons (scripts découpés)', () => {
     ).toEqual([true, true]);
   });
 
+  it('ignore une réponse de recherche dès une nouvelle saisie', async () => {
+    let terminer!: (page: unknown) => void;
+    const { document, window } = await chargerPage({
+      autresReponses: {
+        rechercherMessages: () =>
+          new Promise((resoudre) => {
+            terminer = resoudre;
+          }),
+      },
+    });
+    window.HTMLDialogElement.prototype.showModal = function () {
+      this.setAttribute('open', '');
+    };
+    document.querySelector<HTMLElement>('#open-search')?.click();
+    const dialogue =
+      document.querySelector<HTMLDialogElement>('#search-dialog')!;
+    const champ = dialogue.querySelector<HTMLInputElement>('.search-input')!;
+    champ.value = 'ancien';
+    champ.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+    await vi.waitFor(() => expect(terminer).toBeTypeOf('function'));
+    champ.value = 'nouveau';
+    champ.dispatchEvent(new window.Event('input'));
+    terminer({
+      resultats: [
+        {
+          type: 'salon',
+          conversationId: 'general',
+          auteurNom: 'bob',
+          message: message('m1', 'bob', 'ancien', 1),
+        },
+      ],
+      curseurSuivant: 'ancien-curseur',
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(dialogue.querySelectorAll('.search-result')).toHaveLength(0);
+    expect(dialogue.querySelector<HTMLElement>('.search-more')?.hidden).toBe(
+      true
+    );
+    // Annuler le délai encore en attente pour terminer ce scénario.
+    champ.value = '';
+    champ.dispatchEvent(new window.Event('input'));
+  });
+
   it('recherche : dans le salon affiché, résultats surlignés et paginés', async () => {
     const recherches: unknown[] = [];
     const resultat = (id: string, contenu: string, date: number) => ({

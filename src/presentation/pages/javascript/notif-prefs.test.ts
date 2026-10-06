@@ -150,7 +150,7 @@ describe('NotifPrefs : compteurs de non-lus (copie de Message-Service)', () => {
     );
   });
 
-  it('un échec du serveur au marquage est seulement journalisé', async () => {
+  it('un échec du marquage restaure le compteur et permet une nouvelle tentative', async () => {
     const avertir = vi.spyOn(console, 'warn').mockImplementation(() => {});
     NotifPrefs.ajouterNonLu('prive', 'a:b');
     NotifPrefs.marquerLu(
@@ -164,6 +164,34 @@ describe('NotifPrefs : compteurs de non-lus (copie de Message-Service)', () => {
         expect.any(Error)
       )
     );
+  });
+
+  it('retente après échec et conserve les messages arrivés pendant la requête', async () => {
+    const serveur = api();
+    let rejeter!: (erreur: Error) => void;
+    serveur.marquerConversationLue.mockImplementationOnce(
+      () =>
+        new Promise((_resoudre, rejet) => {
+          rejeter = rejet;
+        })
+    );
+    NotifPrefs.ajouterNonLu('salon', 'retry');
+    NotifPrefs.marquerLu(serveur, 'salon', 'retry');
+    await vi.waitFor(() =>
+      expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(1)
+    );
+    NotifPrefs.ajouterNonLu('salon', 'retry');
+    NotifPrefs.marquerLu(serveur, 'salon', 'retry');
+    expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(1);
+    rejeter(new Error('réseau'));
+    await vi.waitFor(() =>
+      expect(NotifPrefs.nombreNonLus('salon', 'retry')).toBe(2)
+    );
+    NotifPrefs.marquerLu(serveur, 'salon', 'retry');
+    await vi.waitFor(() =>
+      expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(2)
+    );
+    expect(NotifPrefs.nombreNonLus('salon', 'retry')).toBe(0);
   });
 
   it('affiche le compteur (99+ au-delà de 99), masqué à zéro ou si désactivé', () => {
