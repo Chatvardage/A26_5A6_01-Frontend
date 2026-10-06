@@ -105,6 +105,7 @@ async function chargerPage({
     obtenirEtatsSaisie: [],
     obtenirUtilisateurs: [],
     obtenirEtatSalons: { serveurs: [], salons: [] },
+    obtenirServeurs: [],
     obtenirConversationsPrivees: conversations(),
     envoyerMessagePrive: dm('m9', 'moi', 'envoyé', 9),
     ...autresReponses,
@@ -226,7 +227,7 @@ describe('page des messages privés', () => {
     // Même compte, réseau encore en attente : le rail vient du cache.
     const moi = await chargerPage({
       avantScripts: cache('moi'),
-      autresReponses: { obtenirEtatSalons: () => new Promise(() => {}) },
+      autresReponses: { obtenirServeurs: () => new Promise(() => {}) },
     });
     await vi.waitFor(() =>
       expect(moi.document.querySelector(icone)).not.toBeNull()
@@ -400,14 +401,22 @@ describe('page des messages privés', () => {
     const { document, rappels, erreurs } = await chargerPage({
       autresReponses: {
         obtenirSuggestionsDm: [
-          { id: 'alice', pseudo: 'alice', present: false, alias: null, avatar: null },
+          {
+            id: 'alice',
+            pseudo: 'alice',
+            present: false,
+            alias: null,
+            avatar: null,
+          },
         ],
       },
     });
 
     (document.getElementById('open-new-dm') as HTMLButtonElement).click();
     await vi.waitFor(() =>
-      expect(document.querySelector('.user-choice[data-user-id="alice"]')).not.toBeNull()
+      expect(
+        document.querySelector('.user-choice[data-user-id="alice"]')
+      ).not.toBeNull()
     );
 
     const avatar = document.querySelector(
@@ -420,10 +429,204 @@ describe('page des messages privés', () => {
     expect(avatar.classList.contains('offline')).toBe(false);
     expect(avatar.title).toBe(traductions.fr.dm.online);
 
-    rappels.onPresenceChange?.({ utilisateurId: 'alice', statut: 'hors-ligne' });
+    rappels.onPresenceChange?.({
+      utilisateurId: 'alice',
+      statut: 'hors-ligne',
+    });
     expect(avatar.classList.contains('offline')).toBe(true);
     expect(avatar.title).toBe(traductions.fr.dm.offline);
     expect(erreurs).toEqual([]);
   });
 
+  it('non-lus : compteur par conversation, conversation affichée marquée lue', async () => {
+    const marques: unknown[] = [];
+    const deuxConversations = () => [
+      ...conversations(),
+      {
+        ...conversations()[0],
+        id: 'carla:moi',
+        otherUser: {
+          ...conversations()[0].otherUser,
+          id: 'carla',
+          pseudo: 'carla',
+        },
+        messages: [],
+        lastMessage: null,
+      },
+    ];
+    const { document, rappels } = await chargerPage({
+      autresReponses: {
+        obtenirConversationsPrivees: deuxConversations(),
+        obtenirNonLus: {
+          salons: { s1: 1 },
+          prives: { 'bob:moi': 2, 'carla:moi': 4 },
+        },
+        obtenirServeurs: [
+          { id: 'srv', nom: 'Projet', icone: null, salonIds: ['s1'] },
+          { id: 'calme', nom: 'Calme', icone: null, salonIds: ['s2'] },
+        ],
+        marquerConversationLue: (donnees: unknown) => {
+          marques.push(donnees);
+          return { nonLus: 0 };
+        },
+      },
+    });
+    const compteur = (id: string) =>
+      document.querySelector<HTMLElement>(
+        `.conversation[data-conversation-id="${id}"] .notif-count`
+      );
+    await vi.waitFor(() =>
+      expect(marques).toEqual([{ type: 'prive', conversationId: 'bob:moi' }])
+    );
+    expect(compteur('bob:moi')?.hidden).toBe(true);
+    expect(compteur('carla:moi')?.textContent).toBe('4');
+    // Pastille du serveur qui a un salon non lu, pas de l'autre.
+    await vi.waitFor(() =>
+      expect(
+        document.querySelector<HTMLElement>(
+          '.server-icon[data-serveur-id="srv"] .notif-dot'
+        )?.hidden
+      ).toBe(false)
+    );
+    expect(
+      document.querySelector<HTMLElement>(
+        '.server-icon[data-serveur-id="calme"] .notif-dot'
+      )?.hidden
+    ).toBe(true);
+
+    // Message reçu dans une autre conversation : un non-lu de plus.
+    await rappels.onNouveauMessage({
+      conversationType: 'dm',
+      message: {
+        ...dm('m2', 'carla', 'coucou', 2),
+        conversationId: 'carla:moi',
+      },
+    });
+    await vi.waitFor(() =>
+      expect(compteur('carla:moi')?.textContent).toBe('5')
+    );
+    // Message de salon : pastille de son serveur.
+    await rappels.onNouveauMessage({
+      conversationType: 'salon',
+      salonId: 's2',
+      serveurId: 'calme',
+      message: { id: 'ms', auteurId: 'bob', contenu: 'x', date: 3 },
+    });
+    await vi.waitFor(() =>
+      expect(
+        document.querySelector<HTMLElement>(
+          '.server-icon[data-serveur-id="calme"] .notif-dot'
+        )?.hidden
+      ).toBe(false)
+    );
+  });
+
+  it('recherche : un résultat privé ouvre la conversation, un salon ouvre l’autre page', async () => {
+    const cibles: unknown[] = [];
+    const pages: unknown[] = [];
+    const { document, window } = await chargerPage({
+      autresReponses: {
+        rechercherMessages: () => ({
+          resultats: [
+            {
+              type: 'prive',
+              conversationId: 'bob:moi',
+              interlocuteurId: 'bob',
+              interlocuteurNom: 'bob',
+              auteurNom: 'bob',
+              message: dm('m1', 'bob', 'salut', 1),
+            },
+            {
+              type: 'salon',
+              conversationId: '00000000-0000-4000-8000-000000000003',
+              salonNom: 'général',
+              serveurId: 'defaut',
+              serveurNom: 'Chatvardage',
+              auteurNom: 'bob',
+              message: {
+                id: 'ms',
+                auteurId: 'bob',
+                contenu: 'salut tous',
+                date: 2,
+              },
+            },
+          ],
+          curseurSuivant: null,
+        }),
+        definirCibleNavigation: (cible: unknown) => {
+          cibles.push(cible);
+          return true;
+        },
+        navigate: (page: unknown) => {
+          pages.push(page);
+        },
+      },
+    });
+    const dialogue =
+      document.querySelector<HTMLDialogElement>('#search-dialog')!;
+    const champ = dialogue.querySelector<HTMLInputElement>('.search-input')!;
+    document.getElementById('open-search')?.click();
+    champ.value = 'salut';
+    champ.dispatchEvent(new window.Event('input'));
+    await vi.waitFor(() =>
+      expect(dialogue.querySelectorAll('.search-result')).toHaveLength(2)
+    );
+    const titres = [...dialogue.querySelectorAll('.search-result-title')].map(
+      (e) => e.textContent
+    );
+    // Salon par défaut : nom traduit, comme dans le reste de l'app.
+    expect(titres).toEqual([
+      'bob',
+      `# ${traductions.fr.channels.defaultGeneral} · Chatvardage`,
+    ]);
+
+    dialogue.querySelector<HTMLElement>('.search-result')?.click();
+    expect(dialogue.hasAttribute('open')).toBe(false);
+    await vi.waitFor(() =>
+      expect(document.querySelector('.user-name')?.textContent).toBe('bob')
+    );
+
+    document.getElementById('open-search')?.click();
+    dialogue.querySelectorAll<HTMLElement>('.search-result')[1]?.click();
+    await vi.waitFor(() => expect(pages).toEqual(['index.html']));
+    expect(cibles).toEqual([
+      { type: 'salon', id: '00000000-0000-4000-8000-000000000003' },
+    ]);
+  });
+
+  it('recherche : une conversation absente de la liste la recharge', async () => {
+    let liste: unknown[] = [];
+    const { document, window, appels } = await chargerPage({
+      attendreMessages: false,
+      autresReponses: {
+        obtenirConversationsPrivees: () => liste,
+        rechercherMessages: () => ({
+          resultats: [
+            {
+              type: 'prive',
+              conversationId: 'bob:moi',
+              interlocuteurId: 'bob',
+              interlocuteurNom: 'bob',
+              auteurNom: 'bob',
+              message: dm('m1', 'bob', 'salut', 1),
+            },
+          ],
+          curseurSuivant: null,
+        }),
+      },
+    });
+    await vi.waitFor(() => expect(appels.obtenirConversationsPrivees).toBe(1));
+    liste = conversations();
+    const dialogue =
+      document.querySelector<HTMLDialogElement>('#search-dialog')!;
+    const champ = dialogue.querySelector<HTMLInputElement>('.search-input')!;
+    document.getElementById('open-search')?.click();
+    champ.value = 'salut';
+    champ.dispatchEvent(new window.Event('input'));
+    await vi.waitFor(() =>
+      expect(dialogue.querySelectorAll('.search-result')).toHaveLength(1)
+    );
+    dialogue.querySelector<HTMLElement>('.search-result')?.click();
+    await vi.waitFor(() => expect(textes(document)).toEqual(['salut']));
+  });
 });

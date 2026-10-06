@@ -135,7 +135,7 @@ async function afficherConversations(options = {}) {
 
   // renderActiveConversation() doit s'exécuter avant renderConversationList() :
   // c'est elle qui marque la conversation active comme "lue"
-  // (NotifPrefs.marquerCommeLu). Si renderConversationList() tournait en
+  // (NotifPrefs.marquerLu). Si renderConversationList() tournait en
   // premier, le rond de notification de cette conversation serait calculé
   // avec l'ancien état (non lu) et ne disparaîtrait qu'au prochain
   // rafraîchissement.
@@ -277,32 +277,22 @@ function brancherMessagesRecus() {
           ? payload.salonId
           : payload.message.conversationId,
       };
-      // Message de salon : pastille sur l'icône de son serveur (rail).
-      if (
-        estSalon &&
-        payload.serveurId &&
-        payload.message.auteurId !== state.currentUserId &&
-        NotifPrefs.afficheRonds(state.currentUserId)
-      ) {
-        const pastilles = serveursNonLus();
-        pastilles.add(payload.serveurId);
-        ecrireStockage(
-          sessionStorage,
-          CLEF_SERVEURS_NON_LUS,
-          JSON.stringify([...pastilles])
+      // Message d'autrui : un non-lu de plus. S'il arrive dans la
+      // conversation affichée, fenêtre au premier plan, son affichage le
+      // marque aussitôt lu (voir renderActiveConversation) ; sinon il reste
+      // compté (conversation, serveur du rail, badge).
+      if (payload.message.auteurId !== state.currentUserId) {
+        NotifPrefs.ajouterNonLu(
+          messageNormalise.type,
+          messageNormalise.conversationId
         );
       }
       NotifPrefs.traiterMessageRecu(messageNormalise, {
         utilisateurId: state.currentUserId,
         surSalon: async () => {
-          // Aucun appel réseau : le cache des salons suffit aux pastilles
-          // (voir integrerMessageSalonEnCache).
-          const salons = integrerMessageSalonEnCache(
-            payload.salonId,
-            payload.message
-          );
-          await actualiserBadgeSalons(salons);
-          mettreAJourBadgeApplication(salons);
+          // Aucun appel réseau : les compteurs suffisent aux pastilles.
+          await actualiserBadgeSalons({ recharger: false });
+          mettreAJourBadgeApplication();
         },
         // Si c'est la conversation actuellement affichée, refreshConversations()
         // la réaffiche avec le nouveau message ; sinon seuls la liste et le

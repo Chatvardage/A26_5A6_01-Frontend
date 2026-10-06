@@ -5,12 +5,13 @@
 // place.
 
 // Rail affiché tout de suite depuis le cache (serveurs de la dernière page
-// visitée), avant le moindre appel réseau : pas de « saut » du rail.
+// visitée), avant le moindre appel réseau : pas de « saut » du rail. Les
+// pastilles arrivent avec les compteurs de non-lus (voir initialiser).
 ChatUiShared.afficherRailDepuisCache({
   conteneur: el.rail,
   avant: el.creerRail,
   serveurActifId,
-  nonLus: serveursNonLus,
+  nonLus: new Set(),
   surChoix: (serveur) => changerServeur(serveur.id),
 });
 initialiser();

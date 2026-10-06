@@ -147,6 +147,72 @@
       : null;
   }
 
+  // --- Recherche de messages ---------------------------------------------
+
+  /** Longueurs acceptées par Message-Service (GET /api/messages/search). */
+  const LONGUEUR_MIN_RECHERCHE = 2;
+  const LONGUEUR_MAX_RECHERCHE = 100;
+
+  /** Vrai si `texte` (espaces retirés) peut être cherché. */
+  function peutRechercher(texte) {
+    const longueur = String(texte ?? '').trim().length;
+    return (
+      longueur >= LONGUEUR_MIN_RECHERCHE && longueur <= LONGUEUR_MAX_RECHERCHE
+    );
+  }
+
+  /**
+   * Extrait de `texte` centré sur la première occurrence de `terme` (casse
+   * ignorée), d'au plus `rayon` caractères de chaque côté, avec « … » aux
+   * coupures. Texte entier s'il est court ou si le terme est absent (début).
+   */
+  function extraitAutour(texte, terme, rayon = 60) {
+    const source = String(texte ?? '');
+    if (source.length <= rayon * 2) return source;
+    const position = source
+      .toLocaleLowerCase()
+      .indexOf(String(terme ?? '').toLocaleLowerCase());
+    const debut = Math.max(0, (position < 0 ? 0 : position) - rayon);
+    const fin = Math.min(
+      source.length,
+      debut + rayon * 2 + String(terme ?? '').length
+    );
+    return `${debut > 0 ? '…' : ''}${source.slice(debut, fin)}${fin < source.length ? '…' : ''}`;
+  }
+
+  /**
+   * Découpe `texte` en segments `{ texte, surligne }` : chaque occurrence de
+   * `terme` (casse ignorée) est surlignée. Les pages en font des nœuds texte
+   * et <mark>, jamais du HTML.
+   */
+  function decouperSurligne(texte, terme) {
+    const source = String(texte ?? '');
+    const cherche = String(terme ?? '').toLocaleLowerCase();
+    if (!cherche) return source ? [{ texte: source, surligne: false }] : [];
+    const minuscule = source.toLocaleLowerCase();
+    const segments = [];
+    let depuis = 0;
+    let position = minuscule.indexOf(cherche);
+    while (position >= 0) {
+      if (position > depuis) {
+        segments.push({
+          texte: source.slice(depuis, position),
+          surligne: false,
+        });
+      }
+      segments.push({
+        texte: source.slice(position, position + cherche.length),
+        surligne: true,
+      });
+      depuis = position + cherche.length;
+      position = minuscule.indexOf(cherche, depuis);
+    }
+    if (depuis < source.length) {
+      segments.push({ texte: source.slice(depuis), surligne: false });
+    }
+    return segments;
+  }
+
   racine.LogiqueInterface = Object.freeze({
     fusionnerHistorique,
     fusionnerAvecMessagesEnAttente,
@@ -162,5 +228,10 @@
     MESSAGE_BIENVENUE_ID,
     cleNomSalon,
     cleContenuMessage,
+    LONGUEUR_MIN_RECHERCHE,
+    LONGUEUR_MAX_RECHERCHE,
+    peutRechercher,
+    extraitAutour,
+    decouperSurligne,
   });
 })(globalThis);

@@ -14,6 +14,8 @@ function creerDmId(utilisateurAId, utilisateurBId) {
 const DELAI_RECONNEXION_INITIAL_MS = 1000;
 const DELAI_RECONNEXION_MAX_MS = 15000;
 const TAILLE_PAGE_MESSAGES = 15;
+// Résultats par page de recherche de messages (Message-Service : 50 au plus).
+const TAILLE_PAGE_RECHERCHE = 20;
 // Membres d'un serveur par page (panneau des membres, voir
 // obtenirMembresServeur) et par serveur dans les suggestions de DM.
 const TAILLE_PAGE_MEMBRES = 50;
@@ -73,5 +75,6 @@ module.exports = {
   NOM_FICHIER_SESSION,
   TAILLE_PAGE_MEMBRES,
   TAILLE_PAGE_MESSAGES,
+  TAILLE_PAGE_RECHERCHE,
   creerDmId,
 };

@@ -270,6 +270,18 @@
         </div>
         <div class="topbar-actions">
           <button
+            id="open-search"
+            class="network-test-button search-open"
+            type="button"
+            title="Rechercher dans les messages"
+            aria-label="Rechercher dans les messages"
+            data-i18n-title="search.title"
+            data-i18n-aria-label="search.title"
+          >
+            <span aria-hidden="true">⌕</span>
+            <span data-i18n="search.button">Rechercher</span>
+          </button>
+          <button
             id="open-members"
             class="network-test-button"
             disabled
@@ -361,6 +373,44 @@
         </div>
         <div id="dialog-content"></div>
       </form>
+    </dialog>
+
+    <!-- Recherche de messages (ChatUiShared.brancherRechercheMessages) :
+         DM et salons accessibles seulement, filtrés par Message-Service. -->
+    <dialog id="search-dialog" class="search-dialog">
+      <div class="search-panel">
+        <div class="dialog-header">
+          <h2 data-i18n="search.title">Rechercher dans les messages</h2>
+          <button
+            type="button"
+            class="close-button search-close"
+            aria-label="Fermer"
+            data-i18n-aria-label="channels.close"
+          >
+            ×
+          </button>
+        </div>
+        <input
+          type="search"
+          class="search-input"
+          maxlength="100"
+          autocomplete="off"
+          placeholder="Texte à chercher…"
+          aria-label="Texte à chercher"
+          data-i18n-placeholder="search.placeholder"
+          data-i18n-aria-label="search.placeholder"
+        />
+        <p class="search-status" role="status" aria-live="polite"></p>
+        <ul class="search-results"></ul>
+        <button
+          type="button"
+          class="secondary-button full-width search-more"
+          hidden
+          data-i18n="search.more"
+        >
+          Plus de résultats
+        </button>
+      </div>
     </dialog>
 
     <div id="toast" role="status" aria-live="polite"></div>

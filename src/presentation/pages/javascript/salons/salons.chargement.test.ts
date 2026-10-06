@@ -49,7 +49,15 @@ function etatInitial(monRole = 'membre') {
       { id: 'moi', pseudo: 'moi', alias: null, avatar: null },
       { id: 'bob', pseudo: 'bob', alias: null, avatar: null },
     ],
-    serveurs: [{ id: 'srv', nom: 'Projet', icone: null, parDefaut: false }],
+    serveurs: [
+      {
+        id: 'srv',
+        nom: 'Projet',
+        icone: null,
+        parDefaut: false,
+        salonIds: ['general', 'autre'],
+      },
+    ],
     serveurActif: {
       id: 'srv',
       nom: 'Projet',
@@ -132,7 +140,6 @@ async function chargerPage({
     },
     obtenirEtatReseau: { statut: 'connecte' },
     obtenirPresences: {},
-    obtenirResumesConversationsPrivees: [],
     obtenirEtatsSaisie: [],
     obtenirEtatSalons: etatInitial(monRole),
     ...autresReponses,
@@ -424,5 +431,249 @@ describe('page des salons (scripts découpés)', () => {
     expect(
       modo.document.querySelector<HTMLElement>('#open-invite-user')?.hidden
     ).toBe(false);
+  });
+
+  it('non-lus : compteurs du serveur affichés, salon affiché marqué lu', async () => {
+    const marques: unknown[] = [];
+    const { document } = await chargerPage({
+      autresReponses: {
+        obtenirNonLus: { salons: { general: 2, autre: 120 }, prives: {} },
+        marquerConversationLue: (donnees: unknown) => {
+          marques.push(donnees);
+          return { nonLus: 0 };
+        },
+      },
+    });
+    const compteur = (salonId: string) =>
+      [...document.querySelectorAll('#channel-list button')]
+        .find((b) => b.textContent?.includes(salonId))
+        ?.querySelector<HTMLElement>('.notif-count');
+
+    // Le salon affiché (général) est lu dès son affichage.
+    await vi.waitFor(() =>
+      expect(marques).toEqual([{ type: 'salon', conversationId: 'general' }])
+    );
+    expect(compteur('général')?.hidden).toBe(true);
+    expect(compteur('autre')?.textContent).toBe('99+');
+    expect(
+      document.querySelector<HTMLElement>(
+        '.server-icon[data-serveur-id="srv"] .notif-dot'
+      )?.hidden
+    ).toBe(false);
+  });
+
+  it('un message reçu ailleurs incrémente le compteur ; dans le salon affiché, il est lu', async () => {
+    const marques: unknown[] = [];
+    const { document, rappels } = await chargerPage({
+      autresReponses: {
+        marquerConversationLue: (donnees: unknown) => {
+          marques.push(donnees);
+          return { nonLus: 0 };
+        },
+      },
+    });
+    rappels.onNouveauMessage({
+      conversationType: 'salon',
+      salonId: 'autre',
+      serveurId: 'srv',
+      message: message('m2', 'bob', 'ailleurs', 2),
+    });
+    rappels.onNouveauMessage({
+      conversationType: 'salon',
+      salonId: 'general',
+      serveurId: 'srv',
+      message: message('m3', 'bob', 'ici', 3),
+    });
+    // Son propre message ne compte jamais.
+    rappels.onNouveauMessage({
+      conversationType: 'salon',
+      salonId: 'autre',
+      serveurId: 'srv',
+      message: message('m4', 'moi', 'moi', 4),
+    });
+    rappels.onNouveauMessage({
+      conversationType: 'dm',
+      message: {
+        ...message('d1', 'bob', 'privé', 5),
+        conversationId: 'bob:moi',
+      },
+    });
+
+    await vi.waitFor(() =>
+      expect(
+        [...document.querySelectorAll('#channel-list button')]
+          .find((b) => b.textContent?.includes('autre'))
+          ?.querySelector('.notif-count')?.textContent
+      ).toBe('1')
+    );
+    await vi.waitFor(() =>
+      expect(marques).toEqual([{ type: 'salon', conversationId: 'general' }])
+    );
+    expect(
+      document.querySelector<HTMLElement>('#message-prive-btn .notif-dot')
+        ?.hidden
+    ).toBe(false);
+  });
+
+  it('mode « aucune » : compteurs masqués', async () => {
+    const { document, window } = await chargerPage({
+      autresReponses: {
+        obtenirNonLus: { salons: { autre: 2 }, prives: {} },
+      },
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- script non typé
+    (window as any).NotifPrefs.definirMode('moi', 'aucune');
+    window.eval('afficherSalons()');
+    expect(
+      [
+        ...document.querySelectorAll<HTMLElement>('#channel-list .notif-count'),
+      ].map((c) => c.hidden)
+    ).toEqual([true, true]);
+  });
+
+  it('recherche : résultats surlignés, clic sur un salon ou une conversation privée', async () => {
+    const recherches: unknown[] = [];
+    const cibles: unknown[] = [];
+    const pages: unknown[] = [];
+    const resultatSalon = {
+      type: 'salon',
+      conversationId: 'autre',
+      salonNom: 'autre',
+      serveurId: 'srv',
+      serveurNom: 'Projet',
+      auteurNom: 'bob',
+      message: message('ms', 'bob', 'Le projet avance', 10),
+    };
+    const resultatPrive = {
+      type: 'prive',
+      conversationId: 'bob:moi',
+      interlocuteurId: 'bob',
+      interlocuteurNom: null,
+      auteurNom: null,
+      message: {
+        id: 'md',
+        auteurId: 'bob',
+        contenu: 'projet privé',
+        envoi: 11,
+      },
+    };
+    const { document, window } = await chargerPage({
+      autresReponses: {
+        rechercherMessages: (donnees: { curseur?: string }) => {
+          recherches.push(donnees);
+          return donnees.curseur
+            ? { resultats: [resultatPrive], curseurSuivant: null }
+            : { resultats: [resultatSalon], curseurSuivant: 'suite' };
+        },
+        definirCibleNavigation: (cible: unknown) => {
+          cibles.push(cible);
+          return true;
+        },
+        navigate: (page: unknown) => {
+          pages.push(page);
+        },
+      },
+    });
+    window.HTMLDialogElement.prototype.showModal = function () {
+      this.setAttribute('open', '');
+    };
+    window.HTMLDialogElement.prototype.close = function () {
+      this.removeAttribute('open');
+    };
+    const dialogue =
+      document.querySelector<HTMLDialogElement>('#search-dialog')!;
+    const champ = dialogue.querySelector<HTMLInputElement>('.search-input')!;
+    const statut = dialogue.querySelector('.search-status')!;
+
+    document.querySelector<HTMLElement>('#open-search')?.click();
+    expect(dialogue.open).toBe(true);
+    expect(statut.textContent).toBe(traductions.fr.search.prompt);
+
+    // Un seul caractère : rien n'est demandé au serveur.
+    champ.value = 'p';
+    champ.dispatchEvent(new window.Event('input'));
+    champ.value = 'projet';
+    champ.dispatchEvent(
+      new window.KeyboardEvent('keydown', { key: 'Enter', cancelable: true })
+    );
+    await vi.waitFor(() =>
+      expect(dialogue.querySelectorAll('.search-result')).toHaveLength(1)
+    );
+    expect(recherches).toEqual([{ texte: 'projet' }]);
+    const premier = dialogue.querySelector('.search-result')!;
+    expect(premier.querySelector('.search-result-title')?.textContent).toBe(
+      '# autre · Projet'
+    );
+    expect(premier.querySelector('mark')?.textContent).toBe('projet');
+
+    dialogue.querySelector<HTMLElement>('.search-more')?.click();
+    await vi.waitFor(() =>
+      expect(dialogue.querySelectorAll('.search-result')).toHaveLength(2)
+    );
+    expect(recherches.at(-1)).toEqual({ texte: 'projet', curseur: 'suite' });
+    expect(dialogue.querySelector<HTMLElement>('.search-more')?.hidden).toBe(
+      true
+    );
+
+    // Salon de ce serveur : ouvert sur place.
+    dialogue.querySelector<HTMLElement>('.search-result')?.click();
+    expect(dialogue.open).toBe(false);
+    await vi.waitFor(() =>
+      expect(document.querySelector('#active-channel-name')?.textContent).toBe(
+        '# autre'
+      )
+    );
+
+    // Conversation privée : ouverte sur l'autre page.
+    document.querySelector<HTMLElement>('#open-search')?.click();
+    dialogue.querySelectorAll<HTMLElement>('.search-result')[1]?.click();
+    await vi.waitFor(() => expect(pages).toEqual(['message-prive.html']));
+    expect(cibles).toEqual([{ type: 'prive', id: 'bob:moi' }]);
+  });
+
+  it('recherche : aucun résultat, erreur et saisie trop courte', async () => {
+    let echec = false;
+    const { document, window } = await chargerPage({
+      autresReponses: {
+        rechercherMessages: () => {
+          // Forme d'une erreur relayée par l'IPC d'Electron.
+          if (echec)
+            throw "Error invoking remote method 'messages:rechercher': Error: ERR_HTTP_503";
+          return { resultats: [], curseurSuivant: null };
+        },
+      },
+    });
+    window.HTMLDialogElement.prototype.showModal = function () {
+      this.setAttribute('open', '');
+    };
+    window.HTMLDialogElement.prototype.close = function () {
+      this.removeAttribute('open');
+    };
+    const dialogue =
+      document.querySelector<HTMLDialogElement>('#search-dialog')!;
+    const champ = dialogue.querySelector<HTMLInputElement>('.search-input')!;
+    const statut = dialogue.querySelector('.search-status')!;
+    document.querySelector<HTMLElement>('#open-search')?.click();
+
+    champ.value = 'rien';
+    champ.dispatchEvent(new window.Event('input'));
+    await vi.waitFor(() =>
+      expect(statut.textContent).toBe(traductions.fr.search.noResults)
+    );
+
+    echec = true;
+    champ.value = 'panne';
+    champ.dispatchEvent(new window.Event('input'));
+    await vi.waitFor(() =>
+      expect(statut.textContent).toBe(traductions.fr.errors.ERR_HTTP_503)
+    );
+
+    champ.value = ' ';
+    champ.dispatchEvent(new window.Event('input'));
+    expect(statut.textContent).toBe(traductions.fr.search.prompt);
+    champ.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'a' }));
+
+    dialogue.querySelector<HTMLElement>('.search-close')?.click();
+    expect(dialogue.open).toBe(false);
   });
 });

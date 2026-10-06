@@ -9,11 +9,19 @@ const installerStockageMemoire = () => {
   const donnees = new Map<string, string>();
   const stockage = {
     getItem: (cle: string) => donnees.get(cle) ?? null,
-    setItem: (cle: string, valeur: string) => { donnees.set(cle, String(valeur)); },
-    removeItem: (cle: string) => { donnees.delete(cle); },
-    clear: () => { donnees.clear(); },
+    setItem: (cle: string, valeur: string) => {
+      donnees.set(cle, String(valeur));
+    },
+    removeItem: (cle: string) => {
+      donnees.delete(cle);
+    },
+    clear: () => {
+      donnees.clear();
+    },
     key: (index: number) => [...donnees.keys()][index] ?? null,
-    get length() { return donnees.size; },
+    get length() {
+      return donnees.size;
+    },
   };
   Object.defineProperty(window, 'localStorage', {
     configurable: true,
@@ -68,9 +76,107 @@ describe('NotifPrefs : aperçu dans les notifications système', () => {
   it('stockage indisponible : contenu affiché, sans erreur', () => {
     Object.defineProperty(window, 'localStorage', {
       configurable: true,
-      get: () => { throw new Error('bloqué'); },
+      get: () => {
+        throw new Error('bloqué');
+      },
     });
     expect(NotifPrefs.afficheApercu('u1')).toBe(true);
     expect(() => NotifPrefs.definirApercu('u1', false)).not.toThrow();
+  });
+});
+
+describe('NotifPrefs : compteurs de non-lus (copie de Message-Service)', () => {
+  const api = (nonLus: unknown = { salons: {}, prives: {} }) => ({
+    obtenirNonLus: vi.fn().mockResolvedValue(nonLus),
+    marquerConversationLue: vi.fn().mockResolvedValue({ nonLus: 0 }),
+  });
+
+  beforeEach(async () => {
+    await NotifPrefs.chargerNonLus(api());
+  });
+
+  it('charge les compteurs du serveur et ignore les valeurs nulles', async () => {
+    await NotifPrefs.chargerNonLus(
+      api({ salons: { s1: 2, s2: 0 }, prives: { 'a:b': 5 } })
+    );
+    expect(NotifPrefs.nombreNonLus('salon', 's1')).toBe(2);
+    expect(NotifPrefs.nombreNonLus('salon', 's2')).toBe(0);
+    expect(NotifPrefs.nombreNonLus('prive', 'a:b')).toBe(5);
+    expect(NotifPrefs.nombreNonLus('prive', 's1')).toBe(0);
+    expect(NotifPrefs.nombreNonLus('inconnu', 's1')).toBe(0);
+    expect(NotifPrefs.totalNonLus()).toBe(7);
+    expect(NotifPrefs.totalNonLus({ type: 'prive' })).toBe(5);
+    expect(
+      NotifPrefs.totalNonLus({ type: 'salon', conversationIds: ['s1', 's3'] })
+    ).toBe(2);
+
+    // Réponse vide : tout est remis à zéro.
+    await NotifPrefs.chargerNonLus(api(null));
+    expect(NotifPrefs.totalNonLus()).toBe(0);
+  });
+
+  it('garde les compteurs actuels si le serveur ne répond pas', async () => {
+    await NotifPrefs.chargerNonLus(api({ salons: { s1: 1 }, prives: {} }));
+    const avertir = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await NotifPrefs.chargerNonLus({
+      obtenirNonLus: vi.fn().mockRejectedValue(new Error('ERR_HTTP_503')),
+    });
+    expect(NotifPrefs.nombreNonLus('salon', 's1')).toBe(1);
+    expect(avertir).toHaveBeenCalled();
+  });
+
+  it('compte les messages reçus et ignore un type ou un identifiant absent', () => {
+    NotifPrefs.ajouterNonLu('prive', 'a:b');
+    NotifPrefs.ajouterNonLu('prive', 'a:b');
+    NotifPrefs.ajouterNonLu('prive', '');
+    NotifPrefs.ajouterNonLu('autre', 'x');
+    expect(NotifPrefs.nombreNonLus('prive', 'a:b')).toBe(2);
+    expect(NotifPrefs.totalNonLus()).toBe(2);
+  });
+
+  it('marquer lu remet à zéro et prévient le serveur, seulement s’il y avait des non-lus', async () => {
+    const serveur = api();
+    NotifPrefs.marquerLu(serveur, 'salon', 's1');
+    expect(serveur.marquerConversationLue).not.toHaveBeenCalled();
+
+    NotifPrefs.ajouterNonLu('salon', 's1');
+    NotifPrefs.marquerLu(serveur, 'salon', 's1');
+    expect(NotifPrefs.nombreNonLus('salon', 's1')).toBe(0);
+    await vi.waitFor(() =>
+      expect(serveur.marquerConversationLue).toHaveBeenCalledWith({
+        type: 'salon',
+        conversationId: 's1',
+      })
+    );
+  });
+
+  it('un échec du serveur au marquage est seulement journalisé', async () => {
+    const avertir = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    NotifPrefs.ajouterNonLu('prive', 'a:b');
+    NotifPrefs.marquerLu(
+      { marquerConversationLue: vi.fn().mockRejectedValue(new Error('x')) },
+      'prive',
+      'a:b'
+    );
+    await vi.waitFor(() =>
+      expect(avertir).toHaveBeenCalledWith(
+        '[non-lus] marquage comme lu impossible :',
+        expect.any(Error)
+      )
+    );
+  });
+
+  it('affiche le compteur (99+ au-delà de 99), masqué à zéro ou si désactivé', () => {
+    const element = document.createElement('span');
+    NotifPrefs.remplirCompteur(element, 3);
+    expect([element.hidden, element.textContent]).toEqual([false, '3']);
+    NotifPrefs.remplirCompteur(element, 120);
+    expect(element.textContent).toBe('99+');
+    NotifPrefs.remplirCompteur(element, 4, false);
+    expect([element.hidden, element.textContent]).toEqual([true, '']);
+    NotifPrefs.remplirCompteur(element, 0);
+    expect(element.hidden).toBe(true);
+    NotifPrefs.remplirCompteur(null, 3); // sans élément : rien
+    expect(NotifPrefs.libelleNonLus(99)).toBe('99');
   });
 });

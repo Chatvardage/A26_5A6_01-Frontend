@@ -37,23 +37,6 @@ function renderConversationList() {
     }
     ChatUiShared.remplirAvatar(avatar, otherUser?.avatar);
 
-    const nonLu =
-      afficherRonds &&
-      NotifPrefs.estNonLu(
-        state.currentUserId,
-        conversation.id,
-        conversation.lastMessage
-          ? {
-              auteurId: conversation.lastMessage.auteurId,
-              timestamp: conversation.lastMessage.envoi,
-            }
-          : null
-      );
-    const dot = document.createElement('span');
-    dot.classList.add('notif-dot', 'notif-dot--avatar');
-    dot.hidden = !nonLu;
-    avatar.appendChild(dot);
-
     const info = document.createElement('div');
     info.classList.add('conversation-info');
 
@@ -67,7 +50,15 @@ function renderConversationList() {
     lastMessageEl.textContent = subtitle;
 
     info.append(username, lastMessageEl);
-    li.append(avatar, info);
+    // Messages non lus (compteurs de Message-Service, voir NotifPrefs).
+    const compteur = document.createElement('span');
+    compteur.classList.add('notif-count', 'notif-count--conversation');
+    NotifPrefs.remplirCompteur(
+      compteur,
+      NotifPrefs.nombreNonLus('prive', conversation.id),
+      afficherRonds
+    );
+    li.append(avatar, info, compteur);
 
     li.addEventListener('click', async () => {
       state.activeConversationId = conversation.id;
@@ -185,7 +176,7 @@ async function renderActiveConversation(options = {}) {
   // système de main.js, qui exige déjà le focus pour la même décision,
   // finissent en désaccord).
   if (fenetreEstFocusee) {
-    NotifPrefs.marquerCommeLu(state.currentUserId, conversation.id, Date.now());
+    NotifPrefs.marquerLu(window.electronAPI, 'prive', conversation.id);
   }
   // La conversation "active" que main.js ne doit pas notifier (voir
   // showMessageNotification côté main.js) reste définie qu'on ait le

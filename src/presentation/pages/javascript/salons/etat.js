@@ -85,10 +85,14 @@ const NotifPrefs =
       obtenirMode: () => 'aucune',
       definirMode: () => {},
       afficheRonds: () => false,
-      marquerCommeLu: () => {},
-      estNonLu: () => false,
-      compterSalonsNonLus: () => 0,
-      compterConversationsNonLues: () => 0,
+      chargerNonLus: async () => {},
+      nombreNonLus: () => 0,
+      ajouterNonLu: () => {},
+      marquerLu: () => {},
+      totalNonLus: () => 0,
+      remplirCompteur: (element) => {
+        if (element) element.hidden = true;
+      },
       genererIconeBadge: () => null,
       appliquerBadge: () => {},
       traiterMessageRecu: async () => {},
@@ -111,13 +115,6 @@ let salonActifId = null;
 // Serveur affiché, mémorisé d'un lancement à l'autre (best-effort).
 const CLEF_SERVEUR_ACTIF = 'chatvardage:serveur-actif';
 let serveurActifId = lireStockage(localStorage, CLEF_SERVEUR_ACTIF);
-// Serveurs (autres que l'actif) ayant reçu un message depuis qu'on les a
-// quittés des yeux : pastille sur leur icône du rail. Partagé avec
-// message-prive.js via sessionStorage (même clé).
-const CLEF_SERVEURS_NON_LUS = 'chatvardage:serveurs-non-lus';
-const serveursNonLus = new Set(
-  JSON.parse(lireStockage(sessionStorage, CLEF_SERVEURS_NON_LUS) ?? '[]')
-);
 // Vrai après le premier actualiser() réussi : avant, le rail reste celui
 // affiché depuis le cache (voir ChatUiShared.afficherRailDepuisCache) au lieu
 // d'être vidé puis mémorisé vide.
@@ -145,14 +142,6 @@ function ecrireStockage(stockage, clef, valeur) {
   } catch {
     // Best-effort : sans stockage, seul le souvenir est perdu.
   }
-}
-
-function memoriserServeursNonLus() {
-  ecrireStockage(
-    sessionStorage,
-    CLEF_SERVEURS_NON_LUS,
-    JSON.stringify([...serveursNonLus])
-  );
 }
 
 /** Rôle de l'utilisateur dans le serveur affiché (null : aperçu). */
@@ -256,4 +245,3 @@ async function chargerEtatReseauEtPresences() {
 
 const salonActif = () => etat.salons.find((salon) => salon.id === salonActifId);
 const utilisateur = (id) => etat.utilisateurs.find((item) => item.id === id);
-

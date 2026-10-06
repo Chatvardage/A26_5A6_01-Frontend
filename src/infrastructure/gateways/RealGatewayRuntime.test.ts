@@ -685,46 +685,229 @@ describe('RealGatewayRuntime', () => {
       expect(runtime.utilisateursConnus.get('u204')?.pseudo).toBe('p-u204');
     });
 
-    it('résumés de conversations privées : un seul appel, dernier message seulement', async () => {
+    it('non-lus : compteurs du serveur, rangés par type sous les identifiants de l’app', async () => {
       const { runtime } = creerRuntime();
-      expect(await runtime.obtenirResumesConversationsPrivees()).toEqual([]);
+      expect(await runtime.obtenirNonLus()).toEqual({ salons: {}, prives: {} });
 
       runtime.utilisateurConnecte = { id: 'moi', pseudo: 'moi' };
       const fetchMock = vi.fn().mockResolvedValue(
-        reponseJson([
-          {
-            otherUserId: 'u2',
-            lastMessage: {
-              id: 'm9',
-              senderId: 'u2',
-              recipientId: 'moi',
-              content: 'salut',
-              createdAt: '2026-01-01T00:00:00.000Z',
-              updatedAt: '2026-01-01T00:00:00.000Z',
-            },
+        reponseJson({
+          counts: {
+            'dm:u2': 3,
+            'room:salon-1': 2,
+            'room:vide': 0,
+            'inconnu:x': 4,
+            sansCible: 1,
           },
-        ])
+        })
       );
       vi.stubGlobal('fetch', fetchMock);
 
-      const resumes = await runtime.obtenirResumesConversationsPrivees();
-
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(String(fetchMock.mock.calls[0][0])).toContain(
-        '/api/messages/conversations'
+      expect(await runtime.obtenirNonLus()).toEqual({
+        salons: { 'salon-1': 2 },
+        prives: { 'moi:u2': 3 },
+      });
+      expect(String(fetchMock.mock.calls[0][0])).toBe(
+        'http://gateway.test/api/messages/unread'
       );
-      expect(resumes).toEqual([
+
+      fetchMock.mockResolvedValue(reponseJson({}));
+      expect(await runtime.obtenirNonLus()).toEqual({ salons: {}, prives: {} });
+    });
+
+    it('marque un salon ou une conversation privée comme lu', async () => {
+      const { runtime } = creerRuntime();
+      runtime.utilisateurConnecte = { id: 'moi', pseudo: 'moi' };
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(reponseJson({ unreadCount: 1 }))
+        .mockResolvedValueOnce(reponseJson({ unreadCount: 0 }))
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 204,
+          json: async () => null,
+        });
+      vi.stubGlobal('fetch', fetchMock);
+
+      expect(
+        await runtime.marquerConversationLue({
+          type: 'salon',
+          conversationId: 'salon 1',
+        })
+      ).toEqual({ nonLus: 1 });
+      expect(
+        await runtime.marquerConversationLue({
+          type: 'prive',
+          conversationId: 'moi:u2',
+        })
+      ).toEqual({ nonLus: 0 });
+      expect(
+        await runtime.marquerConversationLue({
+          type: 'prive',
+          conversationId: 'moi:u2',
+        })
+      ).toEqual({ nonLus: 0 });
+
+      const appels = fetchMock.mock.calls.map(([url, init]) => [
+        String(url),
+        init.method,
+        init.body,
+      ]);
+      expect(appels[0]).toEqual([
+        'http://gateway.test/api/messages/rooms/salon%201/read',
+        'PUT',
+        '{}',
+      ]);
+      expect(appels[1]).toEqual([
+        'http://gateway.test/api/messages/conversations/u2/read',
+        'PUT',
+        '{}',
+      ]);
+    });
+
+    it('recherche : résultats prêts à afficher et à ouvrir, page suivante', async () => {
+      const { runtime } = creerRuntime();
+      runtime.utilisateurConnecte = { id: 'moi', pseudo: 'moi' };
+      runtime.utilisateursConnus.set('u2', { id: 'u2', pseudo: 'bob' });
+      runtime.utilisateursConnus.set('u3', { id: 'u3', pseudo: 'carla' });
+      runtime.profilsPublics.set('u3', { alias: 'Carla A.' });
+      runtime.serveurs.set('srv', {
+        id: 'srv',
+        nom: 'Projet',
+        salons: [{ id: 'r1', nom: 'général' }],
+      });
+      runtime.salonVersServeur.set('r1', 'srv');
+      const date = '2026-01-01T00:00:00.000Z';
+      const fetchMock = vi.fn().mockResolvedValue(
+        reponseJson({
+          results: [
+            {
+              conversationId: 'room:r1',
+              kind: 'room',
+              message: {
+                id: 'ms',
+                roomId: 'r1',
+                authorId: 'u3',
+                content: 'projet',
+                createdAt: date,
+                updatedAt: date,
+              },
+            },
+            {
+              conversationId: 'room:ailleurs',
+              kind: 'room',
+              message: {
+                id: 'ma',
+                roomId: 'ailleurs',
+                authorId: 'moi',
+                content: 'projet',
+                createdAt: date,
+                updatedAt: date,
+              },
+            },
+            {
+              conversationId: 'dm:u2',
+              kind: 'dm',
+              message: {
+                id: 'md',
+                senderId: 'moi',
+                recipientId: 'u2',
+                content: 'projet',
+                createdAt: date,
+                updatedAt: date,
+              },
+            },
+            {
+              conversationId: 'dm:u9',
+              kind: 'dm',
+              message: {
+                id: 'mi',
+                senderId: 'u9',
+                recipientId: 'moi',
+                content: 'projet',
+                createdAt: date,
+                updatedAt: date,
+              },
+            },
+          ],
+          nextCursor: 'suite',
+        })
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      const resoudre = vi
+        .spyOn(runtime, 'resoudrePseudos')
+        .mockResolvedValue(undefined);
+
+      const page = await runtime.rechercherMessages({ texte: 'pro jet' });
+
+      expect(String(fetchMock.mock.calls[0][0])).toBe(
+        'http://gateway.test/api/messages/search?q=pro+jet&limit=20'
+      );
+      expect(resoudre).toHaveBeenCalledWith(['u3', 'u2', 'u9']);
+      expect(page.curseurSuivant).toBe('suite');
+      expect(page.resultats).toEqual([
         {
-          id: 'moi:u2',
-          lastMessage: expect.objectContaining({
-            id: 'm9',
-            auteurId: 'u2',
-            contenu: 'salut',
-          }),
+          type: 'salon',
+          conversationId: 'r1',
+          salonNom: 'général',
+          serveurId: 'srv',
+          serveurNom: 'Projet',
+          auteurNom: 'Carla A.',
+          message: expect.objectContaining({ id: 'ms', auteurId: 'u3' }),
+        },
+        {
+          type: 'salon',
+          conversationId: 'ailleurs',
+          salonNom: null,
+          serveurId: null,
+          serveurNom: null,
+          auteurNom: 'moi',
+          message: expect.objectContaining({ id: 'ma' }),
+        },
+        {
+          type: 'prive',
+          conversationId: 'moi:u2',
+          interlocuteurId: 'u2',
+          interlocuteurNom: 'bob',
+          auteurNom: 'moi',
+          message: expect.objectContaining({ id: 'md', auteurId: 'moi' }),
+        },
+        {
+          type: 'prive',
+          conversationId: 'moi:u9',
+          interlocuteurId: 'u9',
+          interlocuteurNom: null,
+          auteurNom: null,
+          message: expect.objectContaining({ id: 'mi' }),
         },
       ]);
-      expect(runtime.partenairesDmConnus.has('u2')).toBe(true);
-      expect(runtime.indexMessages.get('m9')).toEqual({ type: 'dm' });
+      // Modifiables / supprimables depuis l'app ensuite (index local).
+      expect(runtime.indexMessages.get('ms')).toEqual({
+        type: 'salon',
+        roomId: 'r1',
+      });
+      expect(runtime.indexMessages.get('md')).toEqual({ type: 'dm' });
+
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 204,
+        json: async () => null,
+      });
+      await expect(
+        runtime.rechercherMessages({ texte: 'projet', curseur: 'suite' })
+      ).resolves.toEqual({ resultats: [], curseurSuivant: null });
+      expect(String(fetchMock.mock.calls[1][0])).toContain('cursor=suite');
+    });
+
+    it('recherche sans session : aucun nom à exclure', async () => {
+      const { runtime } = creerRuntime();
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(reponseJson({ results: [] }))
+      );
+      await expect(
+        runtime.rechercherMessages({ texte: 'projet' })
+      ).resolves.toEqual({ resultats: [], curseurSuivant: null });
     });
 
     it('un message entrant indique son serveur (pastille du rail)', async () => {

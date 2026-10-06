@@ -161,16 +161,20 @@ src/presentation/pages/
                                 démarre la page (DOMContentLoaded). Rien ne
                                 doit s'exécuter au chargement (voir
                                 message-prive.chargement.test.ts).
-  javascript/notif-prefs.js    Préférences de notification, partagées
-                                entre les deux pages JS vanilla via
-                                window.NotifPrefs (même pattern que
-                                window.I18n). Chargé AVANT renderer.js/
+  javascript/notif-prefs.js    Préférences de notification et compteurs
+                                de non-lus, partagés entre les deux pages
+                                JS vanilla via window.NotifPrefs (même
+                                pattern que window.I18n). Les non-lus
+                                viennent de Message-Service (état de
+                                lecture serveur) : jamais de carte de
+                                lecture locale (localStorage). Chargé AVANT renderer.js/
                                 message-prive.js dans le HTML — comme
                                 i18n-browser.js et chat-ui-shared.js :
                                 l'ordre des <script> compte, ce sont des
                                 scripts classiques (pas des modules), qui
                                 partagent le même scope global.
-  javascript/chat-ui-shared.js Logique réseau/présence partagée entre
+  javascript/chat-ui-shared.js Logique réseau/présence et dialogue de
+                                recherche de messages, partagés entre
                                 les deux pages, expose window.ChatUiShared
                                 (même pattern que window.I18n/NotifPrefs).
 ```

@@ -20,10 +20,15 @@
  * afficheRonds() ci-dessous, à utiliser plutôt que de comparer directement à
  * MODE_DISCRET pour décider si un rond doit apparaître.
  *
- * Le mode et l'état "lu/non lu" sont stockés dans localStorage (partagé
- * entre les deux pages puisqu'elles sont chargées depuis la même origine
- * file://, comme `sessionStorage.currentUserId` l'est déjà ailleurs dans
- * l'app), par utilisateur connecté sur cette machine.
+ * Le mode et l'aperçu sont stockés dans localStorage (partagé entre les
+ * deux pages puisqu'elles sont chargées depuis la même origine file://), par
+ * utilisateur connecté sur cette machine.
+ *
+ * Les messages non lus, eux, sont tenus par Message-Service (état de
+ * lecture persistant, identique sur tous les appareils et après un
+ * redémarrage) : cette page en garde une copie (voir « Compteurs de non-lus »
+ * plus bas), chargée à l'ouverture et après chaque reconnexion, tenue à jour
+ * par les messages reçus en temps réel.
  */
 (function (global) {
   const MODE_SYSTEME = 'systeme';
@@ -34,10 +39,6 @@
 
   function clefMode(utilisateurId) {
     return `notif:mode:${utilisateurId}`;
-  }
-
-  function clefLecture(utilisateurId) {
-    return `notif:lecture:${utilisateurId}`;
   }
 
   function clefApercu(utilisateurId) {
@@ -101,97 +102,87 @@
     }
   }
 
-  function obtenirCarteLecture(utilisateurId) {
+  // --- Compteurs de non-lus (copie de l'état de Message-Service) -------------
+  // Clés : identifiant de conversation de l'app (id de DM, id de salon).
+  // Un message reçu d'autrui incrémente toujours le compteur de sa
+  // conversation ; l'affichage de la conversation active (fenêtre au premier
+  // plan) appelle ensuite marquerLu(), qui remet le compteur à zéro et
+  // prévient le serveur. Ainsi, un message lu en direct est aussi lu côté
+  // serveur, et un message reçu en arrière-plan reste compté.
+  const compteurs = { salon: new Map(), prive: new Map() };
+
+  /** Remplace les compteurs par ceux du serveur, `{ salons, prives }`
+   * (best-effort : en cas d'échec, les compteurs actuels sont gardés). */
+  async function chargerNonLus(api) {
     try {
-      const brut = global.localStorage.getItem(clefLecture(utilisateurId));
-      const carte = brut ? JSON.parse(brut) : null;
-      return carte && typeof carte === 'object' ? carte : {};
-    } catch {
-      return {};
+      const nonLus = await api.obtenirNonLus();
+      for (const [type, source] of [
+        ['salon', nonLus?.salons],
+        ['prive', nonLus?.prives],
+      ]) {
+        compteurs[type].clear();
+        for (const [id, nombre] of Object.entries(source ?? {})) {
+          if (nombre > 0) compteurs[type].set(id, nombre);
+        }
+      }
+    } catch (erreur) {
+      console.warn('[non-lus] compteurs indisponibles :', erreur);
     }
   }
 
-  function marquerCommeLu(utilisateurId, conversationId, timestamp) {
-    if (!utilisateurId || !conversationId) return;
-    const carte = obtenirCarteLecture(utilisateurId);
-    carte[conversationId] = timestamp ?? Date.now();
-    try {
-      global.localStorage.setItem(
-        clefLecture(utilisateurId),
-        JSON.stringify(carte)
-      );
-    } catch {
-      // Best-effort, voir definirMode() ci-dessus.
-    }
+  /** `type` : 'salon' ou 'prive'. */
+  function nombreNonLus(type, conversationId) {
+    return compteurs[type]?.get(conversationId) ?? 0;
+  }
+
+  /** Message reçu d'autrui dans `conversationId`. */
+  function ajouterNonLu(type, conversationId) {
+    if (!compteurs[type] || !conversationId) return;
+    compteurs[type].set(conversationId, nombreNonLus(type, conversationId) + 1);
   }
 
   /**
-   * Indique si `conversationId` a une activité non lue pour `utilisateurId`.
-   * @param {string} utilisateurId
-   * @param {string} conversationId
-   * @param {{auteurId: string, timestamp: number}|null|undefined} dernierMessage
-   *   Le dernier message connu de la conversation (peu importe salon ou DM,
-   *   l'appelant normalise déjà la forme). `null`/`undefined` si la
-   *   conversation n'a aucun message.
+   * Conversation affichée et lue : compteur à zéro, puis état enregistré
+   * par le serveur. Rien n'est envoyé si elle n'avait aucun non-lu, pour
+   * que chaque nouvel affichage ne coûte pas une requête.
    */
-  function estNonLu(utilisateurId, conversationId, dernierMessage) {
-    if (!utilisateurId || !conversationId || !dernierMessage) return false;
-    // Mon propre dernier message ne compte jamais comme "non lu" pour moi.
-    if (dernierMessage.auteurId === utilisateurId) return false;
-    const carte = obtenirCarteLecture(utilisateurId);
-    const derniereLecture = carte[conversationId] ?? 0;
-    return (dernierMessage.timestamp ?? 0) > derniereLecture;
+  function marquerLu(api, type, conversationId) {
+    if (!nombreNonLus(type, conversationId)) return;
+    compteurs[type].delete(conversationId);
+    Promise.resolve()
+      .then(() => api.marquerConversationLue({ type, conversationId }))
+      .catch((erreur) =>
+        console.warn('[non-lus] marquage comme lu impossible :', erreur)
+      );
+  }
+
+  /** Total des non-lus : tous types si `type` est absent, seulement
+   * `conversationIds` s'il est fourni. */
+  function totalNonLus({ type, conversationIds } = {}) {
+    const types = type ? [type] : ['salon', 'prive'];
+    let total = 0;
+    for (const t of types) {
+      const ids = conversationIds ?? [...compteurs[t].keys()];
+      for (const id of ids) total += nombreNonLus(t, id);
+    }
+    return total;
+  }
+
+  /** Texte du compteur : « 99+ » au-delà de 99. */
+  function libelleNonLus(nombre) {
+    return nombre > 99 ? '99+' : String(nombre);
+  }
+
+  /** Affiche `nombre` dans l'élément compteur, masqué à zéro ou quand le
+   * mode de notification est « aucune » (`visible` faux). */
+  function remplirCompteur(element, nombre, visible = true) {
+    if (!element) return;
+    const affiche = visible && nombre > 0;
+    element.hidden = !affiche;
+    element.textContent = affiche ? libelleNonLus(nombre) : '';
   }
 
   // --- Badge d'icône d'application (partagé renderer.js / message-prive.js) --
-  // Ces fonctions vivaient auparavant en double dans renderer.js ET
-  // message-prive.js (copiées-collées à l'identique) — exactement le genre de
-  // risque de divergence décrit dans le commentaire en tête de ce fichier.
-  // Elles vivent maintenant ici, seul endroit partagé entre les deux pages.
-
-  /** Le dernier message d'un salon (forme `{ messages: [...] }`), normalisé
-   * pour estNonLu()/compterSalonsNonLus(). */
-  function dernierMessageSalon(salon) {
-    const messages = salon?.messages;
-    if (!messages || !messages.length) return null;
-    const dernier = messages[messages.length - 1];
-    return { auteurId: dernier.auteurId, timestamp: dernier.date };
-  }
-
-  /** Le dernier message d'une conversation privée (forme `{ lastMessage }`),
-   * normalisé pour estNonLu()/compterConversationsNonLues(). */
-  function dernierMessageConversation(conversation) {
-    const dernier = conversation?.lastMessage;
-    if (!dernier) return null;
-    return { auteurId: dernier.auteurId, timestamp: dernier.envoi };
-  }
-
-  /** Nombre de salons non lus pour `utilisateurId` parmi `salons`. */
-  function compterSalonsNonLus(utilisateurId, salons) {
-    return (salons ?? []).reduce(
-      (total, salon) =>
-        estNonLu(utilisateurId, salon.id, dernierMessageSalon(salon))
-          ? total + 1
-          : total,
-      0
-    );
-  }
-
-  /** Nombre de conversations privées non lues pour `utilisateurId` parmi
-   * `conversations`. */
-  function compterConversationsNonLues(utilisateurId, conversations) {
-    return (conversations ?? []).reduce(
-      (total, conversation) =>
-        estNonLu(
-          utilisateurId,
-          conversation.id,
-          dernierMessageConversation(conversation)
-        )
-          ? total + 1
-          : total,
-      0
-    );
-  }
 
   /**
    * Dessine un petit badge numérique (cercle rouge + chiffre blanc) dans un
@@ -207,6 +198,9 @@
     canvas.width = taille;
     canvas.height = taille;
     const ctx = canvas.getContext('2d');
+    // Canvas indisponible : badge sans icône de superposition, plutôt
+    // qu'une erreur qui interromprait l'affichage de la page.
+    if (!ctx) return null;
     ctx.fillStyle = '#e53935';
     ctx.beginPath();
     ctx.arc(taille / 2, taille / 2, taille / 2, 0, Math.PI * 2);
@@ -291,11 +285,13 @@
     afficheRonds,
     afficheApercu,
     definirApercu,
-    marquerCommeLu,
-    estNonLu,
-    dernierMessageSalon,
-    compterSalonsNonLus,
-    compterConversationsNonLues,
+    chargerNonLus,
+    nombreNonLus,
+    ajouterNonLu,
+    marquerLu,
+    totalNonLus,
+    libelleNonLus,
+    remplirCompteur,
     genererIconeBadge,
     appliquerBadge,
     traiterMessageRecu,

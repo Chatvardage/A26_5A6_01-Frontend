@@ -161,3 +161,52 @@ describe('logique-interface', () => {
     });
   });
 });
+
+describe('recherche de messages', () => {
+  it('accepte de 2 à 100 caractères, espaces retirés', () => {
+    expect(L.peutRechercher(' a ')).toBe(false);
+    expect(L.peutRechercher(' ab ')).toBe(true);
+    expect(L.peutRechercher('x'.repeat(100))).toBe(true);
+    expect(L.peutRechercher('x'.repeat(101))).toBe(false);
+    expect(L.peutRechercher(undefined)).toBe(false);
+    expect([L.LONGUEUR_MIN_RECHERCHE, L.LONGUEUR_MAX_RECHERCHE]).toEqual([
+      2, 100,
+    ]);
+  });
+
+  it('extrait le texte autour du terme, avec « … » aux coupures', () => {
+    expect(L.extraitAutour('court', 'ou')).toBe('court');
+    expect(L.extraitAutour(null, 'x')).toBe('');
+    const long = `${'a'.repeat(100)}PROJET${'b'.repeat(100)}`;
+    expect(L.extraitAutour(long, 'projet', 5)).toBe('…aaaaaPROJETbbbbb…');
+    expect(L.extraitAutour(long, 'absent', 5)).toBe('aaaaaaaaaaaaaaaa…');
+    expect(L.extraitAutour(`PROJET${'b'.repeat(100)}`, 'projet', 5)).toBe(
+      'PROJETbbbbbbbbbb…'
+    );
+    expect(L.extraitAutour(`${'a'.repeat(100)}PROJET`, 'projet', 5)).toBe(
+      '…aaaaaPROJET'
+    );
+    expect(L.extraitAutour('x'.repeat(200), undefined, 5)).toBe('xxxxxxxxxx…');
+  });
+
+  it('découpe le texte en segments surlignés, sans tenir compte de la casse', () => {
+    expect(L.decouperSurligne('Le Projet et le projet', 'projet')).toEqual([
+      { texte: 'Le ', surligne: false },
+      { texte: 'Projet', surligne: true },
+      { texte: ' et le ', surligne: false },
+      { texte: 'projet', surligne: true },
+    ]);
+    expect(L.decouperSurligne('un projet ici', 'PROJET')).toEqual([
+      { texte: 'un ', surligne: false },
+      { texte: 'projet', surligne: true },
+      { texte: ' ici', surligne: false },
+    ]);
+    expect(L.decouperSurligne('projet', 'projet')).toEqual([
+      { texte: 'projet', surligne: true },
+    ]);
+    expect(L.decouperSurligne('texte', '')).toEqual([
+      { texte: 'texte', surligne: false },
+    ]);
+    expect(L.decouperSurligne(undefined, undefined)).toEqual([]);
+  });
+});

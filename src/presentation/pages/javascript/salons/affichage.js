@@ -220,7 +220,6 @@ async function actualiser(options = {}) {
     etatCharge = true;
     serveurActifId = etat.serveurActif?.id ?? null;
     ecrireStockage(localStorage, CLEF_SERVEUR_ACTIF, serveurActifId);
-    if (serveursNonLus.delete(serveurActifId)) memoriserServeursNonLus();
     if (!etat.salons.some((salon) => salon.id === salonActifId)) {
       salonActifId = etat.salons[0]?.id ?? null;
     }
@@ -231,82 +230,50 @@ async function actualiser(options = {}) {
   }
   // Note : mettreAJourBadgeApplication() n'est PAS rappelée ici, elle est
   // déjà déclenchée par afficherTout() (voir plus bas) sur le chemin de
-  // succès. Un appel ici en plus doublait le recalcul du badge (et l'appel
-  // IPC obtenirResumesConversationsPrivees sous-jacent) à chaque actualiser() réussi.
+  // succès.
   actualiserBadgeMessagesPrives();
 }
 
 /**
- * Recalcule le nombre total de conversations non lues (salons + messages
- * privés) pour l'utilisateur courant, et met à jour le badge de l'icône de
- * l'app en conséquence (voir mettreAJourBadgeApplication côté main.js).
- * Respecte NotifPrefs.afficheRonds() : en mode "aucune", le badge disparaît
- * comme les ronds de notification. Best-effort et silencieux, comme
- * actualiserBadgeMessagesPrives().
- *
- * Le calcul du compte et le dessin de l'icône de badge vivent dans
- * NotifPrefs (notif-prefs.js), partagés avec message-prive.js — voir son
- * en-tête pour le pourquoi (évite la divergence entre deux copies).
+ * Badge de l'icône de l'app : total des messages non lus (salons + messages
+ * privés, compteurs tenus par Message-Service, voir NotifPrefs). Masqué en
+ * mode de notification « aucune », comme les compteurs.
  */
-async function mettreAJourBadgeApplication() {
+function mettreAJourBadgeApplication() {
   if (typeof serviceNotifications?.setBadgeCount !== 'function') return;
-  if (!NotifPrefs.afficheRonds(utilisateurActuelId)) {
-    NotifPrefs.appliquerBadge(serviceNotifications, 0);
-    return;
-  }
-  let nombre = NotifPrefs.compterSalonsNonLus(utilisateurActuelId, etat.salons);
-  try {
-    const conversations =
-      await window.electronAPI.obtenirResumesConversationsPrivees();
-    nombre += NotifPrefs.compterConversationsNonLues(
-      utilisateurActuelId,
-      conversations
-    );
-  } catch {
-    // Badge best-effort, voir commentaire ci-dessus.
-  }
-  NotifPrefs.appliquerBadge(serviceNotifications, nombre);
+  NotifPrefs.appliquerBadge(
+    serviceNotifications,
+    NotifPrefs.afficheRonds(utilisateurActuelId) ? NotifPrefs.totalNonLus() : 0
+  );
 }
 
 /**
- * Le bouton d'accès aux messages privés (#message-prive-btn) vit sur CETTE
- * page (index.html) mais doit refléter l'état des conversations privées
- * (autre page). Best-effort et silencieux : un badge qui ne se met pas à
- * jour n'est pas une raison de perturber le reste de l'app.
+ * Rond du bouton des messages privés (#message-prive-btn) : au moins un
+ * message privé non lu.
  */
-async function actualiserBadgeMessagesPrives() {
-  const dots = document.querySelectorAll('#message-prive-btn .notif-dot');
-  if (!dots.length) return;
-  if (!NotifPrefs.afficheRonds(utilisateurActuelId)) {
-    dots.forEach((dot) => (dot.hidden = true));
-    return;
-  }
-  try {
-    const conversations =
-      await window.electronAPI.obtenirResumesConversationsPrivees();
-    const nonLu = conversations.some((conversation) =>
-      NotifPrefs.estNonLu(
-        utilisateurActuelId,
-        conversation.id,
-        conversation.lastMessage
-          ? {
-              auteurId: conversation.lastMessage.auteurId,
-              timestamp: conversation.lastMessage.envoi,
-            }
-          : null
-      )
-    );
-    dots.forEach((dot) => (dot.hidden = !nonLu));
-  } catch {
-    // Badge best-effort, voir commentaire ci-dessus.
-  }
+function actualiserBadgeMessagesPrives() {
+  const nonLu =
+    NotifPrefs.afficheRonds(utilisateurActuelId) &&
+    NotifPrefs.totalNonLus({ type: 'prive' }) > 0;
+  document
+    .querySelectorAll('#message-prive-btn .notif-dot')
+    .forEach((dot) => (dot.hidden = !nonLu));
 }
 
-/** Le dernier message d'un salon, normalisé pour NotifPrefs.estNonLu(). */
-function derniereActiviteSalon(salon) {
-  if (!salon.messages.length) return null;
-  const dernier = salon.messages[salon.messages.length - 1];
-  return { auteurId: dernier.auteurId, timestamp: dernier.date };
+/** Serveurs du rail ayant au moins un salon non lu. */
+function serveursAvecNonLus() {
+  if (!NotifPrefs.afficheRonds(utilisateurActuelId)) return new Set();
+  return new Set(
+    etat.serveurs
+      .filter(
+        (serveur) =>
+          NotifPrefs.totalNonLus({
+            type: 'salon',
+            conversationIds: serveur.salonIds ?? [],
+          }) > 0
+      )
+      .map((serveur) => serveur.id)
+  );
 }
 
 function afficherSalons() {
@@ -314,7 +281,6 @@ function afficherSalons() {
     creerEl('li', { classe: 'category', texte: t('channels.categorySalons') })
   );
   const afficherRonds = NotifPrefs.afficheRonds(utilisateurActuelId);
-  let auMoinsUnSalonNonLu = false;
 
   etat.salons.forEach((salon) => {
     const item = document.createElement('li');
@@ -322,20 +288,15 @@ function afficherSalons() {
     bouton.className = salon.id === salonActifId ? 'active' : '';
     remplirLabelSalon(bouton, salon);
 
-    const nonLu =
-      afficherRonds &&
-      NotifPrefs.estNonLu(
-        utilisateurActuelId,
-        salon.id,
-        derniereActiviteSalon(salon)
-      );
-    if (nonLu) auMoinsUnSalonNonLu = true;
-    bouton.appendChild(
-      creerEl('span', {
-        classe: 'notif-dot notif-dot--channel',
-        attrs: nonLu ? {} : { hidden: '' },
-      })
+    const compteur = creerEl('span', {
+      classe: 'notif-count notif-count--channel',
+    });
+    NotifPrefs.remplirCompteur(
+      compteur,
+      NotifPrefs.nombreNonLus('salon', salon.id),
+      afficherRonds
     );
+    bouton.appendChild(compteur);
 
     bouton.addEventListener('click', () => {
       salonActifId = salon.id;
@@ -347,8 +308,7 @@ function afficherSalons() {
 
   if (el.nomServeur) el.nomServeur.textContent = etat.serveurActif?.nom ?? '';
   if (!etatCharge) return;
-  const pastilles = new Set(serveursNonLus);
-  if (auMoinsUnSalonNonLu && serveurActifId) pastilles.add(serveurActifId);
+  const pastilles = serveursAvecNonLus();
   ChatUiShared.afficherRailServeurs({
     conteneur: el.rail,
     avant: el.creerRail,
@@ -436,7 +396,7 @@ function afficherMessages(options = {}) {
   // indicateurs (rond de notification ici, notification système côté
   // main.js) doivent rester d'accord entre eux.
   if (fenetreEstFocusee) {
-    NotifPrefs.marquerCommeLu(utilisateurActuelId, salon.id, Date.now());
+    NotifPrefs.marquerLu(window.electronAPI, 'salon', salon.id);
   }
   // La conversation "active" que main.js ne doit pas notifier (voir
   // showMessageNotification côté main.js) reste définie qu'on ait le focus
@@ -723,4 +683,3 @@ function afficherTout(options = {}) {
 // Un appel direct à actualiser() ici, en plus, chargeait l'état une première
 // fois avec un utilisateurActuelId potentiellement pas encore résolu, avant
 // d'être aussitôt écrasé par le second appel (double fetch + flash possible).
-

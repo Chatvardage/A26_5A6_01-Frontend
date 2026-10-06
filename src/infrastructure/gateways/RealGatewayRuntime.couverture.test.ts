@@ -756,7 +756,6 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
       await runtime.chargerProfilsPublics(['u2']);
       expect(runtime.presences.u2).toBe('hors-ligne');
       expect(await runtime.rechercherUtilisateurs('bo')).toEqual([]);
-      expect(await runtime.obtenirResumesConversationsPrivees()).toEqual([]);
 
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(reponseJson({}, 500)));
       await runtime.chargerProfilsPublics(['u3']);

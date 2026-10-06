@@ -131,7 +131,7 @@ function createWindow() {
     logDebugNotif('[fenetre] focus');
     // Voir 'window:focus-changed' plus bas : le renderer a besoin de ce
     // signal pour ne marquer une conversation comme "lue" (NotifPrefs.
-    // marquerCommeLu) que si la fenêtre a réellement le focus au moment où
+    // marquerLu) que si la fenêtre a réellement le focus au moment où
     // elle est affichée — sinon un message reçu pendant que la fenêtre est
     // en arrière-plan se retrouverait marqué "lu" côté rond de notification
     // alors même qu'une vraie notification système vient d'être déclenchée

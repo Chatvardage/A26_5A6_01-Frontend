@@ -3,7 +3,11 @@
 // runtime/messages.js — Messages de salon et messages privés (Message-Service).
 // Méthodes de RealGatewayRuntime, ajoutées à son prototype (voir
 // RealGatewayRuntime.js) : `this` est l'instance.
-const { TAILLE_PAGE_MESSAGES, creerDmId } = require('./constantes');
+const {
+  TAILLE_PAGE_MESSAGES,
+  TAILLE_PAGE_RECHERCHE,
+  creerDmId,
+} = require('./constantes');
 
 module.exports = {
   // --- Messages de salon (HTTP, voir Message-Service) --------------------------
@@ -123,26 +127,6 @@ module.exports = {
     );
   },
 
-  /**
-   * Version légère de obtenirConversationsPrivees, pour les pastilles « non
-   * lu » : seulement l'id de chaque conversation et son dernier message, en
-   * UN appel (`GET /api/messages/conversations`), sans recharger
-   * l'historique de chaque interlocuteur.
-   */
-  async obtenirResumesConversationsPrivees() {
-    if (!this.utilisateurConnecte) return [];
-    const resume = await this.appelHttp('/api/messages/conversations');
-    return (resume ?? []).map((item) => {
-      this.partenairesDmConnus.add(item.otherUserId);
-      const dernier = this.mapperMessageDm(item.lastMessage);
-      this.indexMessages.set(dernier.id, { type: 'dm' });
-      return {
-        id: creerDmId(this.utilisateurConnecte.id, item.otherUserId),
-        lastMessage: dernier,
-      };
-    });
-  },
-
   async demarrerConversationPrivee({ autreUtilisateurId }) {
     this.partenairesDmConnus.add(autreUtilisateurId);
     return this.construireConversationPrivee(autreUtilisateurId);
@@ -199,5 +183,121 @@ module.exports = {
     }
     this.indexMessages.delete(messageId);
     return { messageId };
+  },
+
+  // --- Messages non lus et recherche (Message-Service) -------------------------
+  // Message-Service identifie une conversation par `dm:<interlocuteur>` ou
+  // `room:<salon>` ; l'app, par l'id de DM (creerDmId) ou l'id du salon.
+
+  /** `{ type, conversationId }` de l'app pour un identifiant de Message-Service
+   * (null s'il est d'une forme inconnue). */
+  versConversationLocale(idServeur) {
+    const [genre, cible] = String(idServeur).split(':');
+    if (!cible) return null;
+    if (genre === 'room') return { type: 'salon', conversationId: cible };
+    if (genre === 'dm') {
+      return {
+        type: 'prive',
+        conversationId: creerDmId(this.utilisateurConnecte.id, cible),
+      };
+    }
+    return null;
+  },
+
+  /**
+   * Messages non lus par conversation (`GET /api/messages/unread`), état
+   * tenu par le serveur : identique sur tous les appareils et après un
+   * redémarrage. `{ salons: { [salonId]: n }, prives: { [dmId]: n } }`,
+   * sans les conversations lues.
+   */
+  async obtenirNonLus() {
+    const nonLus = { salons: {}, prives: {} };
+    if (!this.utilisateurConnecte) return nonLus;
+    const { counts } = await this.appelHttp('/api/messages/unread');
+    for (const [idServeur, nombre] of Object.entries(counts ?? {})) {
+      const locale = this.versConversationLocale(idServeur);
+      if (!locale || !(nombre > 0)) continue;
+      const cible = locale.type === 'salon' ? nonLus.salons : nonLus.prives;
+      cible[locale.conversationId] = nombre;
+    }
+    return nonLus;
+  },
+
+  /** Marque une conversation comme lue jusqu'à son dernier message. */
+  async marquerConversationLue({ type, conversationId }) {
+    const chemin =
+      type === 'salon'
+        ? `/api/messages/rooms/${encodeURIComponent(conversationId)}/read`
+        : `/api/messages/conversations/${encodeURIComponent(this.autreParticipantDm(conversationId))}/read`;
+    const etat = await this.appelHttp(chemin, { methode: 'PUT', corps: {} });
+    return { nonLus: etat?.unreadCount ?? 0 };
+  },
+
+  /**
+   * Recherche dans les conversations accessibles (`GET /api/messages/search`).
+   * Chaque résultat porte de quoi l'afficher et l'ouvrir : le salon et son
+   * serveur, ou l'interlocuteur. `curseurSuivant` : page suivante, ou null.
+   */
+  async rechercherMessages({ texte, curseur }) {
+    const params = new URLSearchParams({
+      q: texte,
+      limit: String(TAILLE_PAGE_RECHERCHE),
+    });
+    if (curseur) params.set('cursor', curseur);
+    const page = await this.appelHttp(
+      `/api/messages/search?${params.toString()}`
+    );
+    const moi = this.utilisateurConnecte?.id;
+    const bruts = page?.results ?? [];
+    // Alias s'il y en a un, sinon pseudo (comme partout dans l'app) ; ses
+    // propres messages : son pseudo.
+    const nom = (id) =>
+      this.profilsPublics.get(id)?.alias ??
+      this.utilisateursConnus.get(id)?.pseudo ??
+      (id === moi ? this.utilisateurConnecte.pseudo : null);
+    await this.resoudrePseudos(
+      bruts
+        .flatMap(({ message }) =>
+          message.roomId
+            ? [message.authorId]
+            : [message.senderId, message.recipientId]
+        )
+        .filter((id) => id && id !== moi)
+    );
+    const resultats = bruts.map(({ kind, message }) => {
+      if (kind === 'room') {
+        const mappe = this.mapperMessageSalon(message);
+        this.indexMessages.set(mappe.id, {
+          type: 'salon',
+          roomId: message.roomId,
+        });
+        const serveurId = this.salonVersServeur.get(message.roomId) ?? null;
+        const serveur = serveurId ? this.serveurs.get(serveurId) : null;
+        return {
+          type: 'salon',
+          conversationId: message.roomId,
+          salonNom:
+            serveur?.salons.find((salon) => salon.id === message.roomId)?.nom ??
+            null,
+          serveurId,
+          serveurNom: serveur?.nom ?? null,
+          auteurNom: nom(mappe.auteurId),
+          message: mappe,
+        };
+      }
+      const mappe = this.mapperMessageDm(message);
+      this.indexMessages.set(mappe.id, { type: 'dm' });
+      const autreId =
+        message.senderId === moi ? message.recipientId : message.senderId;
+      return {
+        type: 'prive',
+        conversationId: mappe.conversationId,
+        interlocuteurId: autreId,
+        interlocuteurNom: nom(autreId),
+        auteurNom: nom(mappe.auteurId),
+        message: mappe,
+      };
+    });
+    return { resultats, curseurSuivant: page?.nextCursor ?? null };
   },
 };

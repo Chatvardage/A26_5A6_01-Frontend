@@ -338,7 +338,12 @@
 
   /** Bouton "Réessayer" de l'indicateur réseau (la présence se modifie
    * désormais depuis la page profil). */
-  function brancherBoutonReessayer({ api, element, getEtatReseau, notifierErreur }) {
+  function brancherBoutonReessayer({
+    api,
+    element,
+    getEtatReseau,
+    notifierErreur,
+  }) {
     element?.addEventListener('click', async () => {
       if (getEtatReseau()?.statut === 'connecte') return;
       try {
@@ -501,7 +506,9 @@
         image.src = serveur.icone;
         bouton.appendChild(image);
       } else {
-        bouton.appendChild(document.createTextNode(initialesServeur(serveur.nom)));
+        bouton.appendChild(
+          document.createTextNode(initialesServeur(serveur.nom))
+        );
       }
       const pastille = document.createElement('span');
       pastille.className = 'notif-dot notif-dot--rail';
@@ -849,7 +856,167 @@
     return conteneur;
   }
 
+  // --- Recherche de messages (dialogue partagé par les deux pages) ---------
+  // Le dialogue #search-dialog est écrit dans index.html et
+  // message-prive.html ; chaque page ne fournit que `surChoix`, qui ouvre la
+  // conversation choisie (sur cette page ou sur l'autre).
+  const DELAI_RECHERCHE_MS = 300;
+
+  function creerResultatRecherche({ resultat, terme, t, surChoix }) {
+    const { LogiqueInterface } = window;
+    const bouton = document.createElement('button');
+    bouton.type = 'button';
+    bouton.classList.add('search-result');
+
+    let titre;
+    if (resultat.type === 'salon') {
+      const cle = LogiqueInterface.cleNomSalon({
+        id: resultat.conversationId,
+        nom: resultat.salonNom,
+      });
+      const salon = cle
+        ? t(cle)
+        : (resultat.salonNom ?? t('search.unknownChannel'));
+      titre = resultat.serveurNom
+        ? `# ${salon} · ${resultat.serveurNom}`
+        : `# ${salon}`;
+    } else {
+      titre = resultat.interlocuteurNom ?? t('dm.defaultUser');
+    }
+    const message = resultat.message;
+    const date = message.date ?? message.envoi;
+    const enTete = document.createElement('span');
+    enTete.classList.add('search-result-title');
+    enTete.textContent = titre;
+    const meta = document.createElement('span');
+    meta.classList.add('search-result-meta');
+    meta.textContent = `${resultat.auteurNom ?? t('dm.defaultUser')} · ${new Date(
+      date
+    ).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}`;
+
+    const cleContenu = LogiqueInterface.cleContenuMessage(message);
+    const contenu = cleContenu ? t(cleContenu) : message.contenu;
+    const extrait = document.createElement('span');
+    extrait.classList.add('search-result-excerpt');
+    for (const segment of LogiqueInterface.decouperSurligne(
+      LogiqueInterface.extraitAutour(contenu, terme),
+      terme
+    )) {
+      if (segment.surligne) {
+        const marque = document.createElement('mark');
+        marque.textContent = segment.texte;
+        extrait.appendChild(marque);
+      } else {
+        extrait.appendChild(document.createTextNode(segment.texte));
+      }
+    }
+
+    bouton.append(enTete, meta, extrait);
+    bouton.addEventListener('click', () =>
+      surChoix({ type: resultat.type, conversationId: resultat.conversationId })
+    );
+    const item = document.createElement('li');
+    item.appendChild(bouton);
+    return item;
+  }
+
+  /**
+   * Branche le bouton `bouton` et le dialogue de recherche `dialogue`.
+   * Recherche lancée après une courte pause de frappe (ou Entrée), à partir
+   * de 2 caractères ; « Plus de résultats » suit le curseur du serveur.
+   * Une réponse arrivée après une saisie plus récente est ignorée.
+   */
+  function brancherRechercheMessages({
+    bouton,
+    dialogue,
+    api,
+    t,
+    messageErreur,
+    surChoix,
+  }) {
+    if (!bouton || !dialogue) return;
+    const champ = dialogue.querySelector('.search-input');
+    const liste = dialogue.querySelector('.search-results');
+    const statut = dialogue.querySelector('.search-status');
+    const plus = dialogue.querySelector('.search-more');
+    let numeroRequete = 0;
+    let texte = '';
+    let curseur = null;
+    let minuteur = null;
+
+    const choisir = (cible) => {
+      dialogue.close();
+      surChoix(cible);
+    };
+
+    async function chercher({ suite = false } = {}) {
+      const numero = ++numeroRequete;
+      if (!suite) {
+        liste.replaceChildren();
+        curseur = null;
+      }
+      plus.hidden = true;
+      statut.textContent = t('search.searching');
+      try {
+        const page = await api.rechercherMessages({
+          texte,
+          ...(suite && curseur ? { curseur } : {}),
+        });
+        if (numero !== numeroRequete) return;
+        for (const resultat of page.resultats) {
+          liste.appendChild(
+            creerResultatRecherche({
+              resultat,
+              terme: texte,
+              t,
+              surChoix: choisir,
+            })
+          );
+        }
+        curseur = page.curseurSuivant;
+        plus.hidden = !curseur;
+        statut.textContent = liste.children.length ? '' : t('search.noResults');
+      } catch (erreur) {
+        if (numero !== numeroRequete) return;
+        statut.textContent = messageErreur(erreur);
+      }
+    }
+
+    function relancer({ immediat = false } = {}) {
+      window.clearTimeout(minuteur);
+      texte = champ.value.trim();
+      if (!window.LogiqueInterface.peutRechercher(texte)) {
+        numeroRequete += 1; // une réponse en cours est désormais périmée
+        liste.replaceChildren();
+        plus.hidden = true;
+        statut.textContent = t('search.prompt');
+        return;
+      }
+      if (immediat) void chercher();
+      else
+        minuteur = window.setTimeout(() => void chercher(), DELAI_RECHERCHE_MS);
+    }
+
+    bouton.addEventListener('click', () => {
+      if (!dialogue.open) dialogue.showModal();
+      champ.focus();
+      champ.select();
+      if (!champ.value.trim()) statut.textContent = t('search.prompt');
+    });
+    champ.addEventListener('input', () => relancer());
+    champ.addEventListener('keydown', (evenement) => {
+      if (evenement.key !== 'Enter') return;
+      evenement.preventDefault();
+      relancer({ immediat: true });
+    });
+    plus.addEventListener('click', () => void chercher({ suite: true }));
+    dialogue
+      .querySelector('.search-close')
+      ?.addEventListener('click', () => dialogue.close());
+  }
+
   window.ChatUiShared = Object.freeze({
+    brancherRechercheMessages,
     afficherEtatReseau,
     afficherAvatarCourant,
     remplirAvatar,
