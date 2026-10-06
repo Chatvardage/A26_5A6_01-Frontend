@@ -244,6 +244,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   window.electronAPI.onMessageSupprimeChange(async (message) => {
     ChatUiShared.oublierEtatActionMessage(message?.messageId);
     await appliquerMessageSupprime(message?.messageId);
+    // Relire même si la conversation supprimée n'est pas chargée ici.
+    await NotifPrefs.chargerNonLus(window.electronAPI);
+    renderConversationList();
+    await actualiserBadgeSalons({ recharger: false });
+    mettreAJourBadgeApplication();
   });
 
   // Rail affiché tout de suite depuis le cache (voir chat-ui-shared.js),

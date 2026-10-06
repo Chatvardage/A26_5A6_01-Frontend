@@ -493,9 +493,14 @@ window.electronAPI.onMessageModifieChange((message) => {
   appliquerMessageSalonModifie(message);
 });
 
-window.electronAPI.onMessageSupprimeChange((message) => {
+window.electronAPI.onMessageSupprimeChange(async (message) => {
   ChatUiShared.oublierEtatActionMessage(message?.messageId);
   appliquerMessageSalonSupprime(message?.messageId);
+  // Le message peut appartenir à une conversation absente du cache local.
+  await NotifPrefs.chargerNonLus(window.electronAPI);
+  afficherSalons();
+  actualiserBadgeMessagesPrives();
+  mettreAJourBadgeApplication();
 });
 
 // Accusés de lecture (« Vu par ») et non-lus lus depuis un autre appareil.
