@@ -234,14 +234,19 @@ module.exports = {
   },
 
   /**
-   * Recherche dans les conversations accessibles (`GET /api/messages/search`).
-   * Chaque résultat porte de quoi l'afficher et l'ouvrir : le salon et son
-   * serveur, ou l'interlocuteur. `curseurSuivant` : page suivante, ou null.
+   * Recherche dans UNE conversation de l'app (`GET /api/messages/search`,
+   * `conversationId` = `room:<salon>` ou `dm:<interlocuteur>`) : le salon
+   * ou la conversation privée affichée. `curseurSuivant` : page suivante,
+   * ou null.
    */
-  async rechercherMessages({ texte, curseur }) {
+  async rechercherMessages({ texte, curseur, type, conversationId }) {
     const params = new URLSearchParams({
       q: texte,
       limit: String(TAILLE_PAGE_RECHERCHE),
+      conversationId:
+        type === 'salon'
+          ? `room:${conversationId}`
+          : `dm:${this.autreParticipantDm(conversationId)}`,
     });
     if (curseur) params.set('cursor', curseur);
     const page = await this.appelHttp(
@@ -249,51 +254,31 @@ module.exports = {
     );
     const moi = this.utilisateurConnecte?.id;
     const bruts = page?.results ?? [];
+    await this.resoudrePseudos(
+      bruts
+        .map(({ message }) => message.authorId ?? message.senderId)
+        .filter((id) => id && id !== moi)
+    );
     // Alias s'il y en a un, sinon pseudo (comme partout dans l'app) ; ses
     // propres messages : son pseudo.
     const nom = (id) =>
       this.profilsPublics.get(id)?.alias ??
       this.utilisateursConnus.get(id)?.pseudo ??
       (id === moi ? this.utilisateurConnecte.pseudo : null);
-    await this.resoudrePseudos(
-      bruts
-        .flatMap(({ message }) =>
-          message.roomId
-            ? [message.authorId]
-            : [message.senderId, message.recipientId]
-        )
-        .filter((id) => id && id !== moi)
-    );
     const resultats = bruts.map(({ kind, message }) => {
-      if (kind === 'room') {
-        const mappe = this.mapperMessageSalon(message);
-        this.indexMessages.set(mappe.id, {
-          type: 'salon',
-          roomId: message.roomId,
-        });
-        const serveurId = this.salonVersServeur.get(message.roomId) ?? null;
-        const serveur = serveurId ? this.serveurs.get(serveurId) : null;
-        return {
-          type: 'salon',
-          conversationId: message.roomId,
-          salonNom:
-            serveur?.salons.find((salon) => salon.id === message.roomId)?.nom ??
-            null,
-          serveurId,
-          serveurNom: serveur?.nom ?? null,
-          auteurNom: nom(mappe.auteurId),
-          message: mappe,
-        };
-      }
-      const mappe = this.mapperMessageDm(message);
-      this.indexMessages.set(mappe.id, { type: 'dm' });
-      const autreId =
-        message.senderId === moi ? message.recipientId : message.senderId;
+      const mappe =
+        kind === 'room'
+          ? this.mapperMessageSalon(message)
+          : this.mapperMessageDm(message);
+      this.indexMessages.set(
+        mappe.id,
+        kind === 'room'
+          ? { type: 'salon', roomId: message.roomId }
+          : { type: 'dm' }
+      );
       return {
-        type: 'prive',
-        conversationId: mappe.conversationId,
-        interlocuteurId: autreId,
-        interlocuteurNom: nom(autreId),
+        type: kind === 'room' ? 'salon' : 'prive',
+        conversationId: kind === 'room' ? message.roomId : mappe.conversationId,
         auteurNom: nom(mappe.auteurId),
         message: mappe,
       };

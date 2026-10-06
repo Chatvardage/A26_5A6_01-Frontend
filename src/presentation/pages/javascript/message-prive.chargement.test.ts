@@ -521,44 +521,23 @@ describe('page des messages privés', () => {
     );
   });
 
-  it('recherche : un résultat privé ouvre la conversation, un salon ouvre l’autre page', async () => {
-    const cibles: unknown[] = [];
-    const pages: unknown[] = [];
+  it('recherche : dans la conversation affichée seulement', async () => {
+    const recherches: unknown[] = [];
     const { document, window } = await chargerPage({
       autresReponses: {
-        rechercherMessages: () => ({
-          resultats: [
-            {
-              type: 'prive',
-              conversationId: 'bob:moi',
-              interlocuteurId: 'bob',
-              interlocuteurNom: 'bob',
-              auteurNom: 'bob',
-              message: dm('m1', 'bob', 'salut', 1),
-            },
-            {
-              type: 'salon',
-              conversationId: '00000000-0000-4000-8000-000000000003',
-              salonNom: 'général',
-              serveurId: 'defaut',
-              serveurNom: 'Chatvardage',
-              auteurNom: 'bob',
-              message: {
-                id: 'ms',
-                auteurId: 'bob',
-                contenu: 'salut tous',
-                date: 2,
+        rechercherMessages: (donnees: unknown) => {
+          recherches.push(donnees);
+          return {
+            resultats: [
+              {
+                type: 'prive',
+                conversationId: 'bob:moi',
+                auteurNom: 'bob',
+                message: dm('m1', 'bob', 'salut toi', 1),
               },
-            },
-          ],
-          curseurSuivant: null,
-        }),
-        definirCibleNavigation: (cible: unknown) => {
-          cibles.push(cible);
-          return true;
-        },
-        navigate: (page: unknown) => {
-          pages.push(page);
+            ],
+            curseurSuivant: null,
+          };
         },
       },
     });
@@ -566,67 +545,43 @@ describe('page des messages privés', () => {
       document.querySelector<HTMLDialogElement>('#search-dialog')!;
     const champ = dialogue.querySelector<HTMLInputElement>('.search-input')!;
     document.getElementById('open-search')?.click();
-    champ.value = 'salut';
-    champ.dispatchEvent(new window.Event('input'));
-    await vi.waitFor(() =>
-      expect(dialogue.querySelectorAll('.search-result')).toHaveLength(2)
+    expect(dialogue.querySelector('.search-title')?.textContent).toBe(
+      'Rechercher dans bob'
     );
-    const titres = [...dialogue.querySelectorAll('.search-result-title')].map(
-      (e) => e.textContent
-    );
-    // Salon par défaut : nom traduit, comme dans le reste de l'app.
-    expect(titres).toEqual([
-      'bob',
-      `# ${traductions.fr.channels.defaultGeneral} · Chatvardage`,
-    ]);
-
-    dialogue.querySelector<HTMLElement>('.search-result')?.click();
-    expect(dialogue.hasAttribute('open')).toBe(false);
-    await vi.waitFor(() =>
-      expect(document.querySelector('.user-name')?.textContent).toBe('bob')
-    );
-
-    document.getElementById('open-search')?.click();
-    dialogue.querySelectorAll<HTMLElement>('.search-result')[1]?.click();
-    await vi.waitFor(() => expect(pages).toEqual(['index.html']));
-    expect(cibles).toEqual([
-      { type: 'salon', id: '00000000-0000-4000-8000-000000000003' },
-    ]);
-  });
-
-  it('recherche : une conversation absente de la liste la recharge', async () => {
-    let liste: unknown[] = [];
-    const { document, window, appels } = await chargerPage({
-      attendreMessages: false,
-      autresReponses: {
-        obtenirConversationsPrivees: () => liste,
-        rechercherMessages: () => ({
-          resultats: [
-            {
-              type: 'prive',
-              conversationId: 'bob:moi',
-              interlocuteurId: 'bob',
-              interlocuteurNom: 'bob',
-              auteurNom: 'bob',
-              message: dm('m1', 'bob', 'salut', 1),
-            },
-          ],
-          curseurSuivant: null,
-        }),
-      },
-    });
-    await vi.waitFor(() => expect(appels.obtenirConversationsPrivees).toBe(1));
-    liste = conversations();
-    const dialogue =
-      document.querySelector<HTMLDialogElement>('#search-dialog')!;
-    const champ = dialogue.querySelector<HTMLInputElement>('.search-input')!;
-    document.getElementById('open-search')?.click();
     champ.value = 'salut';
     champ.dispatchEvent(new window.Event('input'));
     await vi.waitFor(() =>
       expect(dialogue.querySelectorAll('.search-result')).toHaveLength(1)
     );
+    expect(recherches).toEqual([
+      { texte: 'salut', type: 'prive', conversationId: 'bob:moi' },
+    ]);
+    expect(dialogue.querySelector('.search-result-meta')?.textContent).toMatch(
+      /^bob · /
+    );
+
     dialogue.querySelector<HTMLElement>('.search-result')?.click();
-    await vi.waitFor(() => expect(textes(document)).toEqual(['salut']));
+    expect(dialogue.hasAttribute('open')).toBe(false);
+  });
+
+  it('recherche sans conversation affichée : champ désactivé, rien n’est cherché', async () => {
+    const { document, appels } = await chargerPage({
+      attendreMessages: false,
+      autresReponses: { obtenirConversationsPrivees: [] },
+    });
+    await vi.waitFor(() => expect(appels.obtenirConversationsPrivees).toBe(1));
+    const dialogue =
+      document.querySelector<HTMLDialogElement>('#search-dialog')!;
+    document.getElementById('open-search')?.click();
+    expect(
+      dialogue.querySelector<HTMLInputElement>('.search-input')?.disabled
+    ).toBe(true);
+    expect(dialogue.querySelector('.search-title')?.textContent).toBe(
+      traductions.fr.search.title
+    );
+    expect(dialogue.querySelector('.search-status')?.textContent).toBe(
+      traductions.fr.search.noConversation
+    );
+    expect(appels.rechercherMessages).toBeUndefined();
   });
 });

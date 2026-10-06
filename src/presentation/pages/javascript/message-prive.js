@@ -48,13 +48,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     const conversationId = cible?.conversationId;
     if (!conversationId) return;
     if (cible.type === 'prive') {
-      // Conversation absente de la liste (recherche) : liste rechargée,
-      // elle y apparaît puisqu'elle contient au moins un message.
-      if (!trouverConversation(conversationId)) {
-        state.activeConversationId = conversationId;
-        await refreshConversations();
-        return;
-      }
       state.activeConversationId = conversationId;
       await renderActiveConversation();
       renderConversationList();
@@ -77,6 +70,19 @@ window.addEventListener('DOMContentLoaded', async () => {
     api: window.electronAPI,
     t,
     messageErreur,
+    // Recherche dans la conversation privée affichée.
+    conversationActive: () => {
+      const conversation = trouverConversation(state.activeConversationId);
+      return conversation
+        ? {
+            type: 'prive',
+            conversationId: conversation.id,
+            nom:
+              ChatUiShared.nomAffiche(conversation.otherUser) ||
+              t('dm.defaultUser'),
+          }
+        : null;
+    },
     surChoix: ouvrirConversation,
   });
 

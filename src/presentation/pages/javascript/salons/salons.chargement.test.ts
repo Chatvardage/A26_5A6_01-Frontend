@@ -531,46 +531,27 @@ describe('page des salons (scripts découpés)', () => {
     ).toEqual([true, true]);
   });
 
-  it('recherche : résultats surlignés, clic sur un salon ou une conversation privée', async () => {
+  it('recherche : dans le salon affiché, résultats surlignés et paginés', async () => {
     const recherches: unknown[] = [];
-    const cibles: unknown[] = [];
-    const pages: unknown[] = [];
-    const resultatSalon = {
+    const resultat = (id: string, contenu: string, date: number) => ({
       type: 'salon',
-      conversationId: 'autre',
-      salonNom: 'autre',
-      serveurId: 'srv',
-      serveurNom: 'Projet',
+      conversationId: 'general',
       auteurNom: 'bob',
-      message: message('ms', 'bob', 'Le projet avance', 10),
-    };
-    const resultatPrive = {
-      type: 'prive',
-      conversationId: 'bob:moi',
-      interlocuteurId: 'bob',
-      interlocuteurNom: null,
-      auteurNom: null,
-      message: {
-        id: 'md',
-        auteurId: 'bob',
-        contenu: 'projet privé',
-        envoi: 11,
-      },
-    };
+      message: message(id, 'bob', contenu, date),
+    });
     const { document, window } = await chargerPage({
       autresReponses: {
         rechercherMessages: (donnees: { curseur?: string }) => {
           recherches.push(donnees);
           return donnees.curseur
-            ? { resultats: [resultatPrive], curseurSuivant: null }
-            : { resultats: [resultatSalon], curseurSuivant: 'suite' };
-        },
-        definirCibleNavigation: (cible: unknown) => {
-          cibles.push(cible);
-          return true;
-        },
-        navigate: (page: unknown) => {
-          pages.push(page);
+            ? {
+                resultats: [resultat('m0', 'vieux projet', 1)],
+                curseurSuivant: null,
+              }
+            : {
+                resultats: [resultat('m5', 'Le projet avance', 5)],
+                curseurSuivant: 'suite',
+              };
         },
       },
     });
@@ -587,6 +568,9 @@ describe('page des salons (scripts découpés)', () => {
 
     document.querySelector<HTMLElement>('#open-search')?.click();
     expect(dialogue.open).toBe(true);
+    expect(dialogue.querySelector('.search-title')?.textContent).toBe(
+      'Rechercher dans # général'
+    );
     expect(statut.textContent).toBe(traductions.fr.search.prompt);
 
     // Un seul caractère : rien n'est demandé au serveur.
@@ -599,36 +583,45 @@ describe('page des salons (scripts découpés)', () => {
     await vi.waitFor(() =>
       expect(dialogue.querySelectorAll('.search-result')).toHaveLength(1)
     );
-    expect(recherches).toEqual([{ texte: 'projet' }]);
-    const premier = dialogue.querySelector('.search-result')!;
-    expect(premier.querySelector('.search-result-title')?.textContent).toBe(
-      '# autre · Projet'
-    );
-    expect(premier.querySelector('mark')?.textContent).toBe('projet');
+    expect(recherches).toEqual([
+      { texte: 'projet', type: 'salon', conversationId: 'general' },
+    ]);
+    expect(dialogue.querySelector('mark')?.textContent).toBe('projet');
 
     dialogue.querySelector<HTMLElement>('.search-more')?.click();
     await vi.waitFor(() =>
       expect(dialogue.querySelectorAll('.search-result')).toHaveLength(2)
     );
-    expect(recherches.at(-1)).toEqual({ texte: 'projet', curseur: 'suite' });
+    expect(recherches.at(-1)).toEqual({
+      texte: 'projet',
+      type: 'salon',
+      conversationId: 'general',
+      curseur: 'suite',
+    });
     expect(dialogue.querySelector<HTMLElement>('.search-more')?.hidden).toBe(
       true
     );
 
-    // Salon de ce serveur : ouvert sur place.
+    // Clic sur un résultat : le dialogue se ferme sur le salon.
     dialogue.querySelector<HTMLElement>('.search-result')?.click();
     expect(dialogue.open).toBe(false);
-    await vi.waitFor(() =>
-      expect(document.querySelector('#active-channel-name')?.textContent).toBe(
-        '# autre'
-      )
-    );
 
-    // Conversation privée : ouverte sur l'autre page.
+    // Même salon : la recherche précédente est gardée.
     document.querySelector<HTMLElement>('#open-search')?.click();
-    dialogue.querySelectorAll<HTMLElement>('.search-result')[1]?.click();
-    await vi.waitFor(() => expect(pages).toEqual(['message-prive.html']));
-    expect(cibles).toEqual([{ type: 'prive', id: 'bob:moi' }]);
+    expect(champ.value).toBe('projet');
+    expect(dialogue.querySelectorAll('.search-result')).toHaveLength(2);
+    dialogue.querySelector<HTMLElement>('.search-close')?.click();
+
+    // Autre salon : on repart de zéro, dans ce salon.
+    [...document.querySelectorAll<HTMLElement>('#channel-list button')]
+      .find((b) => b.textContent?.includes('autre'))
+      ?.click();
+    document.querySelector<HTMLElement>('#open-search')?.click();
+    expect(dialogue.querySelector('.search-title')?.textContent).toBe(
+      'Rechercher dans # autre'
+    );
+    expect(champ.value).toBe('');
+    expect(dialogue.querySelectorAll('.search-result')).toHaveLength(0);
   });
 
   it('recherche : aucun résultat, erreur et saisie trop courte', async () => {

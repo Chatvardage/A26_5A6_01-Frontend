@@ -858,8 +858,9 @@
 
   // --- Recherche de messages (dialogue partagé par les deux pages) ---------
   // Le dialogue #search-dialog est écrit dans index.html et
-  // message-prive.html ; chaque page ne fournit que `surChoix`, qui ouvre la
-  // conversation choisie (sur cette page ou sur l'autre).
+  // message-prive.html. La recherche porte sur la conversation affichée (le
+  // salon, ou la conversation privée), fournie par la page
+  // (`conversationActive`) ; `surChoix` ouvre la conversation d'un résultat.
   const DELAI_RECHERCHE_MS = 300;
 
   function creerResultatRecherche({ resultat, terme, t, surChoix }) {
@@ -868,30 +869,11 @@
     bouton.type = 'button';
     bouton.classList.add('search-result');
 
-    let titre;
-    if (resultat.type === 'salon') {
-      const cle = LogiqueInterface.cleNomSalon({
-        id: resultat.conversationId,
-        nom: resultat.salonNom,
-      });
-      const salon = cle
-        ? t(cle)
-        : (resultat.salonNom ?? t('search.unknownChannel'));
-      titre = resultat.serveurNom
-        ? `# ${salon} · ${resultat.serveurNom}`
-        : `# ${salon}`;
-    } else {
-      titre = resultat.interlocuteurNom ?? t('dm.defaultUser');
-    }
     const message = resultat.message;
-    const date = message.date ?? message.envoi;
-    const enTete = document.createElement('span');
-    enTete.classList.add('search-result-title');
-    enTete.textContent = titre;
     const meta = document.createElement('span');
     meta.classList.add('search-result-meta');
     meta.textContent = `${resultat.auteurNom ?? t('dm.defaultUser')} · ${new Date(
-      date
+      message.date ?? message.envoi
     ).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}`;
 
     const cleContenu = LogiqueInterface.cleContenuMessage(message);
@@ -911,7 +893,7 @@
       }
     }
 
-    bouton.append(enTete, meta, extrait);
+    bouton.append(meta, extrait);
     bouton.addEventListener('click', () =>
       surChoix({ type: resultat.type, conversationId: resultat.conversationId })
     );
@@ -922,9 +904,11 @@
 
   /**
    * Branche le bouton `bouton` et le dialogue de recherche `dialogue`.
-   * Recherche lancée après une courte pause de frappe (ou Entrée), à partir
-   * de 2 caractères ; « Plus de résultats » suit le curseur du serveur.
-   * Une réponse arrivée après une saisie plus récente est ignorée.
+   * `conversationActive()` : `{ type, conversationId, nom }` de la
+   * conversation affichée, ou null. Recherche lancée après une courte pause
+   * de frappe (ou Entrée), à partir de 2 caractères ; « Plus de résultats »
+   * suit le curseur du serveur. Une réponse arrivée après une saisie plus
+   * récente (ou pour une autre conversation) est ignorée.
    */
   function brancherRechercheMessages({
     bouton,
@@ -932,14 +916,17 @@
     api,
     t,
     messageErreur,
+    conversationActive,
     surChoix,
   }) {
     if (!bouton || !dialogue) return;
+    const titre = dialogue.querySelector('.search-title');
     const champ = dialogue.querySelector('.search-input');
     const liste = dialogue.querySelector('.search-results');
     const statut = dialogue.querySelector('.search-status');
     const plus = dialogue.querySelector('.search-more');
     let numeroRequete = 0;
+    let portee = null;
     let texte = '';
     let curseur = null;
     let minuteur = null;
@@ -948,6 +935,13 @@
       dialogue.close();
       surChoix(cible);
     };
+
+    function vider() {
+      window.clearTimeout(minuteur);
+      numeroRequete += 1; // une réponse en cours est désormais périmée
+      liste.replaceChildren();
+      plus.hidden = true;
+    }
 
     async function chercher({ suite = false } = {}) {
       const numero = ++numeroRequete;
@@ -960,6 +954,8 @@
       try {
         const page = await api.rechercherMessages({
           texte,
+          type: portee.type,
+          conversationId: portee.conversationId,
           ...(suite && curseur ? { curseur } : {}),
         });
         if (numero !== numeroRequete) return;
@@ -985,11 +981,11 @@
     function relancer({ immediat = false } = {}) {
       window.clearTimeout(minuteur);
       texte = champ.value.trim();
-      if (!window.LogiqueInterface.peutRechercher(texte)) {
-        numeroRequete += 1; // une réponse en cours est désormais périmée
-        liste.replaceChildren();
-        plus.hidden = true;
-        statut.textContent = t('search.prompt');
+      if (!portee || !window.LogiqueInterface.peutRechercher(texte)) {
+        vider();
+        statut.textContent = t(
+          portee ? 'search.prompt' : 'search.noConversation'
+        );
         return;
       }
       if (immediat) void chercher();
@@ -998,10 +994,28 @@
     }
 
     bouton.addEventListener('click', () => {
+      const active = conversationActive();
+      // Autre conversation qu'à la dernière ouverture : on repart de zéro.
+      if (
+        active?.type !== portee?.type ||
+        active?.conversationId !== portee?.conversationId
+      ) {
+        vider();
+        champ.value = '';
+      }
+      portee = active;
+      titre.textContent = active
+        ? t('search.titleIn', { name: active.nom })
+        : t('search.title');
+      champ.disabled = !active;
       if (!dialogue.open) dialogue.showModal();
       champ.focus();
       champ.select();
-      if (!champ.value.trim()) statut.textContent = t('search.prompt');
+      if (!champ.value.trim() || !active) {
+        statut.textContent = t(
+          active ? 'search.prompt' : 'search.noConversation'
+        );
+      }
     });
     champ.addEventListener('input', () => relancer());
     champ.addEventListener('keydown', (evenement) => {

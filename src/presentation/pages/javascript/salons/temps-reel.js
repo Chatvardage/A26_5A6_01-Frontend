@@ -109,6 +109,13 @@ ChatUiShared.brancherRechercheMessages({
   api: window.electronAPI,
   t,
   messageErreur,
+  // Recherche dans le salon affiché.
+  conversationActive: () => {
+    const salon = etat.salons.find((item) => item.id === salonActifId);
+    return salon
+      ? { type: 'salon', conversationId: salon.id, nom: `# ${nomSalon(salon)}` }
+      : null;
+  },
   surChoix: ouvrirConversation,
 });
 

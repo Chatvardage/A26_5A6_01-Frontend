@@ -273,10 +273,10 @@
             id="open-search"
             class="network-test-button search-open"
             type="button"
-            title="Rechercher dans les messages"
-            aria-label="Rechercher dans les messages"
-            data-i18n-title="search.title"
-            data-i18n-aria-label="search.title"
+            title="Rechercher dans cette conversation"
+            aria-label="Rechercher dans cette conversation"
+            data-i18n-title="search.buttonTitle"
+            data-i18n-aria-label="search.buttonTitle"
           >
             <span aria-hidden="true">⌕</span>
             <span data-i18n="search.button">Rechercher</span>
@@ -376,11 +376,12 @@
     </dialog>
 
     <!-- Recherche de messages (ChatUiShared.brancherRechercheMessages) :
-         DM et salons accessibles seulement, filtrés par Message-Service. -->
+         dans le salon ou la conversation privée affichée. -->
     <dialog id="search-dialog" class="search-dialog">
       <div class="search-panel">
         <div class="dialog-header">
-          <h2 data-i18n="search.title">Rechercher dans les messages</h2>
+          <!-- Rempli à l'ouverture : « Rechercher dans <conversation> ». -->
+          <h2 class="search-title">Rechercher dans les messages</h2>
           <button
             type="button"
             class="close-button search-close"

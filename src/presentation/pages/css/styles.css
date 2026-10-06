@@ -1950,10 +1950,6 @@ dialog::backdrop {
   background: var(--hover);
 }
 
-.search-result-title {
-  font-weight: 600;
-}
-
 .search-result-meta {
   color: var(--text-muted);
   font-size: 0.8rem;

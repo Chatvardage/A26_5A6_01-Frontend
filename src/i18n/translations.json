@@ -330,13 +330,15 @@
     },
     "search": {
       "button": "Rechercher",
+      "buttonTitle": "Rechercher dans cette conversation",
       "title": "Rechercher dans les messages",
+      "titleIn": "Rechercher dans {name}",
       "placeholder": "Texte à chercher…",
-      "prompt": "Tape au moins 2 caractères pour chercher dans tes conversations et tes salons.",
+      "prompt": "Tape au moins 2 caractères pour chercher dans cette conversation.",
+      "noConversation": "Ouvre un salon ou une conversation pour y chercher.",
       "searching": "Recherche…",
       "noResults": "Aucun message trouvé.",
-      "more": "Plus de résultats",
-      "unknownChannel": "salon"
+      "more": "Plus de résultats"
     }
   },
   "en": {
@@ -670,13 +672,15 @@
     },
     "search": {
       "button": "Search",
+      "buttonTitle": "Search this conversation",
       "title": "Search messages",
+      "titleIn": "Search in {name}",
       "placeholder": "Text to search…",
-      "prompt": "Type at least 2 characters to search your conversations and channels.",
+      "prompt": "Type at least 2 characters to search this conversation.",
+      "noConversation": "Open a channel or a conversation to search it.",
       "searching": "Searching…",
       "noResults": "No messages found.",
-      "more": "More results",
-      "unknownChannel": "channel"
+      "more": "More results"
     }
   }
 }

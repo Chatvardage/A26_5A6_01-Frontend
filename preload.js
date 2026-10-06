@@ -393,7 +393,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // { type: 'salon' | 'prive', conversationId } -> { nonLus }.
   marquerConversationLue: (donnees) =>
     ipcRenderer.invoke('messages:marquer-lu', donnees),
-  // { texte, curseur? } -> { resultats, curseurSuivant }.
+  // { texte, type, conversationId, curseur? } -> { resultats, curseurSuivant } :
+  // recherche dans le salon ou la conversation privée affichée.
   rechercherMessages: (donnees) =>
     ipcRenderer.invoke('messages:rechercher', donnees),
   demarrerConversationPrivee: (donnees) =>
