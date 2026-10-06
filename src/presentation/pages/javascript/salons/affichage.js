@@ -632,18 +632,19 @@ function afficherMessages(options = {}) {
 const paginationsEnCoursSalon = new Map();
 
 function chargerMessagesPlusAnciensSalon(options = {}) {
-  const id = salonActifId;
-  const enCours = paginationsEnCoursSalon.get(id);
+  const historique = etatHistoriqueSalon;
+  const enCours = paginationsEnCoursSalon.get(historique);
   if (enCours) return enCours;
   const requete = executerPaginationSalon(options).finally(() => {
-    if (paginationsEnCoursSalon.get(id) === requete)
-      paginationsEnCoursSalon.delete(id);
+    if (paginationsEnCoursSalon.get(historique) === requete)
+      paginationsEnCoursSalon.delete(historique);
   });
-  paginationsEnCoursSalon.set(id, requete);
+  paginationsEnCoursSalon.set(historique, requete);
   return requete;
 }
 
 async function executerPaginationSalon({ taille } = {}) {
+  const historique = etatHistoriqueSalon;
   const salon = salonActif();
   if (
     !salon ||
@@ -667,7 +668,7 @@ async function executerPaginationSalon({ taille } = {}) {
       avantId: plusAncienCharge?.id,
       ...(taille ? { taille } : {}),
     });
-    if (etatHistoriqueSalon.salonId !== salon.id) {
+    if (etatHistoriqueSalon !== historique) {
       return false;
     }
     etatHistoriqueSalon.messagesAnciens = fusionnerHistorique(
@@ -678,10 +679,11 @@ async function executerPaginationSalon({ taille } = {}) {
     etatHistoriqueSalon.finHistorique = resultat.finHistorique;
     return true;
   } catch (erreur) {
+    if (etatHistoriqueSalon !== historique) return false;
     notifier(messageErreur(erreur), true);
     return false;
   } finally {
-    if (etatHistoriqueSalon.salonId === salon.id) {
+    if (etatHistoriqueSalon === historique) {
       etatHistoriqueSalon.enChargement = false;
       afficherMessages({ conserverPositionScroll: true });
     }
@@ -836,6 +838,7 @@ const PAGES_MAX_SAUT = 20;
 async function allerAuMessageSalon(messageId) {
   const conversationInitiale = salonActifId;
   if (!conversationInitiale) return;
+  const historiqueInitial = etatHistoriqueSalon;
   const estCharge = () => {
     const salon = salonActif();
     return Boolean(
@@ -849,11 +852,11 @@ async function allerAuMessageSalon(messageId) {
     );
   };
   for (let page = 0; !estCharge() && page < PAGES_MAX_SAUT; page += 1) {
-    if (salonActifId !== conversationInitiale) return;
+    if (salonActifId !== conversationInitiale || etatHistoriqueSalon !== historiqueInitial) return;
     if (!(await chargerMessagesPlusAnciensSalon({ taille: TAILLE_PAGE_SAUT })))
       break;
   }
-  if (salonActifId !== conversationInitiale) return;
+  if (salonActifId !== conversationInitiale || etatHistoriqueSalon !== historiqueInitial) return;
   if (!ChatUiShared.allerAuMessageAffiche(el.messages, messageId)) {
     notifier(t('search.messageNotFound'), true);
   }

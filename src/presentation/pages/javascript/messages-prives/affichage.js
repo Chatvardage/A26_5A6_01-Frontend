@@ -438,18 +438,19 @@ function creerActionsMessageNonLivre(message) {
 const paginationsEnCoursDm = new Map();
 
 function chargerMessagesPlusAnciensDm(options = {}) {
-  const id = state.activeConversationId;
-  const enCours = paginationsEnCoursDm.get(id);
+  const historique = etatHistoriqueDm;
+  const enCours = paginationsEnCoursDm.get(historique);
   if (enCours) return enCours;
   const requete = executerPaginationDm(options).finally(() => {
-    if (paginationsEnCoursDm.get(id) === requete)
-      paginationsEnCoursDm.delete(id);
+    if (paginationsEnCoursDm.get(historique) === requete)
+      paginationsEnCoursDm.delete(historique);
   });
-  paginationsEnCoursDm.set(id, requete);
+  paginationsEnCoursDm.set(historique, requete);
   return requete;
 }
 
 async function executerPaginationDm({ taille } = {}) {
+  const historique = etatHistoriqueDm;
   const conversation = state.conversations.find(
     (entry) => entry.id === state.activeConversationId
   );
@@ -469,13 +470,14 @@ async function executerPaginationDm({ taille } = {}) {
   await renderActiveConversation({ conserverPositionScroll: true });
 
   try {
+    if (etatHistoriqueDm !== historique) return false;
     const resultat = await window.electronAPI.obtenirMessagesPriveesAvant({
       conversationId: conversation.id,
       utilisateurId: state.currentUserId,
       avantId: plusAncienCharge?.id,
       ...(taille ? { taille } : {}),
     });
-    if (etatHistoriqueDm.conversationId !== conversation.id) {
+    if (etatHistoriqueDm !== historique) {
       return false;
     }
     etatHistoriqueDm.messagesAnciens = fusionnerHistoriqueDm(
@@ -485,10 +487,11 @@ async function executerPaginationDm({ taille } = {}) {
     etatHistoriqueDm.finHistorique = resultat.finHistorique;
     return true;
   } catch (erreur) {
+    if (etatHistoriqueDm !== historique) return false;
     notifier(messageErreur(erreur), true);
     return false;
   } finally {
-    if (etatHistoriqueDm.conversationId === conversation.id) {
+    if (etatHistoriqueDm === historique) {
       etatHistoriqueDm.enChargement = false;
       await renderActiveConversation({ conserverPositionScroll: true });
     }
@@ -568,6 +571,7 @@ const PAGES_MAX_SAUT_DM = 20;
 async function allerAuMessageDm(messageId) {
   const conversationInitiale = state.activeConversationId;
   if (!conversationInitiale) return;
+  const historiqueInitial = etatHistoriqueDm;
   const estCharge = () => {
     const conversation = trouverConversation(state.activeConversationId);
     return Boolean(
@@ -584,11 +588,11 @@ async function allerAuMessageDm(messageId) {
     );
   };
   for (let page = 0; !estCharge() && page < PAGES_MAX_SAUT_DM; page += 1) {
-    if (state.activeConversationId !== conversationInitiale) return;
+    if (state.activeConversationId !== conversationInitiale || etatHistoriqueDm !== historiqueInitial) return;
     if (!(await chargerMessagesPlusAnciensDm({ taille: TAILLE_PAGE_SAUT_DM })))
       break;
   }
-  if (state.activeConversationId !== conversationInitiale) return;
+  if (state.activeConversationId !== conversationInitiale || etatHistoriqueDm !== historiqueInitial) return;
   if (!ChatUiShared.allerAuMessageAffiche(messageList, messageId)) {
     notifier(t('search.messageNotFound'), true);
   }

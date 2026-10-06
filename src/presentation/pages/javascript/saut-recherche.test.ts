@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { expect, it, vi } from 'vitest';
 
-it.each(['Dm', 'Salon'])(
-  'annule le saut %s après un changement pendant la pagination',
-  async (type) => {
+it.each([['Dm', false], ['Salon', false], ['Dm', true], ['Salon', true]] as const)(
+  'annule le saut %s après navigation ou réouverture (%s) pendant la pagination',
+  async (type, reouverture) => {
     const dm = type === 'Dm';
     const chemin = dm ? 'messages-prives/affichage.js' : 'salons/affichage.js';
     const source = readFileSync(
@@ -54,8 +54,13 @@ it.each(['Dm', 'Salon'])(
     );
     const attente = sauter('ancien');
     expect(charger).toHaveBeenCalledTimes(1);
-    state.activeConversationId = 'autre';
-    contexte.salonActifId = 'autre';
+    if (reouverture) {
+      contexte.etatHistoriqueDm = {};
+      contexte.etatHistoriqueSalon = {};
+    } else {
+      state.activeConversationId = 'autre';
+      contexte.salonActifId = 'autre';
+    }
     finir(true);
     await attente;
     expect(charger).toHaveBeenCalledTimes(1);
@@ -90,6 +95,7 @@ it.each(['Dm', 'Salon'])(
     const contexte = {
       state: { activeConversationId: 'initiale' },
       salonActifId: 'initiale',
+      [`etatHistorique${type}`]: {},
       [`executerPagination${type}`]: executer,
     };
     const charger = runInNewContext(
@@ -142,3 +148,59 @@ it('annule le saut DM si la conversation change pendant son ouverture', async ()
   await attente;
   expect(sauter).not.toHaveBeenCalled();
 });
+
+it.each(['Dm', 'Salon'])(
+  'isole les paginations %s après réouverture de la même conversation',
+  async (type) => {
+    const dm = type === 'Dm';
+    const source = readFileSync(`src/presentation/pages/javascript/${dm ? 'messages-prives/affichage.js' : 'salons/affichage.js'}`, 'utf8');
+    const debut = source.indexOf(`const paginationsEnCours${type} = new Map();`);
+    const fin = source.indexOf('\n}', source.indexOf(`async function executerPagination${type}`, debut)) + 2;
+    const historique = {
+      conversationId: 'c', salonId: 'c',
+      messagesAnciens: [{ id: 'ancien-curseur' }],
+      enChargement: false, finHistorique: false,
+    };
+    const nouveau = { ...historique, messagesAnciens: [], enChargement: false };
+    const reponses: Array<(valeur: { messages: { id: string }[]; finHistorique: boolean }) => void> = [];
+    const obtenir = vi.fn((donnees: unknown) => {
+      void donnees;
+      return new Promise<{ messages: { id: string }[]; finHistorique: boolean }>((r) => { reponses.push(r); });
+    });
+    const rendre = vi.fn();
+    const notifier = vi.fn();
+    const conversation = { id: 'c', messages: [{ id: 'recent' }] };
+    const contexte = {
+      state: { activeConversationId: 'c', currentUserId: 'moi', conversations: [conversation] },
+      salonActifId: 'c', utilisateurActuelId: 'moi',
+      salonActif: () => conversation,
+      [`etatHistorique${type}`]: historique,
+      renderActiveConversation: rendre, afficherMessages: rendre,
+      fusionnerHistoriqueDm: (a: unknown[], b: unknown[]) => [...a, ...b],
+      fusionnerHistorique: (a: unknown[], b: unknown[]) => [...a, ...b],
+      window: { electronAPI: { obtenirMessagesPriveesAvant: obtenir, obtenirMessagesSalonAvant: obtenir } },
+      notifier, messageErreur: (e: unknown) => String(e),
+    };
+    const charger = runInNewContext(`${source.slice(debut, fin)}; chargerMessagesPlusAnciens${type}`, contexte);
+    const ancienne = charger();
+    await Promise.resolve();
+    contexte[`etatHistorique${type}`] = nouveau;
+    const recente = charger();
+    await Promise.resolve();
+    expect(recente).not.toBe(ancienne);
+    expect(obtenir).toHaveBeenCalledTimes(2);
+    expect(obtenir.mock.calls[0][0]).toEqual(expect.objectContaining({ avantId: 'ancien-curseur' }));
+    expect(obtenir.mock.calls[1][0]).toEqual(expect.objectContaining({ avantId: 'recent' }));
+    const rendusAvant = rendre.mock.calls.length;
+    reponses[0]({ messages: [{ id: 'trop-ancien' }], finHistorique: true });
+    await expect(ancienne).resolves.toBe(false);
+    expect(nouveau).toEqual(expect.objectContaining({ messagesAnciens: [], finHistorique: false, enChargement: true }));
+    expect(rendre).toHaveBeenCalledTimes(rendusAvant);
+    expect(charger()).toBe(recente); // L'ancienne réponse ne libère pas la nouvelle requête.
+    reponses[1]({ messages: [{ id: 'page-intermediaire' }], finHistorique: false });
+    await expect(recente).resolves.toBe(true);
+    expect(nouveau.messagesAnciens).toEqual([{ id: 'page-intermediaire' }]);
+    expect(nouveau.enChargement).toBe(false);
+    expect(notifier).not.toHaveBeenCalled();
+  }
+);
