@@ -342,6 +342,8 @@ module.exports = {
     ) {
       return;
     }
+    const luJusqua = Date.parse(evt.lastReadAt);
+    if (!Number.isFinite(luJusqua)) return;
     const deMoi = evt.userId === moi;
     let lecture;
     if (evt.kind === 'room') {
@@ -359,7 +361,7 @@ module.exports = {
       ...lecture,
       utilisateurId: evt.userId,
       nom: this.nomLecteur(evt.userId),
-      luJusqua: new Date(evt.lastReadAt).getTime(),
+      luJusqua,
       dernierMessageLuId: evt.lastReadMessageId ?? null,
       deMoi,
     });

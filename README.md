@@ -107,3 +107,9 @@ Validation : audit high, types, lint, build et 294 tests avec couverture 100 % p
 Un message reçu peut déjà figurer dans les compteurs HTTP : son incrément local est donc provisoire. Après le traitement de chaque événement d’autrui, les deux pages relisent les non-lus serveur puis rafraîchissent les compteurs, le rail et le badge de l’application. Les gardes existantes protègent les réceptions et PUT concurrents; en cas d’échec HTTP, les compteurs locaux sont conservés. Quatre régressions distinguent les événements déjà inclus d’un nouveau message, pour les DM et salons. Les doublures des pages suivent maintenant les compteurs serveur après chaque événement.
 
 Validation : audit high, types, lint, build et 298 tests avec couverture 100 % passent sous Node 24. Validation manuelle Electron non effectuée.
+
+### Vérification du tri des lectures et des dates entrantes
+
+La comparaison lexicographique des identifiants à dates égales est conservée : elle reproduit le contrat serveur `(createdAt, id)`, son `orderBy` et ses filtres `id > lastReadMessageId`. Un tri numérique naturel de m2/m10 divergerait de ce contrat; les identifiants ne définissent jamais seuls la chronologie. Le séparateur de non-lus est fixé par identifiant et ne dépend pas de ces comparaisons.
+
+Les événements de lecture vérifient désormais Number.isFinite après Date.parse avant toute résolution de lecteur ou émission vers les pages. Les dates vides, non interprétables et hors plage sont ignorées; les régressions sont ajoutées au test de relais existant. Validation : audit high, types, lint, build et 298 tests avec couverture 100 % passent sous Node 24. Validation manuelle Electron non effectuée.

@@ -552,6 +552,9 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
         { kind: 'dm', targetId: 'moi', userId: 3, lastReadAt: date },
         { kind: 'dm', targetId: null, userId: 'u2', lastReadAt: date },
         { kind: 'dm', targetId: 'moi', userId: 'u2', lastReadAt: 1 },
+        { kind: 'dm', targetId: 'moi', userId: 'u2', lastReadAt: '' },
+        { kind: 'dm', targetId: 'moi', userId: 'u2', lastReadAt: 'abc' },
+        { kind: 'room', targetId: 'salon', userId: 'u2', lastReadAt: '+999999-01-01T00:00:00Z' },
         null,
       ]) {
         s._declencher('read-state.updated', invalide);
