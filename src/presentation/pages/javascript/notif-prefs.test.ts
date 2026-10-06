@@ -249,3 +249,57 @@ describe('marquage pendant une réception', () => {
     expect(serveur.marquerConversationLue).toHaveBeenCalledTimes(1);
   });
 });
+
+it('ignore un ancien chargement qui répond après le plus récent', async () => {
+  let resoudre!: (valeur: unknown) => void;
+  const serveur = api();
+  serveur.obtenirNonLus.mockImplementationOnce(
+    () =>
+      new Promise((r) => {
+        resoudre = r;
+      })
+  );
+  const ancien = NotifPrefs.chargerNonLus(serveur);
+  serveur.obtenirNonLus.mockResolvedValueOnce({
+    salons: { recent: 2 },
+    prives: {},
+  });
+  await NotifPrefs.chargerNonLus(serveur);
+  resoudre({ salons: { recent: 0 }, prives: {} });
+  await ancien;
+  expect(NotifPrefs.nombreNonLus('salon', 'recent')).toBe(2);
+});
+
+it('redemande les compteurs si un message arrive après leur capture par le serveur', async () => {
+  let resoudre!: (valeur: unknown) => void;
+  const serveur = api();
+  await NotifPrefs.chargerNonLus(serveur);
+  serveur.obtenirNonLus.mockImplementationOnce(
+    () =>
+      new Promise((r) => {
+        resoudre = r;
+      })
+  );
+  serveur.obtenirNonLus.mockResolvedValueOnce({
+    salons: { nouveau: 1 },
+    prives: {},
+  });
+  const enCours = NotifPrefs.chargerNonLus(serveur);
+  NotifPrefs.ajouterNonLu('salon', 'nouveau');
+  resoudre({ salons: {}, prives: {} });
+  await enCours;
+  expect(NotifPrefs.nombreNonLus('salon', 'nouveau')).toBe(1);
+  expect(serveur.obtenirNonLus).toHaveBeenCalledTimes(3);
+});
+
+it('préserve les changements locaux si les deux réponses sont périmées', async () => {
+  const serveur = api();
+  await NotifPrefs.chargerNonLus(serveur);
+  serveur.obtenirNonLus.mockImplementation(async () => {
+    NotifPrefs.ajouterNonLu('prive', 'active');
+    return { salons: {}, prives: {} };
+  });
+  await NotifPrefs.chargerNonLus(serveur);
+  expect(NotifPrefs.nombreNonLus('prive', 'active')).toBe(2);
+  expect(serveur.obtenirNonLus).toHaveBeenCalledTimes(3);
+});

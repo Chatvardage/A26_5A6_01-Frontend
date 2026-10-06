@@ -220,6 +220,8 @@ window.addEventListener('DOMContentLoaded', async () => {
       // Messages reçus pendant la coupure : compteurs relus sur le serveur.
       await NotifPrefs.chargerNonLus(window.electronAPI);
       await refreshConversations({ conserverPositionScroll: true });
+      if (state.activeConversationId)
+        await chargerLecturesDm(state.activeConversationId);
       await actualiserBadgeSalons();
     } catch (erreur) {
       notifier(messageErreur(erreur), true);

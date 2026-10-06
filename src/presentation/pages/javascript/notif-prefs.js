@@ -111,20 +111,32 @@
   // serveur, et un message reçu en arrière-plan reste compté.
   const compteurs = { salon: new Map(), prive: new Map() };
   const lecturesEnCours = { salon: new Set(), prive: new Set() };
+  let generationChargement = 0;
+  let revisionCompteurs = 0;
 
   /** Remplace les compteurs par ceux du serveur, `{ salons, prives }`
    * (best-effort : en cas d'échec, les compteurs actuels sont gardés). */
   async function chargerNonLus(api) {
+    const generation = ++generationChargement;
     try {
-      const nonLus = await api.obtenirNonLus();
-      for (const [type, source] of [
-        ['salon', nonLus?.salons],
-        ['prive', nonLus?.prives],
-      ]) {
-        compteurs[type].clear();
-        for (const [id, nombre] of Object.entries(source ?? {})) {
-          if (nombre > 0) compteurs[type].set(id, nombre);
+      // Relancer une fois si des réceptions ou lectures locales rendent
+      // la réponse périmée; jamais écraser ces changements ni boucler
+      // indéfiniment sur une conversation très active.
+      for (let tentative = 0; tentative < 2; tentative += 1) {
+        const revision = revisionCompteurs;
+        const nonLus = await api.obtenirNonLus();
+        if (generation !== generationChargement) return;
+        if (revision !== revisionCompteurs) continue;
+        for (const [type, source] of [
+          ['salon', nonLus?.salons],
+          ['prive', nonLus?.prives],
+        ]) {
+          compteurs[type].clear();
+          for (const [id, nombre] of Object.entries(source ?? {})) {
+            if (nombre > 0) compteurs[type].set(id, nombre);
+          }
         }
+        return;
       }
     } catch (erreur) {
       console.warn('[non-lus] compteurs indisponibles :', erreur);
@@ -139,6 +151,7 @@
   /** Message reçu d'autrui dans `conversationId`. */
   function ajouterNonLu(type, conversationId) {
     if (!compteurs[type] || !conversationId) return;
+    revisionCompteurs += 1;
     compteurs[type].set(conversationId, nombreNonLus(type, conversationId) + 1);
   }
 
@@ -150,6 +163,7 @@
   function marquerLu(api, type, conversationId, options = {}) {
     const nombre = nombreNonLus(type, conversationId);
     if (!nombre || lecturesEnCours[type].has(conversationId)) return;
+    revisionCompteurs += 1;
     lecturesEnCours[type].add(conversationId);
     compteurs[type].delete(conversationId);
     let reussi = false;
@@ -157,6 +171,7 @@
       .then(() => api.marquerConversationLue({ type, conversationId }))
       .then((reponse) => {
         reussi = true;
+        revisionCompteurs += 1;
         const restants = Math.max(
           nombreNonLus(type, conversationId),
           reponse?.nonLus ?? 0
@@ -164,6 +179,7 @@
         if (restants) compteurs[type].set(conversationId, restants);
       })
       .catch((erreur) => {
+        revisionCompteurs += 1;
         // Restaurer aussi les messages arrivés pendant la requête.
         compteurs[type].set(
           conversationId,

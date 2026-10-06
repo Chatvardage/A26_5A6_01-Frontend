@@ -54,3 +54,10 @@ Le CI vérifie la cohérence entre la version déclarée, le fichier de verrouil
 Accusés : position complète propagée jusqu’aux coches et « Vu par », fusion monotone des réponses HTTP avec le temps réel, initialisation avant la requête et rejet des réponses d’une ancienne ouverture. Frontière des non-lus figée par identifiant. Marquage réussi : réponse réconciliée, nouveaux messages marqués ensuite seulement si la conversation est encore affichée au premier plan.
 
 Validation locale sous Node 24 : audit high, types (Frontend), lint, tests avec couverture et build. La validation manuelle Electron n’a pas été effectuée. Tests PostgreSQL non exécutés : aucune DATABASE_URL de test disponible et démarrage de la base jetable empêché par les permissions de l’environnement. La validation d’intégration reste requise avant fusion.
+
+
+### Revue suivante PR #100 — rechargement des non-lus et reconnexion
+
+Une réponse de non-lus dépassée par une autre requête est ignorée. Une réception ou un marquage local pendant le chargement impose une relecture serveur, bornée à une relance; si les deux réponses deviennent périmées, les compteurs locaux sont conservés jusqu’à la synchronisation suivante. Après reconnexion, la conversation active recharge aussi ses accusés de lecture, en conservant sa position monotone pendant la requête.
+
+Validation de cette suite : audit high, types, lint, 277 tests avec couverture 100 % et build passent sous Node 24. Validation manuelle Electron non effectuée.

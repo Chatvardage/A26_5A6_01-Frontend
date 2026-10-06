@@ -734,7 +734,8 @@ function afficherTout(options = {}) {
  */
 async function chargerLecturesSalon(salonId) {
   const generation = ++generationLecturesSalon;
-  lecturesSalon = { salonId, lecteurs: [] };
+  if (lecturesSalon.salonId !== salonId)
+    lecturesSalon = { salonId, lecteurs: [] };
   try {
     const { lecteurs } = await window.electronAPI.obtenirLectures({
       type: 'salon',

@@ -831,3 +831,25 @@ it('fusionne un accusé reçu pendant le chargement initial, sans confondre deux
   });
   expect(statuts()).toEqual(['✓✓', '✓✓']);
 });
+
+it('recharge les coches de la conversation ouverte après une reconnexion', async () => {
+  let luJusqua = 0;
+  const cs = conversations();
+  cs[0].messages = [dm('m1', 'moi', 'salut', 1)];
+  const { document, rappels } = await chargerPage({
+    autresReponses: {
+      obtenirConversationsPrivees: cs,
+      obtenirLectures: () => ({
+        lecteurs: [{ utilisateurId: 'bob', nom: 'bob', luJusqua }],
+      }),
+    },
+  });
+  await vi.waitFor(() =>
+    expect(document.querySelector('.read-status')?.textContent).toBe('✓')
+  );
+  luJusqua = 1;
+  await rappels.onSynchronisationRequise();
+  await vi.waitFor(() =>
+    expect(document.querySelector('.read-status')?.textContent).toBe('✓✓')
+  );
+});

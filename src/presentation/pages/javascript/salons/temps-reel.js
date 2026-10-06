@@ -508,6 +508,7 @@ window.electronAPI.onSynchronisationRequise?.(async () => {
     // Messages reçus pendant la coupure : compteurs relus sur le serveur.
     await NotifPrefs.chargerNonLus(window.electronAPI);
     await actualiser({ conserverPositionScroll: true });
+    if (salonActifId) await chargerLecturesSalon(salonActifId);
     await actualiserBadgeMessagesPrives();
   } catch (erreur) {
     notifier(messageErreur(erreur), true);

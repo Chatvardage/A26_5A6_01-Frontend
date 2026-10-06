@@ -964,3 +964,24 @@ it('conserve les lecteurs reçus pendant la réponse HTTP initiale et compare le
     'Vu par alice'
   );
 });
+
+it('recharge les lecteurs du salon ouvert après une reconnexion', async () => {
+  let luJusqua = 0;
+  const { document, rappels, appels } = await chargerPage({
+    autresReponses: {
+      obtenirLectures: () => ({
+        lecteurs: [{ utilisateurId: 'alice', nom: 'alice', luJusqua }],
+      }),
+    },
+  });
+  await vi.waitFor(() => expect(appels.obtenirLectures).toBe(1));
+  expect(document.querySelector('.read-receipt')).toBeNull();
+  luJusqua = 1;
+  await rappels.onSynchronisationRequise();
+  await vi.waitFor(() =>
+    expect(document.querySelector('.read-receipt')?.textContent).toBe(
+      'Vu par alice'
+    )
+  );
+  expect(appels.obtenirLectures).toBe(2);
+});

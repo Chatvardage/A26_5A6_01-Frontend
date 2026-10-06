@@ -493,7 +493,10 @@ async function chargerMessagesPlusAnciensDm({ taille } = {}) {
  */
 async function chargerLecturesDm(conversationId) {
   const generation = ++generationLecturesDm;
-  const etat = { conversationId, luJusqua: null };
+  const etat =
+    lecturesDm.conversationId === conversationId
+      ? lecturesDm
+      : { conversationId, luJusqua: null };
   lecturesDm = etat;
   try {
     const { lecteurs } = await window.electronAPI.obtenirLectures({
