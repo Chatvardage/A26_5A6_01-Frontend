@@ -258,6 +258,7 @@ export function LoginPage({
       </form>
 
       {messageRetour && !erreurSoumission && (
+<<<<<<< HEAD
         messageRetourConfirmable ? (
           <div
             className="session-return-overlay"
@@ -291,6 +292,27 @@ export function LoginPage({
             <p>{t(langue, messageRetour)}</p>
           </div>
         )
+=======
+        <div className="session-return-overlay" aria-hidden={false}>
+          <div
+            className="session-return-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t(langue, messageRetour)}
+          >
+            <p className="session-return-message">{t(langue, messageRetour)}</p>
+            {messageRetourConfirmable && onMessageRetourConfirme && (
+              <button
+                type="button"
+                className="session-return-button"
+                onClick={onMessageRetourConfirme}
+              >
+                {t(langue, 'auth.confirm')}
+              </button>
+            )}
+          </div>
+        </div>
+>>>>>>> 84409f1 (modification affichage confirmation de la déconnexion automatique)
       )}
     </div>
   );
