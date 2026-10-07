@@ -28,6 +28,7 @@ interface LoginPageProps {
   /** Clé de traduction d'un message d'information à afficher en arrivant
    * (ex. 'auth.sessionExpired'), ou null. */
   messageRetour?: string | null;
+
   /** Si true, affiche un bouton de confirmation pour fermer le message. */
   messageRetourConfirmable?: boolean;
   /** Appelé quand l'utilisateur confirme le message de retour. */
