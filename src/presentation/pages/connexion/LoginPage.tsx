@@ -1,4 +1,10 @@
-import { useCallback, useRef, useState, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
 import mascotLogo from '../../../../assets/icon.png';
 import type { AuthGateway } from '../../../infrastructure/gateways/AuthGateway';
 import { t, LANGUES_SUPPORTEES } from '../../../i18n/i18n-web';
@@ -74,7 +80,66 @@ export function LoginPage({
   const [enCours, setEnCours] = useState(false);
 
   const identifiantRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const messageRetourId = useRef(
+    `session-return-${Math.random().toString(36).slice(2, 11)}`
+  );
 
+  const fermerMessageRetour = useCallback(() => {
+    onMessageRetourConfirme?.();
+  }, [onMessageRetourConfirme]);
+
+  useEffect(() => {
+    if (!messageRetour || !messageRetourConfirmable || !dialogRef.current) {
+      return undefined;
+    }
+
+    const dialog = dialogRef.current;
+    const focusables = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+    );
+    const firstFocusable = focusables[0] ?? dialog;
+    const lastFocusable = focusables[focusables.length - 1] ?? dialog;
+    const previousActiveElement = document.activeElement as HTMLElement | null;
+
+    firstFocusable.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        fermerMessageRetour();
+        return;
+      }
+
+      if (event.key !== 'Tab' || focusables.length === 0) {
+        return;
+      }
+
+      const currentTarget = document.activeElement as HTMLElement | null;
+      if (event.shiftKey) {
+        if (!dialog.contains(currentTarget) || currentTarget === firstFocusable) {
+          event.preventDefault();
+          lastFocusable.focus();
+        }
+        return;
+      }
+
+      if (!dialog.contains(currentTarget) || currentTarget === lastFocusable) {
+        event.preventDefault();
+        firstFocusable.focus();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      if (previousActiveElement && previousActiveElement.focus) {
+        previousActiveElement.focus();
+      }
+    };
+  }, [fermerMessageRetour, messageRetour, messageRetourConfirmable]);
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -193,25 +258,39 @@ export function LoginPage({
       </form>
 
       {messageRetour && !erreurSoumission && (
-        <div className="session-return-overlay" aria-hidden={false}>
+        messageRetourConfirmable ? (
           <div
-            className="session-return-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t(langue, messageRetour)}
+            className="session-return-overlay"
+            onClick={fermerMessageRetour}
           >
-            <p className="session-return-message">{t(langue, messageRetour)}</p>
-            {messageRetourConfirmable && onMessageRetourConfirme && (
-              <button
-                type="button"
-                className="session-return-button"
-                onClick={onMessageRetourConfirme}
-              >
-                {t(langue, 'auth.confirm')}
-              </button>
-            )}
+            <div
+              ref={dialogRef}
+              className="session-return-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={messageRetourId.current}
+              tabIndex={-1}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <p id={messageRetourId.current} className="session-return-message">
+                {t(langue, messageRetour)}
+              </p>
+              {onMessageRetourConfirme && (
+                <button
+                  type="button"
+                  className="session-return-button"
+                  onClick={fermerMessageRetour}
+                >
+                  {t(langue, 'auth.confirm')}
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="field-message" role="status" data-kind="info">
+            <p>{t(langue, messageRetour)}</p>
+          </div>
+        )
       )}
     </div>
   );

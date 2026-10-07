@@ -1,9 +1,9 @@
 'use strict';
 
 (function (racine) {
-  // 1 * 10 * 1000 = 10 secondes (pour les tester la fonctionnalité)
-  // 30 * 60 * 1000 = 30 minutes
-  const DELAI_INACTIVITE_MS = 30 * 60 * 1000;
+  const DELAI_INACTIVITE_MS = 10 * 1 * 1000;
+  const DELAI_THROTTLE_REINITIALISATION_MS = 5000;
+  const NOTIFICATION_TITRE_DECONNEXION = 'Déconnexion';
   const EVENEMENTS_INTERACTION = [
     'mousedown',
     'mousemove',
@@ -20,7 +20,7 @@
         typeof racine.Notification === 'function' &&
         racine.Notification.permission === 'granted'
       ) {
-        new racine.Notification('Déconnexion', {
+        new racine.Notification(NOTIFICATION_TITRE_DECONNEXION, {
           body: message,
           tag: 'chatvardage-deconnexion-inactivite',
         });
@@ -79,6 +79,14 @@
     return { demarrer, arreter, reinitialiser };
   }
 
+  const objetInactivite = {
+    DELAI_INACTIVITE_MS,
+    creerMinuteurInactivite,
+    initialiserPageInactivite,
+  };
+
+  racine.Inactivite = objetInactivite;
+
   async function initialiserPageInactivite() {
     if (!racine.electronAPI || typeof racine.electronAPI.deconnexionSession !== 'function') {
       return null;
@@ -98,25 +106,60 @@
       estActif: () => true,
       notifier: notifierDeconnexion,
       onExpire: async () => {
-        try {
-          await racine.electronAPI.definirMotifRetourConnexion?.('session-inactive');
-        } catch (erreur) {
-          console.error('[inactivite] échec de définition du motif :', erreur);
+        const { definirMotifRetourConnexion, allerALaConnexion, deconnexionSession } =
+          racine.electronAPI;
+
+        if (typeof definirMotifRetourConnexion === 'function') {
+          try {
+            await definirMotifRetourConnexion('session-inactive');
+          } catch (erreur) {
+            console.error('[inactivite] échec de définition du motif :', erreur);
+          }
+        } else {
+          console.error(
+            '[inactivite] méthode absente pour définir le motif de retour à la connexion.'
+          );
         }
+
+        if (typeof deconnexionSession !== 'function') {
+          console.error('[inactivite] méthode absente pour la déconnexion.');
+          return;
+        }
+
         try {
-          await racine.electronAPI.deconnexionSession();
+          await deconnexionSession();
         } catch (erreur) {
           console.error('[inactivite] échec de déconnexion :', erreur);
         }
+
+        if (typeof allerALaConnexion !== 'function') {
+          console.error('[inactivite] méthode absente pour revenir à la connexion.');
+          return;
+        }
+
         try {
-          await racine.electronAPI.allerALaConnexion();
+          await allerALaConnexion();
         } catch (erreur) {
           console.error('[inactivite] échec de retour à la connexion :', erreur);
         }
       },
     });
 
-    const reactiver = () => minuteur.reinitialiser();
+    let derniereReinitialisationFrequentMs = 0;
+    const reactiver = (evenement) => {
+      const estEvenementFrequent =
+        evenement.type === 'mousemove' || evenement.type === 'scroll';
+
+      if (estEvenementFrequent) {
+        const maintenant = Date.now();
+        if (maintenant - derniereReinitialisationFrequentMs < DELAI_THROTTLE_REINITIALISATION_MS) {
+          return;
+        }
+        derniereReinitialisationFrequentMs = maintenant;
+      }
+
+      minuteur.reinitialiser();
+    };
     const ecouteurs = EVENEMENTS_INTERACTION.map((nom) => {
       document.addEventListener(nom, reactiver, { passive: true });
       return { nom, reactiver };
@@ -130,20 +173,9 @@
     };
 
     minuteur.demarrer();
-    racine.Inactivite = Object.freeze({
-      DELAI_INACTIVITE_MS,
-      creerMinuteurInactivite,
-      initialiserPageInactivite,
-      stopper,
-    });
+    racine.Inactivite.stopper = stopper;
     return stopper;
   }
-
-  racine.Inactivite = Object.freeze({
-    DELAI_INACTIVITE_MS,
-    creerMinuteurInactivite,
-    initialiserPageInactivite,
-  });
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {

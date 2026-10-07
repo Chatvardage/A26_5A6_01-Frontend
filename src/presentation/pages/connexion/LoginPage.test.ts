@@ -33,4 +33,35 @@ describe('LoginPage', () => {
     root.unmount();
     container.remove();
   });
+
+  it('affiche un message simple inline quand la session expirée n’est pas confirmable', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(LoginPage, {
+          gateway: {
+            authentifier: async () => undefined,
+          },
+          langue: 'fr',
+          changerLangue: () => undefined,
+          allerAInscription: () => undefined,
+          messageRetour: 'auth.sessionExpired',
+          messageRetourConfirmable: false,
+        })
+      );
+    });
+
+    const popup = container.querySelector('[role="dialog"][aria-modal="true"]');
+    const inline = container.querySelector('.field-message[data-kind="info"]');
+
+    expect(popup).toBeNull();
+    expect(inline).not.toBeNull();
+    expect(inline?.textContent).toContain('session a expiré');
+
+    root.unmount();
+    container.remove();
+  });
 });

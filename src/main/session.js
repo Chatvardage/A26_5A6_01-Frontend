@@ -9,6 +9,8 @@ const {
   apresOuvertureSessionAvecLangueChoisie,
 } = require('./preferences');
 
+const MOTIFS_VALIDES_RETOUR_CONNEXION = ['session-expiree', 'session-inactive'];
+
 // --- Session (écran de connexion) -------------------------------------------
 // chatGateway est une INSTANCE UNIQUE, partagée par la page de connexion et
 // le dashboard (contrairement à une instance par renderer, qui perdrait
@@ -53,7 +55,10 @@ function oublierPreferencesDuCompte() {
 }
 
 exposerCanal('session:definir-motif-retour', ({ motif }) => {
-  if (typeof motif === 'string' && motif.trim()) {
+  if (
+    typeof motif === 'string' &&
+    MOTIFS_VALIDES_RETOUR_CONNEXION.includes(motif)
+  ) {
     etat.motifRetourConnexion = motif;
   }
   return etat.motifRetourConnexion;

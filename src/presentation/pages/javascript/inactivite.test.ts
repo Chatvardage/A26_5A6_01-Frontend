@@ -52,4 +52,5 @@ describe('Inactivite', () => {
     vi.advanceTimersByTime(401);
     expect(onExpire).toHaveBeenCalledTimes(1);
   });
+
 });
