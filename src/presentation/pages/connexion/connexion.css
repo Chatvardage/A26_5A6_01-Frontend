@@ -174,6 +174,7 @@ body {
    ========================================================= */
 
 .screen-login {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -182,6 +183,7 @@ body {
   gap: clamp(14px, 4vw, 22px);
 
   width: 100%;
+  min-height: calc(100vh - var(--titlebar-height));
 }
 
 /* =========================================================
@@ -374,6 +376,52 @@ body {
 
 .field-message[data-kind='info'] {
   color: var(--text);
+}
+
+.session-return-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(2, 19, 16, 0.65);
+  backdrop-filter: blur(3px);
+}
+
+.session-return-dialog {
+  width: min(460px, 90vw);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: clamp(24px, 4vw, 32px);
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.session-return-message {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(15px, 1.2vw, 18px);
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.session-return-button {
+  margin-top: 0;
+  background: var(--mint);
+  color: var(--on-accent);
+  box-shadow: 0 10px 22px rgba(61, 220, 151, 0.25);
+}
+
+.session-return-button:hover,
+.session-return-button:focus-visible {
+  background: #2acb8a;
+  box-shadow: 0 12px 26px rgba(61, 220, 151, 0.28);
 }
 
 /* =========================================================

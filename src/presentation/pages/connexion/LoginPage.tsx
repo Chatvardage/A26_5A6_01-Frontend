@@ -166,21 +166,6 @@ export function LoginPage({
           onChange={(event) => setMotDePasse(event.target.value)}
         />
 
-        {messageRetour && !erreurSoumission && (
-          <div className="field-message" role="status" data-kind="info">
-            <p>{t(langue, messageRetour)}</p>
-            {messageRetourConfirmable && onMessageRetourConfirme && (
-              <button
-                type="button"
-                className="login-switch"
-                onClick={onMessageRetourConfirme}
-              >
-                {t(langue, 'auth.confirm')}
-              </button>
-            )}
-          </div>
-        )}
-
         {erreurSoumission && (
           <p
             className="field-message"
@@ -206,6 +191,28 @@ export function LoginPage({
           {t(langue, 'auth.noAccount')} {t(langue, 'auth.createAccount')}
         </button>
       </form>
+
+      {messageRetour && !erreurSoumission && (
+        <div className="session-return-overlay" aria-hidden={false}>
+          <div
+            className="session-return-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t(langue, messageRetour)}
+          >
+            <p className="session-return-message">{t(langue, messageRetour)}</p>
+            {messageRetourConfirmable && onMessageRetourConfirme && (
+              <button
+                type="button"
+                className="session-return-button"
+                onClick={onMessageRetourConfirme}
+              >
+                {t(langue, 'auth.confirm')}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

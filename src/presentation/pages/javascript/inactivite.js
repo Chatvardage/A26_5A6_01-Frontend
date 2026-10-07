@@ -1,6 +1,8 @@
 'use strict';
 
 (function (racine) {
+  // 1 * 10 * 1000 = 10 secondes (pour les tester la fonctionnalité)
+  // 30 * 60 * 1000 = 30 minutes
   const DELAI_INACTIVITE_MS = 30 * 60 * 1000;
   const EVENEMENTS_INTERACTION = [
     'mousedown',
