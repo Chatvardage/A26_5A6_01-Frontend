@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+﻿import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import './inactivite.js';
 
 const I = (globalThis as typeof globalThis & { Inactivite?: any }).Inactivite;
