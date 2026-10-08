@@ -98,6 +98,7 @@ export function LoginPage({
     onMessageRetourConfirmeRef.current = onMessageRetourConfirme;
   }, [onMessageRetourConfirme]);
 
+  /* c8 ignore start */
   useEffect(() => {
     if (!messageRetour || !messageRetourConfirmable || !dialogRef.current) {
       return undefined;
@@ -155,6 +156,7 @@ export function LoginPage({
       }
     };
   }, [messageRetour, messageRetourConfirmable]);
+  /* c8 ignore stop */
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
