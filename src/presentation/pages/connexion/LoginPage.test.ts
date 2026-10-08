@@ -28,7 +28,12 @@ describe('LoginPage', () => {
     const popup = container.querySelector('[role="alertdialog"][aria-modal="true"]');
 
     expect(popup).not.toBeNull();
-    expect(popup?.getAttribute('aria-describedby')).toBeNull();
+
+    const labelId = popup?.getAttribute('aria-labelledby');
+    expect(labelId).not.toBeNull();
+
+    const labelEl = container.querySelector(`#${labelId}`);
+    expect(labelEl?.textContent).toContain('inactivité');
 
     const bouton = popup?.querySelector('button.session-return-button');
     expect(bouton).not.toBeNull();

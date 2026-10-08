@@ -135,7 +135,7 @@ export function LoginPage({
         previousActiveElement.focus();
       }
     };
-  }, [messageRetour, messageRetourConfirmable]);
+  }, [messageRetour, messageRetourConfirmable, onMessageRetourConfirme]);
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {

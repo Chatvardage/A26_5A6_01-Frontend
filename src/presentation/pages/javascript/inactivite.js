@@ -49,7 +49,7 @@
   function creerMinuteurInactivite({
     delaiMs = DELAI_INACTIVITE_MS,
     estActif = () => true,
-    message = 'Votre session a été déconnectée pour inactivité.',
+    message = () => 'Votre session a été déconnectée pour inactivité.',
     notifier = notifierDeconnexion,
     onExpire = () => undefined,
     setTimeoutFn = racine.setTimeout.bind(racine),
@@ -65,7 +65,7 @@
       }
       minuteur = setTimeoutFn(() => {
         expire = true;
-        notifier(message);
+        notifier(typeof message === 'function' ? message() : message);
         onExpire();
       }, delaiMs);
     }
@@ -123,7 +123,7 @@
 
     const minuteur = creerMinuteurInactivite({
       delaiMs: DELAI_INACTIVITE_MS,
-      message: obtenirMessageDeconnexionInactivite(),
+      message: () => obtenirMessageDeconnexionInactivite(),
       notifier: notifierDeconnexion,
       onExpire: async () => {
         const { definirMotifRetourConnexion, allerALaConnexion, deconnexionSession } =
@@ -171,7 +171,7 @@
       },
     });
 
-    let derniereReinitialisationFrequentMs = 0;
+    let derniereReinitialisationFrequentMs = Number.NEGATIVE_INFINITY;
     const reactiver = (evenement) => {
       const estEvenementFrequent =
         evenement.type === 'mousemove' ||
