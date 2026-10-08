@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
   type FormEvent,
@@ -82,9 +83,7 @@ export function LoginPage({
 
   const identifiantRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
-  const messageRetourId = useRef(
-    `session-return-${Math.random().toString(36).slice(2, 11)}`
-  );
+  const messageRetourId = useId();
 
   const fermerMessageRetour = useCallback(() => {
     onMessageRetourConfirme?.();
@@ -269,11 +268,11 @@ export function LoginPage({
               className="session-return-dialog"
               role="dialog"
               aria-modal="true"
-              aria-labelledby={messageRetourId.current}
+              aria-labelledby={messageRetourId}
               tabIndex={-1}
               onClick={(event) => event.stopPropagation()}
             >
-              <p id={messageRetourId.current} className="session-return-message">
+              <p id={messageRetourId} className="session-return-message">
                 {t(langue, messageRetour)}
               </p>
               {onMessageRetourConfirme && (
@@ -288,9 +287,9 @@ export function LoginPage({
             </div>
           </div>
         ) : (
-          <div className="field-message" role="status" data-kind="info">
-            <p>{t(langue, messageRetour)}</p>
-          </div>
+          <p className="field-message" role="status" data-kind="info">
+            {t(langue, messageRetour)}
+          </p>
         )
       )}
     </div>

@@ -1,7 +1,7 @@
 'use strict';
 
 (function (racine) {
-  const DELAI_INACTIVITE_MS = 30 * 60 * 1000;
+  const DELAI_INACTIVITE_MS = 10 * 1 * 1000;
   const DELAI_THROTTLE_REINITIALISATION_MS = 5000;
   const NOTIFICATION_TITRE_DECONNEXION = 'Déconnexion';
   const EVENEMENTS_INTERACTION = [
@@ -35,9 +35,17 @@
     }
   }
 
+  function obtenirMessageDeconnexionInactivite() {
+    if (racine.I18n && typeof racine.I18n.t === 'function') {
+      return racine.I18n.t('auth.sessionInactive');
+    }
+    return 'Votre session a été déconnectée pour inactivité.';
+  }
+
   function creerMinuteurInactivite({
     delaiMs = DELAI_INACTIVITE_MS,
     estActif = () => true,
+    message = 'Votre session a été déconnectée pour inactivité.',
     notifier = notifierDeconnexion,
     onExpire = () => undefined,
     setTimeoutFn = racine.setTimeout.bind(racine),
@@ -53,7 +61,7 @@
       }
       minuteur = setTimeoutFn(() => {
         expire = true;
-        notifier('Votre session a été déconnectée pour inactivité.');
+        notifier(message);
         onExpire();
       }, delaiMs);
     }
@@ -79,15 +87,22 @@
     return { demarrer, arreter, reinitialiser };
   }
 
+  let stopperActif = () => undefined;
+
   const objetInactivite = {
     DELAI_INACTIVITE_MS,
     creerMinuteurInactivite,
     initialiserPageInactivite,
+    stopper: () => {
+      stopperActif();
+    },
   };
 
   racine.Inactivite = objetInactivite;
 
   async function initialiserPageInactivite() {
+    objetInactivite.stopper();
+
     if (!racine.electronAPI || typeof racine.electronAPI.deconnexionSession !== 'function') {
       return null;
     }
@@ -104,6 +119,7 @@
     const minuteur = creerMinuteurInactivite({
       delaiMs: DELAI_INACTIVITE_MS,
       estActif: () => true,
+      message: obtenirMessageDeconnexionInactivite(),
       notifier: notifierDeconnexion,
       onExpire: async () => {
         const { definirMotifRetourConnexion, allerALaConnexion, deconnexionSession } =
@@ -148,7 +164,9 @@
     let derniereReinitialisationFrequentMs = 0;
     const reactiver = (evenement) => {
       const estEvenementFrequent =
-        evenement.type === 'mousemove' || evenement.type === 'scroll';
+        evenement.type === 'mousemove' ||
+        evenement.type === 'scroll' ||
+        evenement.type === 'wheel';
 
       if (estEvenementFrequent) {
         const maintenant = Date.now();
@@ -170,10 +188,13 @@
         document.removeEventListener(nom, reactiver);
       });
       minuteur.arreter();
+      if (stopperActif === stopper) {
+        stopperActif = () => undefined;
+      }
     };
 
+    stopperActif = stopper;
     minuteur.demarrer();
-    racine.Inactivite.stopper = stopper;
     return stopper;
   }
 

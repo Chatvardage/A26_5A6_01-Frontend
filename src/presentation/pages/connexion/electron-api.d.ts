@@ -101,6 +101,9 @@ declare global {
        * appliqué.
        */
       definirTheme: (theme: string) => Promise<string>;
+
+      // À ajouter dans la déclaration electronAPI :
+      allerALaConnexion: () => Promise<void>;
     };
   }
 }

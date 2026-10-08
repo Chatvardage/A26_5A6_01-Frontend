@@ -1,4 +1,4 @@
-﻿import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import './inactivite.js';
 
 const I = (globalThis as typeof globalThis & { Inactivite?: any }).Inactivite;
@@ -51,5 +51,72 @@ describe('Inactivite', () => {
 
     vi.advanceTimersByTime(401);
     expect(onExpire).toHaveBeenCalledTimes(1);
+  });
+
+  it('arrête l’instance précédente avant d’en initialiser une nouvelle', async () => {
+    const originalElectronApi = globalThis.electronAPI;
+    const originalI18n = globalThis.I18n;
+
+    globalThis.electronAPI = {
+      obtenirUtilisateurConnecte: vi.fn(async () => ({ id: 'u1' })),
+      definirMotifRetourConnexion: vi.fn(async () => undefined),
+      deconnexionSession: vi.fn(async () => undefined),
+      allerALaConnexion: vi.fn(async () => undefined),
+    } as any;
+    globalThis.I18n = {
+      t: vi.fn((cle: string) => cle),
+    } as any;
+
+    const removeEventListenerSpy = vi.spyOn(document, 'removeEventListener');
+
+    const premierStopper = await I.initialiserPageInactivite();
+    const secondStopper = await I.initialiserPageInactivite();
+
+    expect(typeof premierStopper).toBe('function');
+    expect(typeof secondStopper).toBe('function');
+    expect(removeEventListenerSpy).toHaveBeenCalled();
+
+    I.stopper();
+
+    globalThis.electronAPI = originalElectronApi;
+    globalThis.I18n = originalI18n;
+    removeEventListenerSpy.mockRestore();
+  });
+
+  it('utilise la traduction active pour le message de déconnexion par inactivité', async () => {
+    const originalAlert = globalThis.alert;
+    const originalNotification = globalThis.Notification;
+    const originalElectronApi = globalThis.electronAPI;
+    const originalI18n = globalThis.I18n;
+
+    const alertMock = vi.fn();
+    globalThis.alert = alertMock as typeof alert;
+    globalThis.Notification = undefined as any;
+    globalThis.electronAPI = {
+      obtenirUtilisateurConnecte: vi.fn(async () => ({ id: 'u1' })),
+      definirMotifRetourConnexion: vi.fn(async () => undefined),
+      deconnexionSession: vi.fn(async () => undefined),
+      allerALaConnexion: vi.fn(async () => undefined),
+    } as any;
+    globalThis.I18n = {
+      t: vi.fn((cle: string) =>
+        cle === 'auth.sessionInactive'
+          ? 'Your session was closed automatically after 30 minutes of inactivity.'
+          : cle
+      ),
+    } as any;
+
+    await I.initialiserPageInactivite();
+    vi.advanceTimersByTime(30 * 60 * 1000);
+
+    expect(globalThis.I18n.t).toHaveBeenCalledWith('auth.sessionInactive');
+    expect(alertMock).toHaveBeenCalledWith(
+      'Your session was closed automatically after 30 minutes of inactivity.'
+    );
+
+    globalThis.alert = originalAlert;
+    globalThis.Notification = originalNotification;
+    globalThis.electronAPI = originalElectronApi;
+    globalThis.I18n = originalI18n;
   });
 });

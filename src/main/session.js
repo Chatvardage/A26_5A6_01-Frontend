@@ -63,21 +63,25 @@ exposerCanal('session:definir-motif-retour', ({ motif }) => {
   }
   return etat.motifRetourConnexion;
 });
+
 exposerCanal('session:deconnexion', async () => {
   await chatGateway.deconnexion();
   oublierPreferencesDuCompte();
   etat.cibleNavigation = null;
 });
+
 exposerCanal('session:deconnexion-partout', async () => {
   await chatGateway.deconnexionPartout();
   oublierPreferencesDuCompte();
   etat.cibleNavigation = null;
 });
+
 exposerCanal('navigation:motif-retour-connexion', () => {
   const motif = etat.motifRetourConnexion;
   etat.motifRetourConnexion = null;
   return motif;
 });
+
 // Utilisé par le dashboard au démarrage pour savoir qui vient de se
 // connecter, au lieu de coder un utilisateur en dur (voir renderer.js).
 exposerCanal('session:utilisateur-connecte', () =>
@@ -116,16 +120,19 @@ chatGateway.on('serveur-change', (evenement) => {
     etat.mainWindow.webContents.send('serveurs:change', evenement);
   }
 });
+
 chatGateway.on('presence', (presence) => {
   if (etat.mainWindow && !etat.mainWindow.isDestroyed()) {
     etat.mainWindow.webContents.send('presence:change', presence);
   }
 });
+
 chatGateway.on('message-modifie', (message) => {
   if (etat.mainWindow && !etat.mainWindow.isDestroyed()) {
     etat.mainWindow.webContents.send('messages:modifie-change', message);
   }
 });
+
 chatGateway.on('message-supprime', (message) => {
   if (etat.mainWindow && !etat.mainWindow.isDestroyed()) {
     etat.mainWindow.webContents.send('messages:supprime-change', message);
