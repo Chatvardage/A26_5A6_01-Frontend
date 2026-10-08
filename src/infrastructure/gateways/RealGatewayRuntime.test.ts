@@ -777,7 +777,12 @@ describe('RealGatewayRuntime', () => {
         })
       ).toEqual({ nonLus: 0 });
 
-      await expect(runtime.marquerConversationLue({ type: 'salon', conversationId: 'salon 1' })).rejects.toThrow('ERR_MESSAGE_INTROUVABLE');
+      await expect(
+        runtime.marquerConversationLue({
+          type: 'salon',
+          conversationId: 'salon 1',
+        })
+      ).rejects.toThrow('ERR_MESSAGE_INTROUVABLE');
       expect(fetchMock).toHaveBeenCalledTimes(3);
 
       const appels = fetchMock.mock.calls.map(([url, init]) => [
@@ -1087,15 +1092,20 @@ describe('RealGatewayRuntime', () => {
       ).toEqual(corps);
     });
 
-    it('decouvrirServeurs : filtre optionnel par nom', async () => {
+    it('decouvrirServeurs : filtre optionnel par nom et pages', async () => {
       const { runtime } = creerRuntime();
-      const fetchMock = vi.fn().mockResolvedValue(reponseJson([]));
+      const page = { serveurs: [], total: 0, suivant: null };
+      const fetchMock = vi.fn().mockResolvedValue(reponseJson(page));
       vi.stubGlobal('fetch', fetchMock);
-      await runtime.decouvrirServeurs('  pro ');
+      await expect(runtime.decouvrirServeurs('  pro ')).resolves.toEqual(page);
       await runtime.decouvrirServeurs('');
+      await runtime.decouvrirServeurs('pro', 20);
+      await runtime.decouvrirServeurs('', 40);
       expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
         'http://gateway.test/api/servers/decouvrir?q=pro',
         'http://gateway.test/api/servers/decouvrir',
+        'http://gateway.test/api/servers/decouvrir?q=pro&decalage=20',
+        'http://gateway.test/api/servers/decouvrir?decalage=40',
       ]);
     });
 

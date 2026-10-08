@@ -59,8 +59,8 @@ exposerCanal('serveurs:rejoindre', ({ serveurId }) =>
 exposerCanal('serveurs:quitter', ({ serveurId }) =>
   chatGateway.quitterServeur(serveurId)
 );
-exposerCanal('serveurs:decouvrir', ({ texte }) =>
-  chatGateway.decouvrirServeurs(texte)
+exposerCanal('serveurs:decouvrir', ({ texte, decalage }) =>
+  chatGateway.decouvrirServeurs(texte, decalage)
 );
 exposerCanal('serveurs:expulser', (donnees) =>
   chatGateway.expulserMembre(donnees)

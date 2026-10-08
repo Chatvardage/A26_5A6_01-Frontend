@@ -344,8 +344,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('serveurs:rejoindre', { serveurId }),
   quitterServeur: (serveurId) =>
     ipcRenderer.invoke('serveurs:quitter', { serveurId }),
-  decouvrirServeurs: (texte) =>
-    ipcRenderer.invoke('serveurs:decouvrir', { texte }),
+  decouvrirServeurs: ({ texte, decalage }) =>
+    ipcRenderer.invoke('serveurs:decouvrir', { texte, decalage }),
   expulserMembre: (donnees) => ipcRenderer.invoke('serveurs:expulser', donnees),
   changerRoleMembre: (donnees) =>
     ipcRenderer.invoke('serveurs:changer-role', donnees),

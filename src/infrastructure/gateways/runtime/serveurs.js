@@ -263,13 +263,20 @@ module.exports = {
     return { serveurId };
   },
 
-  /** Serveurs publics dont je ne suis pas membre (recherche par nom). */
-  async decouvrirServeurs(texte) {
+  /**
+   * Serveurs publics dont je ne suis pas membre (recherche par nom), par
+   * pages : `{ serveurs, total, suivant }`.
+   */
+  async decouvrirServeurs(texte, decalage = 0) {
     const q = String(texte ?? '')
       .trim()
       .slice(0, 80);
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (decalage > 0) params.set('decalage', String(decalage));
+    const requete = params.toString();
     return this.appelHttp(
-      `/api/servers/decouvrir${q ? `?q=${encodeURIComponent(q)}` : ''}`
+      `/api/servers/decouvrir${requete ? `?${requete}` : ''}`
     );
   },
 
