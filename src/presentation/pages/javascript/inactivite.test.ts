@@ -4,6 +4,35 @@ import './inactivite.js';
 const I = (globalThis as typeof globalThis & { Inactivite?: any }).Inactivite;
 
 describe('Inactivite', () => {
+  it('ne s’initialise pas automatiquement au chargement du module', async () => {
+    vi.resetModules();
+
+    const originalElectronApi = globalThis.electronAPI;
+    const originalI18n = globalThis.I18n;
+
+    const obtenirUtilisateurConnecte = vi.fn(async () => ({ id: 'u1' }));
+    const definirMotifRetourConnexion = vi.fn(async () => undefined);
+    const deconnexionSession = vi.fn(async () => undefined);
+    const allerALaConnexion = vi.fn(async () => undefined);
+
+    globalThis.electronAPI = {
+      obtenirUtilisateurConnecte,
+      definirMotifRetourConnexion,
+      deconnexionSession,
+      allerALaConnexion,
+    } as any;
+    globalThis.I18n = {
+      t: vi.fn((cle: string) => cle),
+    } as any;
+
+    await import('./inactivite.js');
+
+    expect(obtenirUtilisateurConnecte).not.toHaveBeenCalled();
+
+    globalThis.electronAPI = originalElectronApi;
+    globalThis.I18n = originalI18n;
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -84,13 +113,13 @@ describe('Inactivite', () => {
   });
 
   it('utilise la traduction active pour le message de déconnexion par inactivité', async () => {
-    const originalAlert = globalThis.alert;
+    const originalConsoleWarn = console.warn;
     const originalNotification = globalThis.Notification;
     const originalElectronApi = globalThis.electronAPI;
     const originalI18n = globalThis.I18n;
 
-    const alertMock = vi.fn();
-    globalThis.alert = alertMock as typeof alert;
+    const warnMock = vi.fn();
+    console.warn = warnMock;
     globalThis.Notification = undefined as any;
     globalThis.electronAPI = {
       obtenirUtilisateurConnecte: vi.fn(async () => ({ id: 'u1' })),
@@ -110,11 +139,12 @@ describe('Inactivite', () => {
     vi.advanceTimersByTime(30 * 60 * 1000);
 
     expect(globalThis.I18n.t).toHaveBeenCalledWith('auth.sessionInactive');
-    expect(alertMock).toHaveBeenCalledWith(
+    expect(warnMock).toHaveBeenCalledWith(
+      '[inactivite] notification de déconnexion non disponible :',
       'Your session was closed automatically after 30 minutes of inactivity.'
     );
 
-    globalThis.alert = originalAlert;
+    console.warn = originalConsoleWarn;
     globalThis.Notification = originalNotification;
     globalThis.electronAPI = originalElectronApi;
     globalThis.I18n = originalI18n;

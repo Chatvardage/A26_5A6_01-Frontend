@@ -60,8 +60,9 @@ exposerCanal('session:definir-motif-retour', ({ motif }) => {
     MOTIFS_VALIDES_RETOUR_CONNEXION.includes(motif)
   ) {
     etat.motifRetourConnexion = motif;
+    return motif;
   }
-  return etat.motifRetourConnexion;
+  return null;
 });
 
 exposerCanal('session:deconnexion', async () => {

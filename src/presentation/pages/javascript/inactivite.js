@@ -117,9 +117,11 @@
     const minuteur = creerMinuteurInactivite({
       delaiMs: DELAI_INACTIVITE_MS,
       estActif: () => true,
-      message: obtenirMessageDeconnexionInactivite(),
       notifier: notifierDeconnexion,
       onExpire: async () => {
+        const message = obtenirMessageDeconnexionInactivite();
+        notifierDeconnexion(message);
+
         const { definirMotifRetourConnexion, allerALaConnexion, deconnexionSession } =
           racine.electronAPI;
 
@@ -196,11 +198,6 @@
     return stopper;
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      void initialiserPageInactivite();
-    }, { once: true });
-  } else {
-    void initialiserPageInactivite();
-  }
+  // L’initialisation de la page est volontairement explicite : le script ne doit
+  // pas s’exécuter au chargement pour respecter la convention des scripts vanilla.
 })(globalThis);

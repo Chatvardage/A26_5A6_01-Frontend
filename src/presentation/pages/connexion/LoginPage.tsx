@@ -85,10 +85,6 @@ export function LoginPage({
   const dialogRef = useRef<HTMLDivElement>(null);
   const messageRetourId = useId();
 
-  const fermerMessageRetour = useCallback(() => {
-    onMessageRetourConfirme?.();
-  }, [onMessageRetourConfirme]);
-
   useEffect(() => {
     if (!messageRetour || !messageRetourConfirmable || !dialogRef.current) {
       return undefined;
@@ -109,7 +105,7 @@ export function LoginPage({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        fermerMessageRetour();
+        onMessageRetourConfirme?.();
         return;
       }
 
@@ -139,7 +135,7 @@ export function LoginPage({
         previousActiveElement.focus();
       }
     };
-  }, [fermerMessageRetour, messageRetour, messageRetourConfirmable]);
+  }, [messageRetour, messageRetourConfirmable, onMessageRetourConfirme]);
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -261,7 +257,7 @@ export function LoginPage({
         messageRetourConfirmable ? (
           <div
             className="session-return-overlay"
-            onClick={fermerMessageRetour}
+            onClick={() => onMessageRetourConfirme?.()}
           >
             <div
               ref={dialogRef}
@@ -269,6 +265,7 @@ export function LoginPage({
               role="dialog"
               aria-modal="true"
               aria-labelledby={messageRetourId}
+              aria-describedby={messageRetourId}
               tabIndex={-1}
               onClick={(event) => event.stopPropagation()}
             >
@@ -278,7 +275,7 @@ export function LoginPage({
               <button
                 type="button"
                 className="session-return-button"
-                onClick={fermerMessageRetour}
+                onClick={() => onMessageRetourConfirme?.()}
               >
                 {t(langue, 'auth.confirm')}
               </button>
