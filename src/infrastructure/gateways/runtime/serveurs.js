@@ -82,10 +82,21 @@ module.exports = {
     return serveurs.map((serveur) => this.resumeServeur(serveur));
   },
 
-  async obtenirMessagesSalonAvant({ salonId, avantId, taille }) {
+  async obtenirMessagesSalonAvant({
+    salonId,
+    avantId,
+    autourId,
+    apresId,
+    taille,
+  }) {
     const limite = taille || TAILLE_PAGE_MESSAGES;
     const params = new URLSearchParams({ limit: String(limite) });
     if (avantId) params.set('cursor', avantId);
+    if (autourId) params.set('around', autourId);
+    if (apresId) {
+      params.set('cursor', apresId);
+      params.set('direction', 'after');
+    }
     const bruts = await this.appelHttp(
       `/api/messages/rooms/${encodeURIComponent(salonId)}/history?${params.toString()}`
     );

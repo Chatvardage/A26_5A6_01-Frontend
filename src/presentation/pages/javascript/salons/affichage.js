@@ -435,9 +435,19 @@ function afficherMessages(options = {}) {
   // désordre. Un simple append donnerait alors un ordre chronologiquement
   // faux.
   const messagesEnAttenteDuSalon = obtenirMessagesEnAttenteSalon(salon.id);
+  if (etatHistoriqueSalon.sautEnCours) {
+    ChatUiShared.afficherChargementRecherche(el.messages, t);
+    return;
+  }
   const messagesHistorique = fusionnerHistorique(
     etatHistoriqueSalon.messagesAnciens,
-    salon.messages,
+    etatHistoriqueSalon.ancreId && !etatHistoriqueSalon.finRecents
+      ? salon.messages.filter((message) =>
+          etatHistoriqueSalon.messagesAnciens.some(
+            (ancien) => ancien.id === message.id
+          )
+        )
+      : salon.messages,
     'date'
   );
   // fusionnerHistorique() renvoie déjà un tableau trié par date : pas besoin
@@ -463,7 +473,9 @@ function afficherMessages(options = {}) {
 
   el.messages.replaceChildren();
 
-  const dernierLivre = tousLesMessages.filter((message) => !message.nonLivre).at(-1);
+  const dernierLivre = tousLesMessages
+    .filter((message) => !message.nonLivre)
+    .at(-1);
 
   if (!tousLesMessages.length) {
     // Conversation réellement vide (rien à charger, ni de récent ni
@@ -483,6 +495,19 @@ function afficherMessages(options = {}) {
         chargerMessagesPlusAnciensSalon
       )
     );
+
+    if (etatHistoriqueSalon.ancreId && !etatHistoriqueSalon.finRecents) {
+      const bouton = document.createElement('button');
+      bouton.className = 'historique-statut historique-statut--bouton';
+      bouton.type = 'button';
+      bouton.textContent = t('history.loadNewer');
+      bouton.disabled = etatHistoriqueSalon.enChargement;
+      bouton.addEventListener(
+        'click',
+        () => void chargerMessagesPlusRecentsSalon()
+      );
+      el.messages.appendChild(bouton);
+    }
     const indexNonLu = LogiqueInterface.indexSeparateur(
       tousLesMessages,
       separateurSalon,
@@ -827,37 +852,70 @@ async function appliquerLecture(lecture) {
 
 // Saut vers un message ancien (résultat de recherche) : pages plus grandes
 // que la pagination normale, et un plafond pour un très long historique.
-const TAILLE_PAGE_SAUT = 100;
-const PAGES_MAX_SAUT = 20;
-
-/**
- * Affiche le message `messageId` du salon affiché : charge l'historique
- * plus ancien jusqu'à lui (sans trou, comme « Charger plus »), puis défile
- * jusqu'à lui et le met en évidence.
- */
+/** Charge une page depuis le resultat, sans parcourir l'historique. */
 async function allerAuMessageSalon(messageId) {
-  const conversationInitiale = salonActifId;
-  if (!conversationInitiale) return;
-  const historiqueInitial = etatHistoriqueSalon;
-  const estCharge = () => {
-    const salon = salonActif();
-    return Boolean(
-      salon &&
-      (LogiqueInterface.contientMessage(salon.messages, messageId) ||
-        (etatHistoriqueSalon.salonId === salon.id &&
-          LogiqueInterface.contientMessage(
-            etatHistoriqueSalon.messagesAnciens,
-            messageId
-          )))
-    );
+  const id = salonActifId;
+  if (!id) return;
+  const historique = {
+    ...etatHistoriqueSalon,
+    messagesAnciens: [],
+    sautEnCours: true,
   };
-  for (let page = 0; !estCharge() && page < PAGES_MAX_SAUT; page += 1) {
-    if (salonActifId !== conversationInitiale || etatHistoriqueSalon !== historiqueInitial) return;
-    if (!(await chargerMessagesPlusAnciensSalon({ taille: TAILLE_PAGE_SAUT })))
-      break;
+  etatHistoriqueSalon = historique;
+  ChatUiShared.afficherChargementRecherche(el.messages, t);
+  try {
+    const resultat = await window.electronAPI.obtenirMessagesSalonAvant({
+      salonId: id,
+      autourId: messageId,
+      taille: 50,
+    });
+    if (salonActifId !== id || etatHistoriqueSalon !== historique) return;
+    if (!resultat?.messages?.some((message) => message.id === messageId)) {
+      notifier(t('search.messageNotFound'), true);
+      return;
+    }
+    historique.messagesAnciens = resultat.messages;
+    historique.finHistorique = resultat.finHistorique;
+    historique.ancreId = messageId;
+    historique.finRecents = false;
+  } catch (erreur) {
+    if (salonActifId !== id || etatHistoriqueSalon !== historique) return;
+    notifier(messageErreur(erreur), true);
+  } finally {
+    if (salonActifId === id && etatHistoriqueSalon === historique) {
+      historique.sautEnCours = false;
+      await afficherMessages({ conserverPositionScroll: true });
+      if (historique.ancreId)
+        ChatUiShared.allerAuMessageAffiche(el.messages, messageId);
+    }
   }
-  if (salonActifId !== conversationInitiale || etatHistoriqueSalon !== historiqueInitial) return;
-  if (!ChatUiShared.allerAuMessageAffiche(el.messages, messageId)) {
-    notifier(t('search.messageNotFound'), true);
+}
+async function chargerMessagesPlusRecentsSalon() {
+  const historique = etatHistoriqueSalon;
+  const id = salonActifId;
+  if (!historique.ancreId || historique.finRecents || historique.enChargement)
+    return;
+  historique.enChargement = true;
+  try {
+    const dernier = historique.messagesAnciens.at(-1);
+    const resultat = await window.electronAPI.obtenirMessagesSalonAvant({
+      salonId: id,
+      apresId: dernier.id,
+      taille: 50,
+    });
+    if (etatHistoriqueSalon !== historique || salonActifId !== id) return;
+    historique.messagesAnciens = fusionnerHistorique(
+      historique.messagesAnciens,
+      resultat.messages
+    );
+    historique.finRecents = resultat.finHistorique;
+  } catch (erreur) {
+    if (etatHistoriqueSalon === historique)
+      notifier(messageErreur(erreur), true);
+  } finally {
+    if (etatHistoriqueSalon === historique) {
+      historique.enChargement = false;
+      await afficherMessages({ garderScroll: true });
+    }
   }
 }

@@ -2013,3 +2013,23 @@ dialog::backdrop {
   box-shadow: 0 0 0 2px var(--primary);
   transition: box-shadow 0.3s ease;
 }
+
+.recherche-message-chargement {
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.recherche-message-roue {
+  width: 30px;
+  height: 30px;
+  border: 3px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: recherche-message-tourne 0.8s linear infinite;
+}
+@keyframes recherche-message-tourne {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -451,7 +451,9 @@ describe('page des salons (scripts découpés)', () => {
 
     // Le salon affiché (général) est lu dès son affichage.
     await vi.waitFor(() =>
-      expect(marques).toEqual([{ type: 'salon', conversationId: 'general', messageId: 'm1' }])
+      expect(marques).toEqual([
+        { type: 'salon', conversationId: 'general', messageId: 'm1' },
+      ])
     );
     expect(compteur('général')?.hidden).toBe(true);
     expect(compteur('autre')?.textContent).toBe('99+');
@@ -464,7 +466,10 @@ describe('page des salons (scripts découpés)', () => {
 
   it('un message reçu ailleurs incrémente le compteur ; dans le salon affiché, il est lu', async () => {
     const marques: unknown[] = [];
-    const nonLus = { salons: {} as Record<string, number>, prives: {} as Record<string, number> };
+    const nonLus = {
+      salons: {} as Record<string, number>,
+      prives: {} as Record<string, number>,
+    };
     const { document, rappels } = await chargerPage({
       autresReponses: {
         obtenirNonLus: () => nonLus,
@@ -511,7 +516,9 @@ describe('page des salons (scripts découpés)', () => {
       ).toBe('1')
     );
     await vi.waitFor(() =>
-      expect(marques).toEqual([{ type: 'salon', conversationId: 'general', messageId: 'm3' }])
+      expect(marques).toEqual([
+        { type: 'salon', conversationId: 'general', messageId: 'm3' },
+      ])
     );
     expect(
       document.querySelector<HTMLElement>('#message-prive-btn .notif-dot')
@@ -892,11 +899,11 @@ describe('page des salons (scripts découpés)', () => {
       expect(demandes).toEqual([
         expect.objectContaining({
           salonId: 'general',
-          avantId: 'm1',
-          taille: 100,
+          autourId: 'ancien',
+          taille: 50,
         }),
       ]);
-      expect(textes(document)).toEqual(['un vieux message', 'salut']);
+      expect(textes(document)).toEqual(['un vieux message']);
     });
 
     it('message disparu de l’historique : message d’erreur', async () => {
@@ -988,4 +995,52 @@ it('recharge les lecteurs du salon ouvert après une reconnexion', async () => {
     )
   );
   expect(appels.obtenirLectures).toBe(2);
+});
+
+it('recherche Salon : roue pendant un seul chargement puis pagination depuis la cible', async () => {
+  let resoudre!: (page: unknown) => void;
+  const demandes: unknown[] = [];
+  const { document, window } = await chargerPage({
+    autresReponses: {
+      obtenirMessagesSalonAvant: (donnees: unknown) => {
+        demandes.push(donnees);
+        if (demandes.length === 1)
+          return new Promise((resolve) => {
+            resoudre = resolve;
+          });
+        return {
+          messages: [message('m1', 'bob', 'salut', 1)],
+          finHistorique: true,
+        };
+      },
+    },
+  });
+  const attente = window.eval('allerAuMessageSalon("ancien")');
+  expect(document.querySelector('.recherche-message-roue')).not.toBeNull();
+  expect(document.querySelectorAll('[data-message-id]')).toHaveLength(0);
+  await vi.waitFor(() => expect(demandes).toHaveLength(1));
+  expect(demandes[0]).toMatchObject({ autourId: 'ancien', taille: 50 });
+  resoudre({
+    messages: [message('ancien', 'bob', 'Message ancien', 0)],
+    finHistorique: true,
+  });
+  await attente;
+  expect(document.querySelector('.recherche-message-roue')).toBeNull();
+  expect(
+    document
+      .querySelector('[data-message-id="ancien"]')
+      ?.classList.contains('message-cible')
+  ).toBe(true);
+  expect(document.querySelector('[data-message-id="m1"]')).toBeNull();
+  const bouton = [...document.querySelectorAll('button')].find(
+    (element) => element.textContent === traductions.fr.history.loadNewer
+  );
+  bouton!.click();
+  await vi.waitFor(() =>
+    expect(document.querySelector('[data-message-id="m1"]')).not.toBeNull()
+  );
+  expect(demandes[1]).toMatchObject({ apresId: 'ancien', taille: 50 });
+  expect(document.querySelectorAll('[data-message-id="ancien"]')).toHaveLength(
+    1
+  );
 });

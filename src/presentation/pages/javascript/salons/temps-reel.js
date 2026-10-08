@@ -149,6 +149,18 @@ async function integrerMessageSalonRecu(payload) {
     return;
   }
   const { message } = payload;
+  if (
+    message.auteurId === utilisateurActuelId &&
+    etatHistoriqueSalon.ancreId &&
+    etatHistoriqueSalon.salonId === salon.id
+  ) {
+    etatHistoriqueSalon = {
+      salonId: salon.id,
+      messagesAnciens: [],
+      finHistorique: Boolean(salon.finHistorique),
+      enChargement: false,
+    };
+  }
   // On ne suit le nouveau message (défilement en bas) que s'il est dans le
   // salon affiché ET qu'on est soi-même l'auteur ou déjà en bas de la liste :
   // sinon, quelqu'un qui relit l'historique (ou un message d'un autre salon)
@@ -158,7 +170,10 @@ async function integrerMessageSalonRecu(payload) {
     estAuteur: message.auteurId === utilisateurActuelId,
     presDuBas: LogiqueInterface.estPresDuBas(el.messages),
   });
-  const optionsAffichage = suivre ? {} : { garderScroll: true };
+  const optionsAffichage =
+    suivre && !(etatHistoriqueSalon.ancreId && !etatHistoriqueSalon.finRecents)
+      ? {}
+      : { garderScroll: true };
   if (
     message.auteurId !== utilisateurActuelId &&
     !utilisateur(message.auteurId)

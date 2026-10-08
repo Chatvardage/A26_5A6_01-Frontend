@@ -1052,9 +1052,14 @@
   function creerStatutLecture(statut, t) {
     const marque = document.createElement('span');
     marque.classList.add('read-status', `read-status--${statut}`);
-    marque.textContent = statut === 'lu' ? '✓✓' : '✓';
+    marque.textContent =
+      statut === 'lu' ? '✓✓' : statut === 'distribue' ? '✓' : '○';
     const libelle = t(
-      statut === 'lu' ? 'readReceipts.read' : 'readReceipts.delivered'
+      statut === 'lu'
+        ? 'readReceipts.read'
+        : statut === 'distribue'
+          ? 'readReceipts.delivered'
+          : 'readReceipts.sent'
     );
     marque.title = libelle;
     marque.setAttribute('aria-label', libelle);
@@ -1094,7 +1099,7 @@
       jusqua: Date.now() + DUREE_MISE_EN_EVIDENCE_MS,
     };
     ligne.classList.add('message-cible');
-    ligne.scrollIntoView?.({ block: 'center' });
+    ligne.scrollIntoView?.({ block: 'center', behavior: 'instant' });
     window.setTimeout(() => {
       conteneur
         .querySelectorAll('.message-cible')
@@ -1117,7 +1122,20 @@
     );
   }
 
+  function afficherChargementRecherche(conteneur, t) {
+    const statut = document.createElement('div');
+    statut.className = 'recherche-message-chargement';
+    statut.setAttribute('role', 'status');
+    statut.setAttribute('aria-label', t('history.loading'));
+    const roue = document.createElement('span');
+    roue.className = 'recherche-message-roue';
+    roue.setAttribute('aria-hidden', 'true');
+    statut.appendChild(roue);
+    conteneur.replaceChildren(statut);
+  }
+
   window.ChatUiShared = Object.freeze({
+    afficherChargementRecherche,
     estMessageCible,
     allerAuMessageAffiche,
     creerSeparateurNonLus,

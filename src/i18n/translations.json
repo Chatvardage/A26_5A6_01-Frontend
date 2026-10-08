@@ -147,7 +147,8 @@
     "history": {
       "loadOlder": "Charger les messages plus anciens",
       "loading": "Chargement des messages…",
-      "endOfHistory": "Fin de l'historique"
+      "endOfHistory": "Fin de l'historique",
+      "loadNewer": "Charger les messages plus récents"
     },
     "errors": {
       "generic": "Une erreur est survenue.",
@@ -343,11 +344,12 @@
     },
     "readReceipts": {
       "newMessages": "Nouveaux messages",
-      "delivered": "Distribué",
+      "delivered": "Livré, non lu",
       "read": "Lu",
       "seenBy": "Vu par {names}",
       "seenByOneMore": "Vu par {names} et 1 autre",
-      "seenByMore": "Vu par {names} et {count} autres"
+      "seenByMore": "Vu par {names} et {count} autres",
+      "sent": "Envoyé, non lu"
     }
   },
   "en": {
@@ -498,7 +500,8 @@
     "history": {
       "loadOlder": "Load older messages",
       "loading": "Loading messages…",
-      "endOfHistory": "End of history"
+      "endOfHistory": "End of history",
+      "loadNewer": "Load newer messages"
     },
     "errors": {
       "generic": "An error occurred.",
@@ -694,11 +697,12 @@
     },
     "readReceipts": {
       "newMessages": "New messages",
-      "delivered": "Delivered",
+      "delivered": "Delivered, unread",
       "read": "Read",
       "seenBy": "Seen by {names}",
       "seenByOneMore": "Seen by {names} and 1 other",
-      "seenByMore": "Seen by {names} and {count} others"
+      "seenByMore": "Seen by {names} and {count} others",
+      "sent": "Sent, unread"
     }
   }
 }

@@ -454,7 +454,10 @@ describe('page des messages privés', () => {
         lastMessage: null,
       },
     ];
-    const nonLus = { salons: { s1: 1 } as Record<string, number>, prives: { 'bob:moi': 2, 'carla:moi': 4 } };
+    const nonLus = {
+      salons: { s1: 1 } as Record<string, number>,
+      prives: { 'bob:moi': 2, 'carla:moi': 4 },
+    };
     const { document, rappels } = await chargerPage({
       autresReponses: {
         obtenirConversationsPrivees: deuxConversations(),
@@ -474,7 +477,9 @@ describe('page des messages privés', () => {
         `.conversation[data-conversation-id="${id}"] .notif-count`
       );
     await vi.waitFor(() =>
-      expect(marques).toEqual([{ type: 'prive', conversationId: 'bob:moi', messageId: 'm1' }])
+      expect(marques).toEqual([
+        { type: 'prive', conversationId: 'bob:moi', messageId: 'm1' },
+      ])
     );
     expect(compteur('bob:moi')?.hidden).toBe(true);
     expect(compteur('carla:moi')?.textContent).toBe('4');
@@ -612,19 +617,19 @@ describe('page des messages privés', () => {
         },
       });
       await vi.waitFor(() =>
-        expect(document.querySelectorAll('.read-status')).toHaveLength(2)
+        expect(document.querySelectorAll('.read-status')).toHaveLength(1)
       );
       const statuts = () =>
         [...document.querySelectorAll('.read-status')].map(
           (e) => e.textContent
         );
       const ligne = () => document.querySelector('.read-receipt')?.textContent;
-      expect(statuts()).toEqual(['✓✓', '✓']);
-      expect(ligne()).toBe(traductions.fr.readReceipts.delivered);
+      expect(statuts()).toEqual(['○']);
+      expect(ligne()).toBeUndefined();
       // La ligne est sous mon dernier message.
       expect(
         document
-          .querySelector('.read-receipt')
+          .querySelector('.read-status')
           ?.closest('.message-row')
           ?.querySelector('.text')?.textContent
       ).toBe('et toi ?');
@@ -637,8 +642,8 @@ describe('page des messages privés', () => {
         luJusqua: 3,
         deMoi: false,
       });
-      await vi.waitFor(() => expect(statuts()).toEqual(['✓✓', '✓✓']));
-      expect(ligne()).toBe(traductions.fr.readReceipts.read);
+      await vi.waitFor(() => expect(statuts()).toEqual(['✓✓']));
+      expect(ligne()).toBeUndefined();
 
       // Lecture d'une autre conversation : sans effet ici.
       await rappels.onLectureChange({
@@ -648,7 +653,7 @@ describe('page des messages privés', () => {
         luJusqua: 1,
         deMoi: false,
       });
-      expect(statuts()).toEqual(['✓✓', '✓✓']);
+      expect(statuts()).toEqual(['✓✓']);
     });
 
     it('séparateur « Nouveaux messages » gardé après le marquage comme lu', async () => {
@@ -693,7 +698,7 @@ describe('page des messages privés', () => {
       await vi.waitFor(() => expect(appels.obtenirNonLus).toBe(avant + 1));
     });
 
-    it('« Lu » juste sous le message, au-dessus de Modifier / Supprimer', async () => {
+    it('affiche seulement les coches sur le dernier message propre', async () => {
       const { document } = await chargerPage({
         attendreMessages: false,
         autresReponses: {
@@ -706,12 +711,15 @@ describe('page des messages privés', () => {
         },
       });
       await vi.waitFor(() =>
-        expect(document.querySelector('.read-receipt')).not.toBeNull()
+        expect(document.querySelector('.read-status')?.textContent).toBe('✓✓')
       );
-      const corps = document.querySelector('.message-row .message-body')!;
-      const ordre = [...corps.children].map((e) => e.className.split(' ')[0]);
-      expect(ordre.indexOf('read-receipt')).toBe(ordre.indexOf('text') + 1);
-      expect(ordre.at(-1)).not.toBe('read-receipt');
+      expect(document.querySelector('.read-receipt')).toBeNull();
+      expect(
+        document
+          .querySelector('.read-status')
+          ?.closest('.message-row')
+          ?.querySelector('.text')?.textContent
+      ).toBe('mon message');
     });
   });
 
@@ -761,9 +769,9 @@ describe('page des messages privés', () => {
       ).toBe(true)
     );
     expect(demandes).toEqual([
-      expect.objectContaining({ avantId: 'm1', taille: 100 }),
+      expect.objectContaining({ autourId: 'ancien', taille: 50 }),
     ]);
-    expect(textes(document)).toEqual(['un vieux message', 'salut']);
+    expect(textes(document)).toEqual(['un vieux message']);
   });
 });
 
@@ -786,7 +794,7 @@ it('fusionne un accusé reçu pendant le chargement initial, sans confondre deux
   });
   await vi.waitFor(() => expect(appels.obtenirLectures).toBe(1));
   await vi.waitFor(() =>
-    expect(document.querySelectorAll('.read-status')).toHaveLength(2)
+    expect(document.querySelectorAll('.read-status')).toHaveLength(1)
   );
   await rappels.onLectureChange({
     type: 'prive',
@@ -799,7 +807,7 @@ it('fusionne un accusé reçu pendant le chargement initial, sans confondre deux
   });
   const statuts = () =>
     [...document.querySelectorAll('.read-status')].map((e) => e.textContent);
-  expect(statuts()).toEqual(['✓✓', '✓']);
+  expect(statuts()).toEqual(['○']);
   resoudre({
     lecteurs: [
       {
@@ -810,7 +818,7 @@ it('fusionne un accusé reçu pendant le chargement initial, sans confondre deux
       },
     ],
   });
-  await vi.waitFor(() => expect(statuts()).toEqual(['✓✓', '✓']));
+  await vi.waitFor(() => expect(statuts()).toEqual(['○']));
   await rappels.onLectureChange({
     type: 'prive',
     conversationId: 'bob:moi',
@@ -820,7 +828,7 @@ it('fusionne un accusé reçu pendant le chargement initial, sans confondre deux
     dernierMessageLuId: 'm2',
     deMoi: false,
   });
-  expect(statuts()).toEqual(['✓✓', '✓✓']);
+  expect(statuts()).toEqual(['✓✓']);
   await rappels.onLectureChange({
     type: 'prive',
     conversationId: 'bob:moi',
@@ -830,7 +838,7 @@ it('fusionne un accusé reçu pendant le chargement initial, sans confondre deux
     dernierMessageLuId: 'm1',
     deMoi: false,
   });
-  expect(statuts()).toEqual(['✓✓', '✓✓']);
+  expect(statuts()).toEqual(['✓✓']);
 });
 
 it('recharge les coches de la conversation ouverte après une reconnexion', async () => {
@@ -846,11 +854,56 @@ it('recharge les coches de la conversation ouverte après une reconnexion', asyn
     },
   });
   await vi.waitFor(() =>
-    expect(document.querySelector('.read-status')?.textContent).toBe('✓')
+    expect(document.querySelector('.read-status')?.textContent).toBe('○')
   );
   luJusqua = 1;
   await rappels.onSynchronisationRequise();
   await vi.waitFor(() =>
     expect(document.querySelector('.read-status')?.textContent).toBe('✓✓')
+  );
+});
+
+it('recherche Dm : roue pendant un seul chargement puis pagination depuis la cible', async () => {
+  let resoudre!: (page: unknown) => void;
+  const demandes: unknown[] = [];
+  const { document, window } = await chargerPage({
+    autresReponses: {
+      obtenirMessagesPriveesAvant: (donnees: unknown) => {
+        demandes.push(donnees);
+        if (demandes.length === 1)
+          return new Promise((resolve) => {
+            resoudre = resolve;
+          });
+        return { messages: [dm('m1', 'bob', 'salut', 1)], finHistorique: true };
+      },
+    },
+  });
+  const attente = window.eval('allerAuMessageDm("ancien")');
+  expect(document.querySelector('.recherche-message-roue')).not.toBeNull();
+  expect(document.querySelectorAll('[data-message-id]')).toHaveLength(0);
+  await vi.waitFor(() => expect(demandes).toHaveLength(1));
+  expect(demandes[0]).toMatchObject({ autourId: 'ancien', taille: 50 });
+  resoudre({
+    messages: [dm('ancien', 'bob', 'Message ancien', 0)],
+    finHistorique: true,
+  });
+  await attente;
+  expect(document.querySelector('.recherche-message-roue')).toBeNull();
+  expect(
+    document
+      .querySelector('[data-message-id="ancien"]')
+      ?.classList.contains('message-cible')
+  ).toBe(true);
+  expect(document.querySelector('[data-message-id="m1"]')).toBeNull();
+  const bouton = [...document.querySelectorAll('button')].find(
+    (element) => element.textContent === traductions.fr.history.loadNewer
+  );
+  bouton!.click();
+  await vi.waitFor(() =>
+    expect(document.querySelector('[data-message-id="m1"]')).not.toBeNull()
+  );
+  expect(demandes[1]).toMatchObject({ apresId: 'ancien', taille: 50 });
+  expect(document.querySelectorAll('[data-message-id="ancien"]')).toHaveLength(
+    1
   );
 });

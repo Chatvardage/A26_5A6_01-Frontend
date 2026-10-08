@@ -75,6 +75,9 @@ module.exports = {
     socket.on('private-message.updated', (m) =>
       this.traiterMessageDmModifie(m)
     );
+    socket.on('private-message.delivered', (m) =>
+      this.traiterMessageDmModifie(m)
+    );
     socket.on('private-message.deleted', (m) =>
       this.traiterMessageDmSupprime(m)
     );
@@ -154,6 +157,7 @@ module.exports = {
   },
 
   traiterMessageDmEntrant(brut) {
+    void this.confirmerLivraisonDm(brut);
     const message = this.mapperMessageDm(brut);
     this.indexMessages.set(message.id, { type: 'dm' });
     this.partenairesDmConnus.add(

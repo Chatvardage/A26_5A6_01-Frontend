@@ -1496,3 +1496,51 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
     });
   });
 });
+
+
+describe('pagination depuis une cible et confirmation de livraison', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('transmet la cible et le sens de pagination pour les DM et salons', async () => {
+    const { runtime } = runtimeConnecte();
+    const http = vi.spyOn(runtime, 'appelHttp').mockResolvedValue([]);
+    for (const contexte of ['dm', 'salon']) {
+      for (const options of [{ autourId: 'ancien' }, { apresId: 'ancien' }]) {
+        if (contexte === 'dm') {
+          await runtime.obtenirMessagesPriveesAvant({ conversationId: 'moi:u2', taille: 50, ...options });
+        } else {
+          await runtime.obtenirMessagesSalonAvant({ salonId: 'salon', taille: 50, ...options });
+        }
+        const url = new URL(String(http.mock.calls.at(-1)?.[0]), 'http://gateway.test');
+        expect(url.searchParams.get('limit')).toBe('50');
+        if ('autourId' in options) {
+          expect(url.searchParams.get('around')).toBe('ancien');
+          expect(url.searchParams.has('cursor')).toBe(false);
+        } else {
+          expect(url.searchParams.get('cursor')).toBe('ancien');
+          expect(url.searchParams.get('direction')).toBe('after');
+        }
+      }
+    }
+  });
+
+  it('tolere une confirmation en panne et conserve la livraison deja recue', async () => {
+    const { runtime } = runtimeConnecte();
+    vi.spyOn(runtime, 'appelHttp').mockRejectedValue(new Error('offline'));
+    await expect(runtime.confirmerLivraisonDm(messageBrut())).resolves.toBeUndefined();
+    const deliveredAt = '2026-01-01T00:00:01.000Z';
+    expect(runtime.mapperMessageDm(messageBrut({ deliveredAt })).livraison).toBe(Date.parse(deliveredAt));
+    await runtime.confirmerLivraisonDm(messageBrut({ deliveredAt }));
+    await runtime.confirmerLivraisonDm(messageBrut({ recipientId: 'autre' }));
+    expect(runtime.appelHttp).toHaveBeenCalledTimes(1);
+  });
+
+  it('transmet les confirmations de livraison recues en temps reel', () => {
+    const { runtime, socket } = runtimeConnecte();
+    const traiter = vi.spyOn(runtime, 'traiterMessageDmModifie').mockImplementation(() => {});
+    runtime.connecterSocket();
+    const message = messageBrut({ deliveredAt: '2026-01-01T00:00:01.000Z' });
+    socket()._declencher('private-message.delivered', message);
+    expect(traiter).toHaveBeenCalledWith(message);
+  });
+});
