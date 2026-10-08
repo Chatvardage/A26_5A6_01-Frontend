@@ -15,3 +15,6 @@ ChatUiShared.afficherRailDepuisCache({
   surChoix: (serveur) => changerServeur(serveur.id),
 });
 initialiser();
+if (window.Inactivite?.initialiserPageInactivite) {
+  void window.Inactivite.initialiserPageInactivite();
+}
