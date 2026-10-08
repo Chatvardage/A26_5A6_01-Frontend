@@ -5,7 +5,7 @@ export default defineConfig({
     testTimeout: 20000,
     hookTimeout: 20000,
     environment: 'jsdom',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
@@ -22,6 +22,7 @@ export default defineConfig({
       ],
       exclude: [
         'src/**/*.test.ts',
+        'src/**/*.test.tsx',
         'src/**/*.d.ts',
         'src/infrastructure/gateways/AuthGateway.ts',
       ],

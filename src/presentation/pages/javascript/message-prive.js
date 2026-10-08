@@ -277,6 +277,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     ThemeManager.pagePrete?.();
   }
   await actualiserBadgeSalons();
+
+  if (window.Inactivite?.initialiserPageInactivite) {
+    void window.Inactivite.initialiserPageInactivite();
+  }
 });
 
 // Logo : retour à la page des salons (dernier serveur affiché). Les icônes

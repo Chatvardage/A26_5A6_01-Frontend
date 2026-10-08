@@ -257,6 +257,12 @@ export function LoginPage({
           </p>
         )}
 
+        {messageRetour && !erreurSoumission && !messageRetourConfirmable && (
+          <p className="field-message" role="status" data-kind="info">
+            {t(langue, messageRetour)}
+          </p>
+        )}
+
         <button type="submit" disabled={enCours}>
           {enCours ? t(langue, 'auth.connecting') : t(langue, 'auth.join')}
         </button>
@@ -272,42 +278,39 @@ export function LoginPage({
         </button>
       </form>
 
-      {messageRetour && !erreurSoumission && (
-        messageRetourConfirmable ? (
+      {messageRetour && !erreurSoumission && messageRetourConfirmable && (
+        <div
+          className="session-return-overlay"
+          onClick={() => onMessageRetourConfirmeRef.current?.()}
+        >
           <div
-            className="session-return-overlay"
-            onClick={() => onMessageRetourConfirmeRef.current?.()}
+            ref={dialogRef}
+            className="session-return-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby={messageRetourTitreId}
+            aria-describedby={messageRetourDescriptionId}
+            tabIndex={-1}
+            onClick={(event) => event.stopPropagation()}
           >
-            <div
-              ref={dialogRef}
-              className="session-return-dialog"
-              role="alertdialog"
-              aria-modal="true"
-              aria-labelledby={messageRetourTitreId}
-              aria-describedby={messageRetourDescriptionId}
-              tabIndex={-1}
-              onClick={(event) => event.stopPropagation()}
+            <h2 id={messageRetourTitreId} className="session-return-title">
+              {t(langue, 'auth.sessionReturnTitle')}
+            </h2>
+            <p id={messageRetourDescriptionId} className="session-return-message">
+              {t(langue, messageRetour)}
+              <span className="session-return-hint">
+                {t(langue, 'auth.sessionInactiveDismissHint')}
+              </span>
+            </p>
+            <button
+              type="button"
+              className="session-return-button"
+              onClick={() => onMessageRetourConfirmeRef.current?.()}
             >
-              <h2 id={messageRetourTitreId} className="session-return-title">
-                {t(langue, 'auth.sessionReturnTitle')}
-              </h2>
-              <p id={messageRetourDescriptionId} className="session-return-message">
-                {t(langue, messageRetour)}
-              </p>
-              <button
-                type="button"
-                className="session-return-button"
-                onClick={() => onMessageRetourConfirmeRef.current?.()}
-              >
-                {t(langue, 'auth.sessionInactiveConfirm')}
-              </button>
-            </div>
+              {t(langue, 'auth.sessionInactiveConfirm')}
+            </button>
           </div>
-        ) : (
-          <p className="field-message" role="status" data-kind="info">
-            {t(langue, messageRetour)}
-          </p>
-        )
+        </div>
       )}
     </div>
   );

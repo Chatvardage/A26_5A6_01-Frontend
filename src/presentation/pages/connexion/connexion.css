@@ -37,7 +37,6 @@
   --placeholder: rgba(20, 40, 40, 0.55);
   --on-accent: #0b3d30;
   --overlay-bg: rgba(12, 28, 27, 0.42);
-  --z-modal: 2000;
 }
 
 /* =========================================================
@@ -422,6 +421,15 @@ body {
   font-weight: 700;
   line-height: 1.5;
   text-align: center;
+}
+
+.session-return-hint {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.8em;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .session-return-button {

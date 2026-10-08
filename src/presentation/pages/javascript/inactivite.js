@@ -8,6 +8,7 @@
     'mousemove',
     'keydown',
     'touchstart',
+    'touchmove',
     'click',
     'scroll',
     'wheel',
@@ -22,6 +23,12 @@
 
   function notifierDeconnexion(message) {
     try {
+      // Dans Electron, la permission de notification est généralement déjà
+      // accordée par le runtime / le système d'exploitation, donc on n'ouvre
+      // pas de demande explicite ici. Le code est volontairement conservateur :
+      // si l'environnement ne la donne pas déjà comme "granted", on ignore la
+      // notification système sans produire de dialogue additionnel, ce qui évite
+      // un comportement silencieux ambigu dans un contexte web non autorisé.
       if (
         typeof racine.Notification === 'function' &&
         racine.Notification.permission === 'granted'
@@ -214,7 +221,8 @@
       const estEvenementFrequent =
         evenement.type === 'mousemove' ||
         evenement.type === 'scroll' ||
-        evenement.type === 'wheel';
+        evenement.type === 'wheel' ||
+        evenement.type === 'touchmove';
 
       if (estEvenementFrequent) {
         const maintenant = Date.now();

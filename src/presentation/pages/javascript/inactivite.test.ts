@@ -80,6 +80,25 @@ describe('Inactivite', () => {
     expect(onExpire).toHaveBeenCalledTimes(1);
   });
 
+  it('throttle les événements fréquents tactiles pour éviter les réinitialisations inutiles', async () => {
+    const minuter = I.creerMinuteurInactivite({
+      delaiMs: 1000,
+      estActif: () => true,
+      notifier: vi.fn(),
+      onExpire: vi.fn(),
+    });
+
+    minuter.demarrer();
+    const touchmoveEvent = new Event('touchmove', { bubbles: true });
+    const secondTouchmoveEvent = new Event('touchmove', { bubbles: true });
+
+    document.dispatchEvent(touchmoveEvent);
+    vi.advanceTimersByTime(4000);
+    document.dispatchEvent(secondTouchmoveEvent);
+    vi.advanceTimersByTime(100);
+    expect(minuter).toBeTruthy();
+  });
+
   it('arrête l’instance précédente avant d’en initialiser une nouvelle', async () => {
     const removeEventListenerSpy = vi.spyOn(document, 'removeEventListener');
 
