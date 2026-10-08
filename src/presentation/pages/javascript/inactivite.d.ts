@@ -21,18 +21,18 @@ declare global {
     stopper: () => void;
   };
 
-  var electronAPI: {
+  const electronAPI: {
     obtenirUtilisateurConnecte?: () => Promise<{ id: string } | null>;
     definirMotifRetourConnexion?: (motif: string) => Promise<string | undefined> | string | undefined;
     deconnexionSession?: () => Promise<void> | void;
     allerALaConnexion?: () => Promise<void> | void;
   };
 
-  var I18n: {
+  const I18n: {
     t: (cle: string) => string;
   };
 
-  var Inactivite: InactiviteApi;
+  const Inactivite: InactiviteApi;
 }
 
 declare module './inactivite.js' {
