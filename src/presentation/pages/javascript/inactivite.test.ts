@@ -1,0 +1,179 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import './inactivite.js';
+
+type InactiviteApi = {
+  creerMinuteurInactivite: (options?: {
+    delaiMs?: number;
+    estActif?: () => boolean;
+    message?: (() => string) | string;
+    notifier?: (message: string) => void;
+    onExpire?: (() => Promise<void> | void) | undefined;
+    setTimeoutFn?: (
+      callback: (...args: unknown[]) => void,
+      delay?: number,
+      ...args: unknown[]
+    ) => number;
+    clearTimeoutFn?: (id: number) => void;
+  }) => {
+    demarrer: () => void;
+    arreter: () => void;
+    reinitialiser: () => void;
+  };
+  initialiserPageInactivite: () => Promise<(() => void) | null>;
+  stopper: () => void;
+};
+
+type ElectronApi = {
+  obtenirUtilisateurConnecte: () => Promise<{ id: string }>;
+  definirMotifRetourConnexion: (motif: string) => Promise<string | undefined> | string | undefined;
+  deconnexionSession: () => Promise<void> | void;
+  allerALaConnexion: () => Promise<void> | void;
+};
+
+type BrowserGlobals = typeof globalThis & {
+  electronAPI?: ElectronApi;
+  I18n?: { t: (cle: string) => string };
+  Notification?: typeof Notification;
+  Inactivite?: InactiviteApi;
+};
+
+const g = globalThis as BrowserGlobals;
+const I = g.Inactivite as InactiviteApi;
+
+describe('Inactivite', () => {
+  const originalElectronApi = g.electronAPI;
+  const originalI18n = g.I18n;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal('electronAPI', {
+      obtenirUtilisateurConnecte: vi.fn(async () => ({ id: 'u1' })),
+      definirMotifRetourConnexion: vi.fn(async () => undefined),
+      deconnexionSession: vi.fn(async () => undefined),
+      allerALaConnexion: vi.fn(async () => undefined),
+    } satisfies ElectronApi);
+    vi.stubGlobal('I18n', {
+      t: vi.fn((cle: string) => cle),
+    });
+  });
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.stubGlobal('electronAPI', originalElectronApi);
+    vi.stubGlobal('I18n', originalI18n);
+  });
+
+  it('ne s’initialise pas automatiquement au chargement du module', async () => {
+    vi.resetModules();
+
+    const electronApi = g.electronAPI as ElectronApi;
+    const obtenirUtilisateurConnecte = electronApi.obtenirUtilisateurConnecte;
+    const definirMotifRetourConnexion = electronApi.definirMotifRetourConnexion;
+
+    await import('./inactivite.js');
+
+    expect(obtenirUtilisateurConnecte).not.toHaveBeenCalled();
+    expect(definirMotifRetourConnexion).not.toHaveBeenCalled();
+  });
+
+  it('déclenche la déconnexion après 30 minutes sans activité', () => {
+    const notifier = vi.fn();
+    const onExpire = vi.fn();
+    const minuteur = I.creerMinuteurInactivite({
+      delaiMs: 1000,
+      estActif: () => true,
+      notifier,
+      onExpire,
+    });
+
+    minuteur.demarrer();
+    vi.advanceTimersByTime(999);
+    expect(onExpire).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1);
+    expect(notifier).toHaveBeenCalledWith(
+      expect.stringMatching(/déconnecté|inactivité/i)
+    );
+    expect(onExpire).toHaveBeenCalledTimes(1);
+  });
+
+  it('réinitialise le compte à rebours après une interaction', () => {
+    const onExpire = vi.fn();
+    const minuteur = I.creerMinuteurInactivite({
+      delaiMs: 1000,
+      estActif: () => true,
+      notifier: vi.fn(),
+      onExpire,
+    });
+
+    minuteur.demarrer();
+    vi.advanceTimersByTime(600);
+    minuteur.reinitialiser();
+    vi.advanceTimersByTime(600);
+    expect(onExpire).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(401);
+    expect(onExpire).toHaveBeenCalledTimes(1);
+  });
+
+  it('throttle les événements fréquents tactiles pour éviter les réinitialisations inutiles', async () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    const stopper = await I.initialiserPageInactivite();
+
+    const compteAvant = setTimeoutSpy.mock.calls.length;
+    document.dispatchEvent(new Event('touchmove', { bubbles: true }));
+    expect(setTimeoutSpy.mock.calls.length).toBe(compteAvant + 1);
+
+    document.dispatchEvent(new Event('touchmove', { bubbles: true }));
+    expect(setTimeoutSpy.mock.calls.length).toBe(compteAvant + 1);
+
+    stopper?.();
+    setTimeoutSpy.mockRestore();
+  });
+
+  it('arrête l’instance précédente avant d’en initialiser une nouvelle', async () => {
+    const removeEventListenerSpy = vi.spyOn(document, 'removeEventListener');
+
+    const premierStopper = await I.initialiserPageInactivite();
+    const secondStopper = await I.initialiserPageInactivite();
+
+    expect(typeof premierStopper).toBe('function');
+    expect(typeof secondStopper).toBe('function');
+    expect(removeEventListenerSpy).toHaveBeenCalled();
+
+    I.stopper();
+    removeEventListenerSpy.mockRestore();
+  });
+
+  it('utilise la traduction active pour le message de déconnexion par inactivité', async () => {
+    const originalConsoleWarn = console.warn;
+    const originalNotification = g.Notification;
+
+    const warnMock = vi.fn();
+    console.warn = warnMock;
+    vi.stubGlobal('Notification', undefined);
+    g.I18n = {
+      t: vi.fn((cle: string) =>
+        cle === 'auth.sessionInactive'
+          ? 'Your session was closed automatically after 30 minutes of inactivity.'
+          : cle
+      ),
+    };
+
+    try {
+      await I.initialiserPageInactivite();
+      await vi.runAllTimersAsync();
+
+      expect(g.I18n.t).toHaveBeenCalledWith('auth.sessionInactive');
+      expect(warnMock).toHaveBeenCalledWith(
+        '[inactivite] notification de déconnexion non disponible :',
+        'Your session was closed automatically after 30 minutes of inactivity.'
+      );
+    } finally {
+      console.warn = originalConsoleWarn;
+      vi.stubGlobal('Notification', originalNotification);
+    }
+  });
+});

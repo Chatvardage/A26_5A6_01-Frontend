@@ -63,6 +63,8 @@ function App() {
   // Clé de traduction d'un message à afficher en arrivant sur cet écran
   // (ex. session expirée pendant l'utilisation), ou null.
   const [messageRetour, setMessageRetour] = useState<string | null>(null);
+  const [messageRetourConfirmable, setMessageRetourConfirmable] =
+    useState(false);
 
   // Tente de reprendre une session déjà ouverte lors d'un lancement
   // précédent (voir 'session:restaurer' dans main.js / restaurerSession dans
@@ -82,6 +84,11 @@ function App() {
             .then((motif) => {
               if (!annule && motif === 'session-expiree') {
                 setMessageRetour('auth.sessionExpired');
+                setMessageRetourConfirmable(false);
+              }
+              if (!annule && motif === 'session-inactive') {
+                setMessageRetour('auth.sessionInactive');
+                setMessageRetourConfirmable(true);
               }
             })
             .catch(() => {
@@ -133,6 +140,11 @@ function App() {
         // Si l'IPC échoue, on ne change rien : mieux vaut rester dans la
         // langue actuelle (cohérente) qu'afficher un mélange des deux.
       });
+  }, []);
+
+  const fermerMessageRetour = useCallback(() => {
+    setMessageRetour(null);
+    setMessageRetourConfirmable(false);
   }, []);
 
   // Pas de sélecteur de thème sur ces écrans : on applique simplement le
@@ -225,13 +237,28 @@ function App() {
     );
   }
 
+  const baseLoginProps = {
+    gateway: gatewaySession,
+    langue,
+    changerLangue,
+    messageRetour,
+    allerAInscription: () => setVue('inscription'),
+  };
+
+  if (messageRetourConfirmable) {
+    return (
+      <LoginPage
+        {...baseLoginProps}
+        messageRetourConfirmable={true}
+        onMessageRetourConfirme={fermerMessageRetour}
+      />
+    );
+  }
+
   return (
     <LoginPage
-      gateway={gatewaySession}
-      langue={langue}
-      changerLangue={changerLangue}
-      messageRetour={messageRetour}
-      allerAInscription={() => setVue('inscription')}
+      {...baseLoginProps}
+      messageRetourConfirmable={false}
     />
   );
 }

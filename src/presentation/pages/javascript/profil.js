@@ -136,6 +136,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   appliquerTraductionsStatiques();
   await ThemeManager.initialiserDepuisElectronAPI(window.electronAPI);
 
+  if (window.Inactivite?.initialiserPageInactivite) {
+    void window.Inactivite.initialiserPageInactivite();
+  }
+
   // --- En-tête (avatar + identité) --------------------------------------
   function afficherEntete() {
     const pseudo = el.pseudoInput?.value.trim() || utilisateur?.pseudo || '';

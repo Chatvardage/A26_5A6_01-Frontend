@@ -1,4 +1,11 @@
-import { useCallback, useRef, useState, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
 import mascotLogo from '../../../../assets/icon.png';
 import type { AuthGateway } from '../../../infrastructure/gateways/AuthGateway';
 import { t, LANGUES_SUPPORTEES } from '../../../i18n/i18n-web';
@@ -9,7 +16,7 @@ import { t, LANGUES_SUPPORTEES } from '../../../i18n/i18n-web';
  */
 export type GatewaySession = Pick<AuthGateway, 'authentifier'>;
 
-interface LoginPageProps {
+type LoginPageProps = {
   gateway: GatewaySession;
   /** Langue actuelle ('fr' ou 'en'), pilotée par le composant parent (voir main.tsx). */
   langue: string;
@@ -22,7 +29,19 @@ interface LoginPageProps {
   /** Clé de traduction d'un message d'information à afficher en arrivant
    * (ex. 'auth.sessionExpired'), ou null. */
   messageRetour?: string | null;
-}
+} & (
+  | {
+      /** Quand ce flag est activé, la modale exige une confirmation explicite.
+       * La référence de callback doit être stable (mémorisée par le parent),
+       * sinon le focus trap peut se réinitialiser à chaque rendu. */
+      messageRetourConfirmable: true;
+      onMessageRetourConfirme: () => void;
+    }
+  | {
+      messageRetourConfirmable?: false;
+      onMessageRetourConfirme?: never;
+    }
+);
 
 
 interface ErreurSoumission {
@@ -53,6 +72,49 @@ function traduireErreurSoumission(
   return brutTraduit === cleTraduction ? t(langue, 'errors.generic') : brutTraduit;
 }
 
+const SELECTEUR_FOCUSABLES =
+  'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+export function gererFocusTrapRetourSession(
+  dialog: HTMLDivElement,
+  event: KeyboardEvent,
+  onConfirme?: () => void
+): void {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    onConfirme?.();
+    return;
+  }
+
+  if (event.key !== 'Tab') {
+    return;
+  }
+
+  const focusablesActuels = Array.from(
+    dialog.querySelectorAll<HTMLElement>(SELECTEUR_FOCUSABLES)
+  );
+
+  if (focusablesActuels.length === 0) {
+    return;
+  }
+
+  const firstFocusableActuel = focusablesActuels[0];
+  const lastFocusableActuel = focusablesActuels[focusablesActuels.length - 1];
+  const currentTarget = document.activeElement as HTMLElement | null;
+  const doitRebouclement =
+    event.shiftKey
+      ? !dialog.contains(currentTarget) || currentTarget === firstFocusableActuel
+      : !dialog.contains(currentTarget) || currentTarget === lastFocusableActuel;
+
+  if (!doitRebouclement) {
+    return;
+  }
+
+  event.preventDefault();
+  const cibleFocus = event.shiftKey ? lastFocusableActuel : firstFocusableActuel;
+  cibleFocus.focus();
+}
+
 export function LoginPage({
   gateway,
   langue,
@@ -60,6 +122,8 @@ export function LoginPage({
   onSessionEtablie,
   allerAInscription,
   messageRetour = null,
+  messageRetourConfirmable = false,
+  onMessageRetourConfirme,
 }: LoginPageProps) {
   const [identifiant, setIdentifiant] = useState('');
   const [motDePasse, setMotDePasse] = useState('');
@@ -68,7 +132,33 @@ export function LoginPage({
   const [enCours, setEnCours] = useState(false);
 
   const identifiantRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const messageRetourTitreId = useId();
+  const messageRetourDescriptionId = useId();
 
+  useEffect(() => {
+    if (!messageRetour || !messageRetourConfirmable || !dialogRef.current) {
+      return undefined;
+    }
+
+    const dialog = dialogRef.current;
+    const previousActiveElement = document.activeElement as HTMLElement | null;
+    const focusables = Array.from(dialog.querySelectorAll<HTMLElement>(SELECTEUR_FOCUSABLES));
+    const firstFocusable = focusables[0] ?? dialog;
+    firstFocusable.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      gererFocusTrapRetourSession(dialog, event, onMessageRetourConfirme);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      if (previousActiveElement && previousActiveElement.focus) {
+        previousActiveElement.focus();
+      }
+    };
+  }, [messageRetour, messageRetourConfirmable, onMessageRetourConfirme]);
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -95,7 +185,12 @@ export function LoginPage({
           await window.electronAPI.allerAuTableauDeBord();
         }
       } catch (err) {
-        const cle = err instanceof Error ? err.message : '';
+        const cle =
+          err instanceof Error
+            ? err.message
+            : typeof err === 'string' && err.length > 0
+              ? err
+              : 'generic';
         setErreurSoumission({ cle });
         setEnCours(false);
         identifiantRef.current?.focus();
@@ -160,12 +255,6 @@ export function LoginPage({
           onChange={(event) => setMotDePasse(event.target.value)}
         />
 
-        {messageRetour && !erreurSoumission && (
-          <p className="field-message" role="status" data-kind="info">
-            {t(langue, messageRetour)}
-          </p>
-        )}
-
         {erreurSoumission && (
           <p
             className="field-message"
@@ -174,6 +263,12 @@ export function LoginPage({
             data-kind="error"
           >
             {traduireErreurSoumission(langue, erreurSoumission)}
+          </p>
+        )}
+
+        {messageRetour && !erreurSoumission && !messageRetourConfirmable && (
+          <p className="field-message" role="status" data-kind="info">
+            {t(langue, messageRetour)}
           </p>
         )}
 
@@ -191,6 +286,49 @@ export function LoginPage({
           {t(langue, 'auth.noAccount')} {t(langue, 'auth.createAccount')}
         </button>
       </form>
+
+      {messageRetour && messageRetourConfirmable && (
+        <div
+          className="session-return-overlay"
+          onClick={() => {
+            if (onMessageRetourConfirme) {
+              onMessageRetourConfirme();
+            }
+          }}
+        >
+          <div
+            ref={dialogRef}
+            className="session-return-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby={messageRetourTitreId}
+            aria-describedby={messageRetourDescriptionId}
+            tabIndex={-1}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id={messageRetourTitreId} className="session-return-title">
+              {t(langue, 'auth.sessionReturnTitle')}
+            </h2>
+            <p id={messageRetourDescriptionId} className="session-return-message">
+              {t(langue, messageRetour)}
+              <span className="session-return-hint">
+                {t(langue, 'auth.sessionInactiveDismissHint')}
+              </span>
+            </p>
+            <button
+              type="button"
+              className="session-return-button"
+              onClick={() => {
+                if (onMessageRetourConfirme) {
+                  onMessageRetourConfirme();
+                }
+              }}
+            >
+              {t(langue, 'auth.sessionInactiveConfirm')}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

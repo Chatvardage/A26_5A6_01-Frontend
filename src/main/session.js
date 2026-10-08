@@ -9,6 +9,8 @@ const {
   apresOuvertureSessionAvecLangueChoisie,
 } = require('./preferences');
 
+const MOTIFS_VALIDES_RETOUR_CONNEXION = ['session-expiree', 'session-inactive'];
+
 // --- Session (écran de connexion) -------------------------------------------
 // chatGateway est une INSTANCE UNIQUE, partagée par la page de connexion et
 // le dashboard (contrairement à une instance par renderer, qui perdrait
@@ -52,21 +54,38 @@ function oublierPreferencesDuCompte() {
   etat.avatarActuel = null;
 }
 
+// Le motif est lu plus tard par la page de connexion lors du retour automatique
+// sur l'écran de connexion (voir obtenirMotifRetourConnexion / App dans
+// connexion/main.tsx) pour afficher le message adapté à la raison du retour.
+exposerCanal('session:definir-motif-retour', ({ motif }) => {
+  if (
+    typeof motif === 'string' &&
+    MOTIFS_VALIDES_RETOUR_CONNEXION.includes(motif)
+  ) {
+    etat.motifRetourConnexion = motif;
+    return motif;
+  }
+  return null;
+});
+
 exposerCanal('session:deconnexion', async () => {
   await chatGateway.deconnexion();
   oublierPreferencesDuCompte();
   etat.cibleNavigation = null;
 });
+
 exposerCanal('session:deconnexion-partout', async () => {
   await chatGateway.deconnexionPartout();
   oublierPreferencesDuCompte();
   etat.cibleNavigation = null;
 });
+
 exposerCanal('navigation:motif-retour-connexion', () => {
   const motif = etat.motifRetourConnexion;
   etat.motifRetourConnexion = null;
   return motif;
 });
+
 // Utilisé par le dashboard au démarrage pour savoir qui vient de se
 // connecter, au lieu de coder un utilisateur en dur (voir renderer.js).
 exposerCanal('session:utilisateur-connecte', () =>
@@ -105,16 +124,19 @@ chatGateway.on('serveur-change', (evenement) => {
     etat.mainWindow.webContents.send('serveurs:change', evenement);
   }
 });
+
 chatGateway.on('presence', (presence) => {
   if (etat.mainWindow && !etat.mainWindow.isDestroyed()) {
     etat.mainWindow.webContents.send('presence:change', presence);
   }
 });
+
 chatGateway.on('message-modifie', (message) => {
   if (etat.mainWindow && !etat.mainWindow.isDestroyed()) {
     etat.mainWindow.webContents.send('messages:modifie-change', message);
   }
 });
+
 chatGateway.on('message-supprime', (message) => {
   if (etat.mainWindow && !etat.mainWindow.isDestroyed()) {
     etat.mainWindow.webContents.send('messages:supprime-change', message);
