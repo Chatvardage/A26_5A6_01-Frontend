@@ -104,6 +104,19 @@ describe('useSearchResults', () => {
     expect(hook.result.current.results.map((r) => r.id)).toEqual(['b']);
   });
 
+  it("ignore aussi la réponse réussie d'une requête annulée par une saisie plus récente", async () => {
+    let resolveFirst: (page: SearchPage) => void = () => undefined;
+    search.mockImplementationOnce(() => new Promise((resolve) => (resolveFirst = resolve)));
+    search.mockResolvedValueOnce({ results: [result('b')], nextCursor: null });
+    const hook = setup();
+    await type(hook, 'premier');
+    await settle();
+    await type(hook, 'second');
+    await settle();
+    await act(async () => resolveFirst({ results: [result('périmé')], nextCursor: null }));
+    expect(hook.result.current.results.map((r) => r.id)).toEqual(['b']);
+  });
+
   it('utilise le délai de frappe choisi même si les fonctions sont recréées à chaque rendu', async () => {
     const calls: string[] = [];
     const hook = renderHook(() =>
