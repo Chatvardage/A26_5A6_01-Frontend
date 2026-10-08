@@ -346,7 +346,6 @@ describe('LoginPage', () => {
         allerAInscription={() => undefined}
         messageRetour="auth.sessionInactive"
         messageRetourConfirmable={false}
-        onMessageRetourConfirme={vi.fn()}
       />
     );
 
