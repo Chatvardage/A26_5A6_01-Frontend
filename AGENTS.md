@@ -95,6 +95,23 @@ preload.js                  Seul pont autorisé vers le renderer
                             (notifications système, badge, focus fenêtre).
                             Injecte aussi la barre de titre (.app-titlebar)
                             dans chaque page, boutons → canaux 'fenetre:*'.
+src/partage/               Noyau React partagé avec le client mobile
+                            (A26_5A6_01-Mobile) : useAsyncResource,
+                            useSearchResults, search, groupResults,
+                            highlight. Sans dépendance à Electron, à
+                            React Native ni à l'application (seulement
+                            `react`) ; les textes d'erreur sont injectés
+                            (`describeError`). Partage par COPIE : les
+                            fichiers doivent rester identiques dans les
+                            deux dépôts, vérifié par
+                            A26_5A6_01-Infra/scripts/verifier-fichiers-partages.sh
+                            — modifier un fichier ici impose de reporter
+                            le même changement dans Mobile. Aucune page
+                            actuelle ne l'importe encore (réservé au futur
+                            écran de recherche Web) ; la couverture 100 %
+                            s'applique quand même. La saisie de recherche
+                            est tronquée à MAX_QUERY_LENGTH sans signal :
+                            l'écran consommateur pose `maxLength`.
 scripts/start.js            Orchestre Vite + Electron (dev) ou juste
                             Electron après build (prod) — évite le rituel
                             manuel "deux terminaux + $env:NODE_ENV".
@@ -264,6 +281,10 @@ conflit Git (`<<<<<<<`, `=======`, `>>>>>>>`) ne traîne dans le diff.
 - Noms de variables, fonctions et commentaires : **en français**, dans
   tout le code (TS et JS). Les clés de traduction elles-mêmes sont en
   anglais (`auth.invalidFormat`, `errors.ERR_PSEUDO_PRIS`).
+  Exception assumée : les identifiants de `src/partage/` sont en anglais
+  (`useAsyncResource`, `loadMore`…), car ces fichiers sont copiés à
+  l'identique dans le client mobile, qui suit la convention inverse ;
+  leurs commentaires restent en français.
 - Aucun texte d'UI en dur dans un composant ou un template — toujours via
   `t(langue, 'cle')`. Pour le HTML statique des pages vanilla, utiliser
   les attributs `data-i18n` / `data-i18n-title` / `data-i18n-aria-label` /

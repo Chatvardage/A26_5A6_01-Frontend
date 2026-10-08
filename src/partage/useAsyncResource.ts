@@ -72,6 +72,8 @@ export function useAsyncResource<T>(
     };
   }, [loadInto]);
 
+  // Pas de garde `isCancelled` ici : le nettoyage de l'effet incrémente `requestId`, ce qui invalide un retry en vol
+  // après démontage ou changement de `load`.
   const retry = useCallback(async () => {
     const id = ++requestId.current;
     setRefreshError(null);
