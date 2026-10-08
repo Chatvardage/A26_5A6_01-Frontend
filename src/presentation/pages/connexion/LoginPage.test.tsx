@@ -197,11 +197,11 @@ describe('LoginPage', () => {
     const originalQuerySelectorAll = HTMLElement.prototype.querySelectorAll;
     const querySelectorAllSpy = vi
       .spyOn(HTMLElement.prototype, 'querySelectorAll')
-      .mockImplementation(function (selector: string, ...args: unknown[]) {
-        if (typeof selector === 'string' && selector.includes('button:not([disabled])')) {
+      .mockImplementation(function (this: HTMLElement, selector: string) {
+        if (selector.includes('button:not([disabled])')) {
           return [] as unknown as NodeListOf<Element>;
         }
-        return originalQuerySelectorAll.call(this, selector as string, ...args);
+        return originalQuerySelectorAll.call(this, selector);
       });
 
     Object.defineProperty(document, 'activeElement', {
