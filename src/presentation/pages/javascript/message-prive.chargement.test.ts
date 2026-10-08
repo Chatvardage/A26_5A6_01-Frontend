@@ -770,6 +770,8 @@ describe('page des messages privés', () => {
     );
     expect(demandes).toEqual([
       expect.objectContaining({ autourId: 'ancien', taille: 50 }),
+      // Y a-t-il des messages plus récents ? (un seul suffit)
+      expect.objectContaining({ apresId: 'ancien', taille: 1 }),
     ]);
     expect(textes(document)).toEqual(['un vieux message']);
   });
@@ -902,8 +904,41 @@ it('recherche Dm : roue pendant un seul chargement puis pagination depuis la cib
   await vi.waitFor(() =>
     expect(document.querySelector('[data-message-id="m1"]')).not.toBeNull()
   );
-  expect(demandes[1]).toMatchObject({ apresId: 'ancien', taille: 50 });
+  expect(demandes[1]).toMatchObject({ apresId: 'ancien', taille: 1 });
+  expect(demandes[2]).toMatchObject({ apresId: 'ancien', taille: 50 });
   expect(document.querySelectorAll('[data-message-id="ancien"]')).toHaveLength(
     1
   );
 });
+
+it.each([
+  ['rien après la cible', () => ({ messages: [], finHistorique: true })],
+  [
+    'vérification en échec',
+    () => {
+      throw new Error('réseau');
+    },
+  ],
+])(
+  'recherche Dm : bouton « plus récents » selon la suite (%s)',
+  async (cas, suite) => {
+    let appel = 0;
+    const { document, window } = await chargerPage({
+      autresReponses: {
+        obtenirMessagesPriveesAvant: () =>
+          ++appel === 1
+            ? {
+                messages: [dm('ancien', 'bob', 'Message ancien', 0)],
+                finHistorique: true,
+              }
+            : suite(),
+      },
+    });
+    await window.eval('allerAuMessageDm("ancien")');
+    const bouton = [...document.querySelectorAll('button')].find(
+      (element) => element.textContent === traductions.fr.history.loadNewer
+    );
+    // Échec : le bouton reste, la suite existe peut-être.
+    expect(Boolean(bouton)).toBe(cas === 'vérification en échec');
+  }
+);

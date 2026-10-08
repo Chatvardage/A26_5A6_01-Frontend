@@ -603,7 +603,18 @@ async function allerAuMessageDm(messageId) {
     historique.messagesAnciens = resultat.messages;
     historique.finHistorique = resultat.finHistorique;
     historique.ancreId = messageId;
-    historique.finRecents = false;
+    // « Charger les messages plus récents » seulement s'il en existe (un
+    // échec garde le bouton : la suite existe peut-être).
+    try {
+      const suite = await window.electronAPI.obtenirMessagesPriveesAvant({
+        conversationId: id,
+        apresId: resultat.messages.at(-1).id,
+        taille: 1,
+      });
+      historique.finRecents = suite.messages.length === 0;
+    } catch {
+      historique.finRecents = false;
+    }
   } catch (erreur) {
     if (state.activeConversationId !== id || etatHistoriqueDm !== historique)
       return;
