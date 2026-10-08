@@ -129,6 +129,21 @@ describe('useAsyncResource : échec d’un rafraîchissement', () => {
     expect(result.current.state).toEqual({ status: 'ready', data: ['fresh'] });
   });
 
+  it('ne reste pas en « refreshing » quand retry() remplace un rafraîchissement en cours', async () => {
+    const slow = deferred<string[]>();
+    const retried = deferred<string[]>();
+    const load = vi.fn().mockResolvedValueOnce(['a']).mockReturnValueOnce(slow.promise).mockReturnValueOnce(retried.promise);
+    const { result } = renderHook(() => useAsyncResource(load, isEmpty, describeError));
+    await waitFor(() => expect(result.current.state.status).toBe('ready'));
+    await act(async () => void result.current.refresh());
+    expect(result.current.refreshing).toBe(true);
+    await act(async () => void result.current.retry());
+    expect(result.current.state.status).toBe('loading');
+    expect(result.current.refreshing).toBe(false);
+    await act(async () => retried.resolve(['b']));
+    expect(result.current.state).toEqual({ status: 'ready', data: ['b'] });
+  });
+
   it('relance le chargement quand `load` change', async () => {
     const { result, rerender } = renderHook(
       ({ load }: { load: () => Promise<string[]> }) => useAsyncResource(load, isEmpty, describeError),

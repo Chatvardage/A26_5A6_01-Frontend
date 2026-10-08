@@ -75,6 +75,8 @@ export function useAsyncResource<T>(
   const retry = useCallback(async () => {
     const id = ++requestId.current;
     setRefreshError(null);
+    // Un rafraîchissement en cours est remplacé : la liste n'est plus affichée, donc plus de « refreshing ».
+    setRefreshing(false);
     setRemote(null);
     await loadInto(id);
   }, [loadInto]);

@@ -207,4 +207,23 @@ describe('useSearchResults : pagination', () => {
     await act(async () => resolve({ results: [result('tard')], nextCursor: null }));
     expect(hook.result.current.results.map((r) => r.id)).toEqual(['n']);
   });
+
+  it('interrompt la page suivante quand la recherche change, sans afficher son erreur', async () => {
+    const hook = await start();
+    let signal: AbortSignal | undefined;
+    let reject: (error: Error) => void = () => undefined;
+    search.mockImplementationOnce((input) => {
+      signal = input.signal;
+      return new Promise((_, r) => (reject = r));
+    });
+    await act(async () => void hook.result.current.loadMore());
+    expect(signal?.aborted).toBe(false);
+    search.mockResolvedValueOnce({ results: [result('n')], nextCursor: null });
+    await type(hook, 'autre');
+    await settle();
+    expect(signal?.aborted).toBe(true);
+    await act(async () => reject(new Error('annulé')));
+    expect(hook.result.current.moreError).toBeNull();
+    expect(hook.result.current.loadingMore).toBe(false);
+  });
 });

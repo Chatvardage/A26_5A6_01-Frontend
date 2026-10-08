@@ -34,6 +34,7 @@ export function useSearchResults({ search, describeError, debounceMs = DEFAULT_D
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState<string | null>(null);
   const moreRequest = useRef(false);
+  const moreController = useRef<AbortController | null>(null);
   // Les dépendances sont lues par référence : une fonction recréée à chaque rendu ne relance pas la recherche.
   const deps = useRef({ search, describeError });
   useEffect(() => {
@@ -59,6 +60,7 @@ export function useSearchResults({ search, describeError, debounceMs = DEFAULT_D
     return () => {
       clearTimeout(timer);
       controller.abort();
+      moreController.current?.abort();
       moreRequest.current = false;
       setLoadingMore(false);
       setMoreError(null);
@@ -81,18 +83,24 @@ export function useSearchResults({ search, describeError, debounceMs = DEFAULT_D
     setLoadingMore(true);
     setMoreError(null);
     const requestKey = current.key;
+    // Annulé avec la recherche (nouvelle saisie, démontage) : la requête réseau est interrompue, pas seulement ignorée.
+    const controller = new AbortController();
+    moreController.current = controller;
     try {
-      const page = await deps.current.search({ q: normalized, conversationId, cursor: current.nextCursor });
+      const page = await deps.current.search({ q: normalized, conversationId, cursor: current.nextCursor, signal: controller.signal });
       setRemote((prev) =>
         prev?.key === requestKey && prev.status === 'ready'
           ? { ...prev, results: appendUnique(prev.results, page.results), nextCursor: page.nextCursor }
           : prev,
       );
     } catch (error) {
-      setMoreError(deps.current.describeError(error));
+      if (!controller.signal.aborted) setMoreError(deps.current.describeError(error));
     } finally {
-      moreRequest.current = false;
-      setLoadingMore(false);
+      // Après annulation, le cleanup a déjà tout remis à zéro : ne pas toucher à une éventuelle requête plus récente.
+      if (!controller.signal.aborted) {
+        moreRequest.current = false;
+        setLoadingMore(false);
+      }
     }
   }, [normalized, conversationId, current]);
 
