@@ -112,6 +112,9 @@ src/partage/               Noyau React partagé avec le client mobile
                             s'applique quand même. La saisie de recherche
                             est tronquée à MAX_QUERY_LENGTH sans signal :
                             l'écran consommateur pose `maxLength`.
+                            `useAsyncResource` exige un `load` STABLE
+                            (useCallback) : une fonction recréée à chaque
+                            rendu relance le chargement complet en boucle.
 scripts/start.js            Orchestre Vite + Electron (dev) ou juste
                             Electron après build (prod) — évite le rituel
                             manuel "deux terminaux + $env:NODE_ENV".
