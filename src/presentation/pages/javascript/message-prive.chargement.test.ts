@@ -771,9 +771,11 @@ describe('page des messages privés', () => {
     expect(demandes).toEqual([
       expect.objectContaining({ autourId: 'ancien', taille: 50 }),
       // Y a-t-il des messages plus récents ? (un seul suffit)
-      expect.objectContaining({ apresId: 'ancien', taille: 1 }),
+      expect.objectContaining({ apresId: 'ancien', taille: 50 }),
     ]);
-    expect(textes(document)).toEqual(['un vieux message']);
+    // Rien après la cible : la fenêtre rejoint les messages récents déjà
+    // affichés, sans bouton « plus récents ».
+    expect(textes(document)).toEqual(['un vieux message', 'salut']);
   });
 });
 
@@ -876,7 +878,9 @@ it('recherche Dm : roue pendant un seul chargement puis pagination depuis la cib
           return new Promise((resolve) => {
             resoudre = resolve;
           });
-        return { messages: [dm('m1', 'bob', 'salut', 1)], finHistorique: true };
+        return demandes.length === 2
+          ? { messages: [dm('m1', 'bob', 'salut', 1)], finHistorique: false }
+          : { messages: [dm('m2', 'bob', 'suite', 2)], finHistorique: true };
       },
     },
   });
@@ -896,16 +900,22 @@ it('recherche Dm : roue pendant un seul chargement puis pagination depuis la cib
       .querySelector('[data-message-id="ancien"]')
       ?.classList.contains('message-cible')
   ).toBe(true);
-  expect(document.querySelector('[data-message-id="m1"]')).toBeNull();
+  // Une page de messages plus récents arrive avec la cible.
+  expect(document.querySelector('[data-message-id="m1"]')).not.toBeNull();
+  expect(demandes[1]).toMatchObject({ apresId: 'ancien', taille: 50 });
   const bouton = [...document.querySelectorAll('button')].find(
     (element) => element.textContent === traductions.fr.history.loadNewer
   );
   bouton!.click();
   await vi.waitFor(() =>
-    expect(document.querySelector('[data-message-id="m1"]')).not.toBeNull()
+    expect(document.querySelector('[data-message-id="m2"]')).not.toBeNull()
   );
-  expect(demandes[1]).toMatchObject({ apresId: 'ancien', taille: 1 });
-  expect(demandes[2]).toMatchObject({ apresId: 'ancien', taille: 50 });
+  expect(demandes[2]).toMatchObject({ apresId: 'm1', taille: 50 });
+  expect(
+    [...document.querySelectorAll('button')].some(
+      (element) => element.textContent === traductions.fr.history.loadNewer
+    )
+  ).toBe(false);
   expect(document.querySelectorAll('[data-message-id="ancien"]')).toHaveLength(
     1
   );

@@ -877,15 +877,21 @@ async function allerAuMessageSalon(messageId) {
     historique.messagesAnciens = resultat.messages;
     historique.finHistorique = resultat.finHistorique;
     historique.ancreId = messageId;
-    // « Charger les messages plus récents » seulement s'il en existe (un
-    // échec garde le bouton : la suite existe peut-être).
+    // `autourId` ne rend que la cible et les plus anciens : on ajoute une
+    // page de plus récents. Une petite conversation s'affiche en entier, et
+    // « Charger les messages plus récents » ne reste que s'il en manque
+    // (ou si ce chargement échoue).
     try {
       const suite = await window.electronAPI.obtenirMessagesSalonAvant({
         salonId: id,
         apresId: resultat.messages.at(-1).id,
-        taille: 1,
+        taille: 50,
       });
-      historique.finRecents = suite.messages.length === 0;
+      historique.messagesAnciens = fusionnerHistorique(
+        historique.messagesAnciens,
+        suite.messages
+      );
+      historique.finRecents = suite.finHistorique;
     } catch {
       historique.finRecents = false;
     }
