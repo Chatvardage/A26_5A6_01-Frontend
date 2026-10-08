@@ -113,3 +113,7 @@ Validation : audit high, types, lint, build et 298 tests avec couverture 100 % p
 La comparaison lexicographique des identifiants à dates égales est conservée : elle reproduit le contrat serveur `(createdAt, id)`, son `orderBy` et ses filtres `id > lastReadMessageId`. Un tri numérique naturel de m2/m10 divergerait de ce contrat; les identifiants ne définissent jamais seuls la chronologie. Le séparateur de non-lus est fixé par identifiant et ne dépend pas de ces comparaisons.
 
 Les événements de lecture vérifient désormais Number.isFinite après Date.parse avant toute résolution de lecteur ou émission vers les pages. Les dates vides, non interprétables et hors plage sont ignorées; les régressions sont ajoutées au test de relais existant. Validation : audit high, types, lint, build et 298 tests avec couverture 100 % passent sous Node 24. Validation manuelle Electron non effectuée.
+
+### Conversation et messagerie : résultats anciens
+
+Un résultat de recherche ouvre une page directement depuis le message choisi, avec un indicateur de chargement puis une mise en évidence instantanée. Les messages intermédiaires ne sont plus chargés. La pagination reprend depuis cette position, vers les messages plus anciens ou plus récents. Une reconstruction locale de Message-Service est nécessaire pour activer les nouveaux paramètres `around` et `direction`.
