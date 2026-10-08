@@ -275,15 +275,13 @@ export function LoginPage({
               <p id={messageRetourId} className="session-return-message">
                 {t(langue, messageRetour)}
               </p>
-              {onMessageRetourConfirme && (
-                <button
-                  type="button"
-                  className="session-return-button"
-                  onClick={fermerMessageRetour}
-                >
-                  {t(langue, 'auth.confirm')}
-                </button>
-              )}
+              <button
+                type="button"
+                className="session-return-button"
+                onClick={fermerMessageRetour}
+              >
+                {t(langue, 'auth.confirm')}
+              </button>
             </div>
           </div>
         ) : (

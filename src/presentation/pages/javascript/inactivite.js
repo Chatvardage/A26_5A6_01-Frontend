@@ -1,7 +1,7 @@
 'use strict';
 
 (function (racine) {
-  const DELAI_INACTIVITE_MS = 10 * 1 * 1000;
+  const DELAI_INACTIVITE_MS = 30 * 60 * 1000;
   const DELAI_THROTTLE_REINITIALISATION_MS = 5000;
   const NOTIFICATION_TITRE_DECONNEXION = 'Déconnexion';
   const EVENEMENTS_INTERACTION = [
@@ -26,13 +26,11 @@
         });
         return;
       }
-    } catch {
-      // Repli silencieux : l'API notifications n'est pas toujours disponible.
+    } catch (erreur) {
+      console.warn('[inactivite] notification de déconnexion impossible :', erreur);
     }
 
-    if (typeof racine.alert === 'function') {
-      racine.alert(message);
-    }
+    console.warn('[inactivite] notification de déconnexion non disponible :', message);
   }
 
   function obtenirMessageDeconnexionInactivite() {

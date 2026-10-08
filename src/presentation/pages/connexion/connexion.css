@@ -14,6 +14,7 @@
   --input-text: #fff;
   --placeholder: rgba(255, 255, 255, 0.85);
   --on-accent: #0b3d30;
+  --overlay-bg: rgba(2, 19, 16, 0.65);
 }
 
 /* =========================================================
@@ -34,6 +35,7 @@
   --input-text: #14282a;
   --placeholder: rgba(20, 40, 40, 0.55);
   --on-accent: #0b3d30;
+  --overlay-bg: rgba(12, 28, 27, 0.42);
 }
 
 /* =========================================================
@@ -386,7 +388,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(2, 19, 16, 0.65);
+  background: var(--overlay-bg);
   backdrop-filter: blur(3px);
 }
 
