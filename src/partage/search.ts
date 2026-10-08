@@ -32,7 +32,11 @@ export type SearchInput = {
   signal?: AbortSignal;
 };
 
-/** Texte de recherche normalisé (espaces retirés), ou `null` s'il est trop court : aucune requête ne part alors. */
+/**
+ * Texte de recherche normalisé (espaces retirés), ou `null` s'il est trop court : aucune requête ne part alors.
+ * Un texte de plus de `MAX_QUERY_LENGTH` caractères est tronqué sans signal : l'interface qui veut prévenir
+ * l'utilisateur doit limiter elle-même la saisie (`maxLength`) ou comparer avec `text.trim().length`.
+ */
 export function normalizeQuery(text: string): string | null {
   const q = text.trim();
   return q.length >= MIN_QUERY_LENGTH ? q.slice(0, MAX_QUERY_LENGTH) : null;

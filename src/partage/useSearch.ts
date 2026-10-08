@@ -82,17 +82,14 @@ export function useSearchResults({ search, describeError, debounceMs = DEFAULT_D
     moreRequest.current = true;
     setLoadingMore(true);
     setMoreError(null);
-    const requestKey = current.key;
     // Annulé avec la recherche (nouvelle saisie, démontage) : la requête réseau est interrompue, pas seulement ignorée.
     const controller = new AbortController();
     moreController.current = controller;
     try {
       const page = await deps.current.search({ q: normalized, conversationId, cursor: current.nextCursor, signal: controller.signal });
-      setRemote((prev) =>
-        prev?.key === requestKey && prev.status === 'ready'
-          ? { ...prev, results: appendUnique(prev.results, page.results), nextCursor: page.nextCursor }
-          : prev,
-      );
+      if (controller.signal.aborted) return;
+      // Non annulée : la clé n'a pas changé et `moreRequest` exclut toute autre page en vol, `current` est donc à jour.
+      setRemote({ ...current, results: appendUnique(current.results, page.results), nextCursor: page.nextCursor });
     } catch (error) {
       if (!controller.signal.aborted) setMoreError(deps.current.describeError(error));
     } finally {
