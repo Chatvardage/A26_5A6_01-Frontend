@@ -21,6 +21,7 @@ export type SearchResult = {
   updatedAt: string;
 };
 
+/** Une page de résultats, triés du plus récent au plus ancien (ordre fourni par le serveur, jamais retrié par le client). */
 export type SearchPage = { results: SearchResult[]; nextCursor: string | null };
 
 export type SearchInput = {

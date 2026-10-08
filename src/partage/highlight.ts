@@ -5,9 +5,10 @@ export type Segment = { text: string; match: boolean };
  * ni des accents de casse). Le terme est cherché littéralement : `%`, `_`, `.` n'ont pas de sens spécial.
  */
 export function splitHighlight(text: string, term: string): Segment[] {
-  const needle = term.trim().toLocaleLowerCase();
+  // `toLowerCase` (sans locale) : même résultat sur Electron et sur Hermes, quelle que soit la langue du système.
+  const needle = term.trim().toLowerCase();
   if (!needle) return [{ text, match: false }];
-  const haystack = text.toLocaleLowerCase();
+  const haystack = text.toLowerCase();
   // Une casse qui change la longueur du texte (ex. « İ ») décalerait les positions : pas de surlignage.
   if (haystack.length !== text.length) return [{ text, match: false }];
 

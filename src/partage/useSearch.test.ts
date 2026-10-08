@@ -226,4 +226,11 @@ describe('useSearchResults : pagination', () => {
     expect(hook.result.current.moreError).toBeNull();
     expect(hook.result.current.loadingMore).toBe(false);
   });
+
+  it("ignore les doublons à l'intérieur d'une même page suivante", async () => {
+    const hook = await start();
+    search.mockResolvedValueOnce({ results: [result('x'), result('x')], nextCursor: null });
+    await act(async () => hook.result.current.loadMore());
+    expect(hook.result.current.results.filter((r) => r.id === 'x')).toHaveLength(1);
+  });
 });

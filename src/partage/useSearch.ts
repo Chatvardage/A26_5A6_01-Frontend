@@ -12,7 +12,14 @@ type Remote =
 
 function appendUnique(current: SearchResult[], page: SearchResult[]): SearchResult[] {
   const seen = new Set(current.map((r) => r.id));
-  return [...current, ...page.filter((r) => !seen.has(r.id))];
+  return [
+    ...current,
+    ...page.filter((r) => {
+      if (seen.has(r.id)) return false;
+      seen.add(r.id);
+      return true;
+    }),
+  ];
 }
 
 /**
