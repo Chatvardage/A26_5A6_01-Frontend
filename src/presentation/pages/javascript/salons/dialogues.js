@@ -400,6 +400,8 @@ el.membres.addEventListener('click', () => {
   );
   plus.hidden = true;
   const connus = new Map();
+  // Membres déjà affichés : candidats pour reprendre la propriété du serveur.
+  const charges = [];
 
   async function chargerPage(decalage) {
     plus.disabled = true;
@@ -410,6 +412,7 @@ el.membres.addEventListener('click', () => {
       });
       for (const u of page.utilisateurs) connus.set(u.id, u);
       for (const { utilisateurId, role } of page.membres) {
+        charges.push(utilisateurId);
         liste.appendChild(ligneMembre(utilisateurId, role));
       }
       plus.hidden = page.suivant === null;
@@ -515,6 +518,20 @@ el.membres.addEventListener('click', () => {
         );
       }
     }
+    // Expulser le propriétaire : administrateur seulement, qui choisit le
+    // membre qui reprend le serveur (Room-Service exige ce successeur).
+    if (
+      role === 'proprietaire' &&
+      monRole === 'admin' &&
+      !serveur.parDefaut &&
+      utilisateurId !== utilisateurActuelId
+    ) {
+      actions.push(
+        creerBouton(t('servers.kick'), 'member-action danger', () =>
+          choisirNouveauProprietaire(utilisateurId, nom)
+        )
+      );
+    }
     const enfants = [avatarMembre, identite];
     if (actions.length > 0) {
       enfants.push(
@@ -522,6 +539,44 @@ el.membres.addEventListener('click', () => {
       );
     }
     return creerEl('div', { classe: 'member-row', enfants });
+  }
+
+  function choisirNouveauProprietaire(proprietaireId, nomProprietaire) {
+    const candidats = charges.filter((id) => id !== proprietaireId);
+    const choix = creerEl('div', { classe: 'choice-list' });
+    choix.replaceChildren(
+      ...(candidats.length
+        ? candidats.map((id) => {
+            const membre = connus.get(id) ?? {
+              id,
+              pseudo: t('channels.unknownUser'),
+            };
+            return creerBouton(
+              `${t('servers.makeOwner')} · ${ChatUiShared.nomAffiche(membre)}`,
+              'secondary-button full-width',
+              () =>
+                agir(
+                  () =>
+                    window.electronAPI.expulserMembre({
+                      serveurId: serveur.id,
+                      utilisateurId: proprietaireId,
+                      nouveauProprietaire: id,
+                    }),
+                  t('servers.kicked')
+                )
+            );
+          })
+        : [
+            creerEl('p', {
+              classe: 'empty-state',
+              texte: t('servers.noOtherMember'),
+            }),
+          ])
+    );
+    ouvrirDialogue(t('servers.transferTitle', { name: nomProprietaire }), [
+      creerEl('p', { texte: t('servers.transferHint') }),
+      choix,
+    ]);
   }
 
   ouvrirDialogue(t('servers.membersOf', { name: serveur.nom }), [liste, plus]);

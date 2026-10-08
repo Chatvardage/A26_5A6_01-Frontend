@@ -1046,6 +1046,13 @@ describe('RealGatewayRuntime', () => {
         undefined,
       ],
       [
+        'expulserMembre',
+        { serveurId: 's', utilisateurId: 'owner', nouveauProprietaire: 'b/c' },
+        'DELETE',
+        '/api/servers/s/members/owner?nouveauProprietaire=b%2Fc',
+        undefined,
+      ],
+      [
         'changerRoleMembre',
         { serveurId: 's', utilisateurId: 'u', role: 'moderateur' },
         'PATCH',

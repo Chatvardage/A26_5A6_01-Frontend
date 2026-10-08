@@ -280,9 +280,16 @@ module.exports = {
     );
   },
 
-  async expulserMembre({ serveurId, utilisateurId }) {
+  /**
+   * Expulser le propriétaire (administrateur) exige `nouveauProprietaire`,
+   * le membre qui reprend le serveur.
+   */
+  async expulserMembre({ serveurId, utilisateurId, nouveauProprietaire }) {
+    const suite = nouveauProprietaire
+      ? `?nouveauProprietaire=${encodeURIComponent(nouveauProprietaire)}`
+      : '';
     return this.appelHttp(
-      `/api/servers/${encodeURIComponent(serveurId)}/members/${encodeURIComponent(utilisateurId)}`,
+      `/api/servers/${encodeURIComponent(serveurId)}/members/${encodeURIComponent(utilisateurId)}${suite}`,
       { methode: 'DELETE' }
     );
   },

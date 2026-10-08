@@ -422,6 +422,66 @@ describe('page des salons (scripts découpés)', () => {
     expect(erreurs).toEqual([]);
   });
 
+  it('un admin expulse le propriétaire en choisissant son successeur', async () => {
+    const expulsions: unknown[] = [];
+    const { document, window, erreurs } = await chargerPage({
+      monRole: 'admin',
+      autresReponses: {
+        obtenirMembresServeur: () => ({
+          membres: [
+            { utilisateurId: 'bob', role: 'proprietaire' },
+            { utilisateurId: 'zoe', role: 'membre' },
+            { utilisateurId: 'moi', role: 'membre' },
+          ],
+          total: 3,
+          suivant: null,
+          utilisateurs: [
+            { id: 'bob', pseudo: 'bob', alias: 'Bobby', avatar: null },
+            { id: 'zoe', pseudo: 'zoe', alias: null, avatar: null },
+            { id: 'moi', pseudo: 'moi', alias: null, avatar: null },
+          ],
+        }),
+        expulserMembre: (donnees: unknown) => {
+          expulsions.push(donnees);
+          return {};
+        },
+      },
+    });
+    window.HTMLDialogElement.prototype.showModal ??= function () {};
+    window.HTMLDialogElement.prototype.close ??= function () {};
+    document.querySelector<HTMLElement>('#open-members')?.click();
+    const boutons = () => [
+      ...document.querySelectorAll<HTMLButtonElement>('#dialog-content button'),
+    ];
+    await vi.waitFor(() =>
+      expect(
+        document.querySelectorAll('.member-row .member-action.danger')
+      ).toHaveLength(2)
+    );
+    // Premier « Expulser » : celui du propriétaire (en tête de liste).
+    document
+      .querySelector<HTMLButtonElement>('.member-row .member-action.danger')
+      ?.click();
+    expect(document.querySelector('#dialog-title')?.textContent).toBe(
+      'Expulser Bobby, propriétaire du serveur'
+    );
+    expect(boutons().map((bouton) => bouton.textContent)).toEqual(
+      expect.arrayContaining([
+        'Nommer propriétaire et expulser · zoe',
+        'Nommer propriétaire et expulser · moi',
+      ])
+    );
+    boutons()
+      .find((bouton) => bouton.textContent?.endsWith('· zoe'))
+      ?.click();
+    await vi.waitFor(() =>
+      expect(expulsions).toEqual([
+        { serveurId: 'srv', utilisateurId: 'bob', nouveauProprietaire: 'zoe' },
+      ])
+    );
+    expect(erreurs).toEqual([]);
+  });
+
   it('invitation masquée pour un simple membre, visible pour un modérateur', async () => {
     const membre = await chargerPage({ monRole: 'membre' });
     expect(
