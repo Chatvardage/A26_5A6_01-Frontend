@@ -37,6 +37,7 @@
   --placeholder: rgba(20, 40, 40, 0.55);
   --on-accent: #0b3d30;
   --overlay-bg: rgba(12, 28, 27, 0.42);
+  --z-modal: 2000;
 }
 
 /* =========================================================
@@ -403,6 +404,15 @@ body {
   background: var(--card);
   box-shadow: 0 28px 60px rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.session-return-title {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(18px, 1.4vw, 22px);
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .session-return-message {

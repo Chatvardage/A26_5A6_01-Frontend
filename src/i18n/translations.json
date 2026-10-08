@@ -43,7 +43,7 @@
       "defaultPseudoHint": "Un pseudo par défaut vous sera attribué ; vous pourrez le changer plus tard dans votre profil.",
       "sessionExpired": "Ta session a expiré. Reconnecte-toi pour continuer.",
       "sessionInactive": "Ta session a été fermée automatiquement après 30 minutes d'inactivité. Confirme pour revenir à l'écran de connexion.",
-      "confirm": "Confirmer"
+      "sessionInactiveConfirm": "Confirmer"
     },
     "nav": {
       "servers": "Serveurs",
@@ -396,7 +396,7 @@
       "defaultPseudoHint": "A default username will be assigned to you; you can change it later in your profile.",
       "sessionExpired": "Your session has expired. Please sign in again.",
       "sessionInactive": "Your session was closed automatically after 30 minutes of inactivity. Confirm to return to the sign-in screen.",
-      "confirm": "Confirm"
+      "sessionInactiveConfirm": "Confirm"
     },
     "nav": {
       "servers": "Servers",

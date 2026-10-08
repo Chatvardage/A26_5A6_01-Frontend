@@ -31,7 +31,7 @@ describe('LoginPage', () => {
     const popup = screen.getByRole('alertdialog');
     expect(popup).toBeTruthy();
     expect(popup.textContent).toContain('auth.sessionInactive');
-    expect(screen.getByRole('button', { name: 'auth.confirm' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'auth.sessionInactiveConfirm' })).toBeTruthy();
   });
 
   it('affiche un message simple inline quand la session expirée n’est pas confirmable', () => {

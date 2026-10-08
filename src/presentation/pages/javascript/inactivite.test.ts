@@ -4,42 +4,40 @@ import './inactivite.js';
 const I = (globalThis as typeof globalThis & { Inactivite?: any }).Inactivite;
 
 describe('Inactivite', () => {
-  it('ne s’initialise pas automatiquement au chargement du module', async () => {
-    vi.resetModules();
-
-    const originalElectronApi = globalThis.electronAPI;
-    const originalI18n = globalThis.I18n;
-
-    const obtenirUtilisateurConnecte = vi.fn(async () => ({ id: 'u1' }));
-    const definirMotifRetourConnexion = vi.fn(async () => undefined);
-    const deconnexionSession = vi.fn(async () => undefined);
-    const allerALaConnexion = vi.fn(async () => undefined);
-
-    globalThis.electronAPI = {
-      obtenirUtilisateurConnecte,
-      definirMotifRetourConnexion,
-      deconnexionSession,
-      allerALaConnexion,
-    } as any;
-    globalThis.I18n = {
-      t: vi.fn((cle: string) => cle),
-    } as any;
-
-    await import('./inactivite.js');
-
-    expect(obtenirUtilisateurConnecte).not.toHaveBeenCalled();
-
-    globalThis.electronAPI = originalElectronApi;
-    globalThis.I18n = originalI18n;
-  });
+  const originalElectronApi = globalThis.electronAPI;
+  const originalI18n = globalThis.I18n;
 
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.stubGlobal('electronAPI', {
+      obtenirUtilisateurConnecte: vi.fn(async () => ({ id: 'u1' })),
+      definirMotifRetourConnexion: vi.fn(async () => undefined),
+      deconnexionSession: vi.fn(async () => undefined),
+      allerALaConnexion: vi.fn(async () => undefined),
+    });
+    vi.stubGlobal('I18n', {
+      t: vi.fn((cle: string) => cle),
+    });
   });
 
   afterEach(() => {
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.stubGlobal('electronAPI', originalElectronApi);
+    vi.stubGlobal('I18n', originalI18n);
+  });
+
+  it('ne s’initialise pas automatiquement au chargement du module', async () => {
+    vi.resetModules();
+
+    const obtenirUtilisateurConnecte = globalThis.electronAPI.obtenirUtilisateurConnecte as any;
+    const definirMotifRetourConnexion = globalThis.electronAPI.definirMotifRetourConnexion as any;
+
+    await import('./inactivite.js');
+
+    expect(obtenirUtilisateurConnecte).not.toHaveBeenCalled();
+    expect(definirMotifRetourConnexion).not.toHaveBeenCalled();
   });
 
   it('déclenche la déconnexion après 30 minutes sans activité', () => {
@@ -83,19 +81,6 @@ describe('Inactivite', () => {
   });
 
   it('arrête l’instance précédente avant d’en initialiser une nouvelle', async () => {
-    const originalElectronApi = globalThis.electronAPI;
-    const originalI18n = globalThis.I18n;
-
-    globalThis.electronAPI = {
-      obtenirUtilisateurConnecte: vi.fn(async () => ({ id: 'u1' })),
-      definirMotifRetourConnexion: vi.fn(async () => undefined),
-      deconnexionSession: vi.fn(async () => undefined),
-      allerALaConnexion: vi.fn(async () => undefined),
-    } as any;
-    globalThis.I18n = {
-      t: vi.fn((cle: string) => cle),
-    } as any;
-
     const removeEventListenerSpy = vi.spyOn(document, 'removeEventListener');
 
     const premierStopper = await I.initialiserPageInactivite();
@@ -106,47 +91,34 @@ describe('Inactivite', () => {
     expect(removeEventListenerSpy).toHaveBeenCalled();
 
     I.stopper();
-
-    globalThis.electronAPI = originalElectronApi;
-    globalThis.I18n = originalI18n;
     removeEventListenerSpy.mockRestore();
   });
 
   it('utilise la traduction active pour le message de déconnexion par inactivité', async () => {
     const originalConsoleWarn = console.warn;
     const originalNotification = globalThis.Notification;
-    const originalElectronApi = globalThis.electronAPI;
-    const originalI18n = globalThis.I18n;
 
     const warnMock = vi.fn();
     console.warn = warnMock;
     globalThis.Notification = undefined as any;
-    globalThis.electronAPI = {
-      obtenirUtilisateurConnecte: vi.fn(async () => ({ id: 'u1' })),
-      definirMotifRetourConnexion: vi.fn(async () => undefined),
-      deconnexionSession: vi.fn(async () => undefined),
-      allerALaConnexion: vi.fn(async () => undefined),
-    } as any;
-    globalThis.I18n = {
-      t: vi.fn((cle: string) =>
-        cle === 'auth.sessionInactive'
-          ? 'Your session was closed automatically after 30 minutes of inactivity.'
-          : cle
-      ),
-    } as any;
-
-    await I.initialiserPageInactivite();
-    await vi.runAllTimersAsync();
-
-    expect(globalThis.I18n.t).toHaveBeenCalledWith('auth.sessionInactive');
-    expect(warnMock).toHaveBeenCalledWith(
-      '[inactivite] notification de déconnexion non disponible :',
-      'Your session was closed automatically after 30 minutes of inactivity.'
+    globalThis.I18n.t = vi.fn((cle: string) =>
+      cle === 'auth.sessionInactive'
+        ? 'Your session was closed automatically after 30 minutes of inactivity.'
+        : cle
     );
 
-    console.warn = originalConsoleWarn;
-    globalThis.Notification = originalNotification;
-    globalThis.electronAPI = originalElectronApi;
-    globalThis.I18n = originalI18n;
+    try {
+      await I.initialiserPageInactivite();
+      await vi.runAllTimersAsync();
+
+      expect(globalThis.I18n.t).toHaveBeenCalledWith('auth.sessionInactive');
+      expect(warnMock).toHaveBeenCalledWith(
+        '[inactivite] notification de déconnexion non disponible :',
+        'Your session was closed automatically after 30 minutes of inactivity.'
+      );
+    } finally {
+      console.warn = originalConsoleWarn;
+      globalThis.Notification = originalNotification;
+    }
   });
 });

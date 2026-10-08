@@ -90,7 +90,8 @@ export function LoginPage({
 
   const identifiantRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
-  const messageRetourId = useId();
+  const messageRetourTitreId = useId();
+  const messageRetourDescriptionId = useId();
   const onMessageRetourConfirmeRef = useRef(onMessageRetourConfirme);
 
   useEffect(() => {
@@ -103,15 +104,16 @@ export function LoginPage({
     }
 
     const dialog = dialogRef.current;
-    const focusables = Array.from(
-      dialog.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      )
-    );
-    const firstFocusable = focusables[0] ?? dialog;
-    const lastFocusable = focusables[focusables.length - 1] ?? dialog;
+    const getFocusables = (): HTMLElement[] =>
+      Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      );
     const previousActiveElement = document.activeElement as HTMLElement | null;
 
+    const focusables = getFocusables();
+    const firstFocusable = focusables[0] ?? dialog;
     firstFocusable.focus();
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -121,22 +123,27 @@ export function LoginPage({
         return;
       }
 
-      if (event.key !== 'Tab' || focusables.length === 0) {
+      const focusablesActuels = getFocusables();
+      if (event.key !== 'Tab' || focusablesActuels.length === 0) {
         return;
       }
 
+      const firstFocusableActuel = focusablesActuels[0] ?? dialog;
+      const lastFocusableActuel =
+        focusablesActuels[focusablesActuels.length - 1] ?? dialog;
       const currentTarget = document.activeElement as HTMLElement | null;
+
       if (event.shiftKey) {
-        if (!dialog.contains(currentTarget) || currentTarget === firstFocusable) {
+        if (!dialog.contains(currentTarget) || currentTarget === firstFocusableActuel) {
           event.preventDefault();
-          lastFocusable.focus();
+          lastFocusableActuel.focus();
         }
         return;
       }
 
-      if (!dialog.contains(currentTarget) || currentTarget === lastFocusable) {
+      if (!dialog.contains(currentTarget) || currentTarget === lastFocusableActuel) {
         event.preventDefault();
-        firstFocusable.focus();
+        firstFocusableActuel.focus();
       }
     };
 
@@ -276,11 +283,15 @@ export function LoginPage({
               className="session-return-dialog"
               role="alertdialog"
               aria-modal="true"
-              aria-labelledby={messageRetourId}
+              aria-labelledby={messageRetourTitreId}
+              aria-describedby={messageRetourDescriptionId}
               tabIndex={-1}
               onClick={(event) => event.stopPropagation()}
             >
-              <p id={messageRetourId} className="session-return-message">
+              <h2 id={messageRetourTitreId} className="session-return-title">
+                {t(langue, 'auth.sessionReturnTitle')}
+              </h2>
+              <p id={messageRetourDescriptionId} className="session-return-message">
                 {t(langue, messageRetour)}
               </p>
               <button
@@ -288,7 +299,7 @@ export function LoginPage({
                 className="session-return-button"
                 onClick={() => onMessageRetourConfirmeRef.current?.()}
               >
-                {t(langue, 'auth.confirm')}
+                {t(langue, 'auth.sessionInactiveConfirm')}
               </button>
             </div>
           </div>

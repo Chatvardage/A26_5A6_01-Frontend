@@ -237,15 +237,28 @@ function App() {
     );
   }
 
+  const baseLoginProps = {
+    gateway: gatewaySession,
+    langue,
+    changerLangue,
+    messageRetour,
+    allerAInscription: () => setVue('inscription'),
+  };
+
+  if (messageRetourConfirmable) {
+    return (
+      <LoginPage
+        {...baseLoginProps}
+        messageRetourConfirmable={true}
+        onMessageRetourConfirme={fermerMessageRetour}
+      />
+    );
+  }
+
   return (
     <LoginPage
-      gateway={gatewaySession}
-      langue={langue}
-      changerLangue={changerLangue}
-      messageRetour={messageRetour}
-      messageRetourConfirmable={messageRetourConfirmable}
-      onMessageRetourConfirme={fermerMessageRetour}
-      allerAInscription={() => setVue('inscription')}
+      {...baseLoginProps}
+      messageRetourConfirmable={false}
     />
   );
 }

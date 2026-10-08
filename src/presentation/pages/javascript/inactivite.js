@@ -118,6 +118,7 @@
   }
 
   let stopperActif = () => undefined;
+  let initialisationEnCours = false;
 
   const objetInactivite = {
     DELAI_INACTIVITE_MS,
@@ -131,19 +132,27 @@
   racine.Inactivite = objetInactivite;
 
   async function initialiserPageInactivite() {
+    if (initialisationEnCours) {
+      return null;
+    }
+
+    initialisationEnCours = true;
     objetInactivite.stopper();
 
     if (!racine.electronAPI || typeof racine.electronAPI.deconnexionSession !== 'function') {
+      initialisationEnCours = false;
       return null;
     }
 
     try {
       const utilisateur = await racine.electronAPI.obtenirUtilisateurConnecte?.();
       if (!utilisateur) {
+        initialisationEnCours = false;
         return null;
       }
     } catch (erreur) {
       console.warn('[inactivite] impossible d’obtenir l’utilisateur connecté :', erreur);
+      initialisationEnCours = false;
       return null;
     }
 
@@ -233,6 +242,7 @@
     };
 
     stopperActif = stopper;
+    initialisationEnCours = false;
     minuteur.demarrer();
     return stopper;
   }
