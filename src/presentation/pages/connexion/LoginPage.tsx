@@ -16,7 +16,7 @@ import { t, LANGUES_SUPPORTEES } from '../../../i18n/i18n-web';
  */
 export type GatewaySession = Pick<AuthGateway, 'authentifier'>;
 
-interface LoginPageProps {
+type LoginPageProps = {
   gateway: GatewaySession;
   /** Langue actuelle ('fr' ou 'en'), pilotée par le composant parent (voir main.tsx). */
   langue: string;
@@ -29,12 +29,19 @@ interface LoginPageProps {
   /** Clé de traduction d'un message d'information à afficher en arrivant
    * (ex. 'auth.sessionExpired'), ou null. */
   messageRetour?: string | null;
-
-  /** Si true, affiche un bouton de confirmation pour fermer le message. */
-  messageRetourConfirmable?: boolean;
-  /** Appelé quand l'utilisateur confirme le message de retour. */
-  onMessageRetourConfirme?: () => void;
-}
+} & (
+  | {
+      /** Quand ce flag est activé, la modale exige une confirmation explicite.
+       * La référence de callback doit être stable (mémorisée par le parent),
+       * sinon le focus trap peut se réinitialiser à chaque rendu. */
+      messageRetourConfirmable: true;
+      onMessageRetourConfirme: () => void;
+    }
+  | {
+      messageRetourConfirmable?: false;
+      onMessageRetourConfirme?: never;
+    }
+);
 
 
 interface ErreurSoumission {
@@ -84,6 +91,11 @@ export function LoginPage({
   const identifiantRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const messageRetourId = useId();
+  const onMessageRetourConfirmeRef = useRef(onMessageRetourConfirme);
+
+  useEffect(() => {
+    onMessageRetourConfirmeRef.current = onMessageRetourConfirme;
+  }, [onMessageRetourConfirme]);
 
   useEffect(() => {
     if (!messageRetour || !messageRetourConfirmable || !dialogRef.current) {
@@ -105,7 +117,7 @@ export function LoginPage({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onMessageRetourConfirme?.();
+        onMessageRetourConfirmeRef.current?.();
         return;
       }
 
@@ -135,7 +147,7 @@ export function LoginPage({
         previousActiveElement.focus();
       }
     };
-  }, [messageRetour, messageRetourConfirmable, onMessageRetourConfirme]);
+  }, [messageRetour, messageRetourConfirmable]);
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -257,7 +269,7 @@ export function LoginPage({
         messageRetourConfirmable ? (
           <div
             className="session-return-overlay"
-            onClick={() => onMessageRetourConfirme?.()}
+            onClick={() => onMessageRetourConfirmeRef.current?.()}
           >
             <div
               ref={dialogRef}
@@ -274,7 +286,7 @@ export function LoginPage({
               <button
                 type="button"
                 className="session-return-button"
-                onClick={() => onMessageRetourConfirme?.()}
+                onClick={() => onMessageRetourConfirmeRef.current?.()}
               >
                 {t(langue, 'auth.confirm')}
               </button>

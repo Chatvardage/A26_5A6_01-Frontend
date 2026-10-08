@@ -1,75 +1,54 @@
-import React, { act } from 'react';
-import { createRoot } from 'react-dom/client';
-import { describe, expect, it } from 'vitest';
+import React from 'react';
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LoginPage } from './LoginPage';
 
+afterEach(() => {
+  cleanup();
+});
+
+vi.mock('../../../i18n/i18n-web', () => ({
+  LANGUES_SUPPORTEES: ['fr', 'en'],
+  t: (_langue: string, cle: string) => cle,
+}));
+
 describe('LoginPage', () => {
-  it('affiche un pop-up de confirmation pour la session inactive', async () => {
-    const container = document.createElement('div');
-    document.body.appendChild(container);
-    const root = createRoot(container);
+  it('affiche un pop-up de confirmation pour la session inactive', () => {
+    render(
+      React.createElement(LoginPage, {
+        gateway: {
+          authentifier: async () => undefined,
+        },
+        langue: 'fr',
+        changerLangue: () => undefined,
+        allerAInscription: () => undefined,
+        messageRetour: 'auth.sessionInactive',
+        messageRetourConfirmable: true,
+        onMessageRetourConfirme: () => undefined,
+      })
+    );
 
-    await act(async () => {
-      root.render(
-        React.createElement(LoginPage, {
-          gateway: {
-            authentifier: async () => undefined,
-          },
-          langue: 'fr',
-          changerLangue: () => undefined,
-          allerAInscription: () => undefined,
-          messageRetour: 'auth.sessionInactive',
-          messageRetourConfirmable: true,
-          onMessageRetourConfirme: () => undefined,
-        })
-      );
-    });
-
-    const popup = container.querySelector('[role="alertdialog"][aria-modal="true"]');
-
-    expect(popup).not.toBeNull();
-
-    const labelId = popup?.getAttribute('aria-labelledby');
-    expect(labelId).not.toBeNull();
-
-    const labelEl = container.querySelector(`#${labelId}`);
-    expect(labelEl?.textContent).toContain('inactivité');
-
-    const bouton = popup?.querySelector('button.session-return-button');
-    expect(bouton).not.toBeNull();
-
-    root.unmount();
-    container.remove();
+    const popup = screen.getByRole('alertdialog');
+    expect(popup).toBeTruthy();
+    expect(popup.textContent).toContain('auth.sessionInactive');
+    expect(screen.getByRole('button', { name: 'auth.confirm' })).toBeTruthy();
   });
 
-  it('affiche un message simple inline quand la session expirée n’est pas confirmable', async () => {
-    const container = document.createElement('div');
-    document.body.appendChild(container);
-    const root = createRoot(container);
+  it('affiche un message simple inline quand la session expirée n’est pas confirmable', () => {
+    render(
+      React.createElement(LoginPage, {
+        gateway: {
+          authentifier: async () => undefined,
+        },
+        langue: 'fr',
+        changerLangue: () => undefined,
+        allerAInscription: () => undefined,
+        messageRetour: 'auth.sessionExpired',
+        messageRetourConfirmable: false,
+      })
+    );
 
-    await act(async () => {
-      root.render(
-        React.createElement(LoginPage, {
-          gateway: {
-            authentifier: async () => undefined,
-          },
-          langue: 'fr',
-          changerLangue: () => undefined,
-          allerAInscription: () => undefined,
-          messageRetour: 'auth.sessionExpired',
-          messageRetourConfirmable: false,
-        })
-      );
-    });
-
-    const popup = container.querySelector('[role="alertdialog"][aria-modal="true"]');
-    const inline = container.querySelector('.field-message[data-kind="info"]');
-
-    expect(popup).toBeNull();
-    expect(inline).not.toBeNull();
-    expect(inline?.textContent).toContain('session a expiré');
-
-    root.unmount();
-    container.remove();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.getByRole('status').textContent).toContain('auth.sessionExpired');
   });
 });

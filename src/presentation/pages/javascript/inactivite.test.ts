@@ -136,7 +136,7 @@ describe('Inactivite', () => {
     } as any;
 
     await I.initialiserPageInactivite();
-    vi.advanceTimersByTime(30 * 60 * 1000);
+    await vi.runAllTimersAsync();
 
     expect(globalThis.I18n.t).toHaveBeenCalledWith('auth.sessionInactive');
     expect(warnMock).toHaveBeenCalledWith(

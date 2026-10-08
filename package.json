@@ -21,6 +21,7 @@
     "build:all": "npm run build:login && npx --yes electron-builder@26.0.12 --win --mac --linux --publish never"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "@typescript-eslint/eslint-plugin": "^8.70.0",

@@ -46,6 +46,22 @@
     return 'Votre session a été déconnectée pour inactivité.';
   }
 
+  /**
+   * Crée un minuteur d'inactivité.
+   *
+   * @param {Object} options
+   * @param {number} [options.delaiMs=30*60*1000]
+   * @param {() => boolean} [options.estActif]
+   * @param {(() => string) | string} [options.message]
+   * @param {(message: string) => void} [options.notifier]
+   * @param {(() => Promise<void> | void)} [options.onExpire]
+   * @param {(callback: (...args: any[]) => void, delay?: number, ...args: any[]) => number} [options.setTimeoutFn]
+   * @param {(id: number) => void} [options.clearTimeoutFn]
+   *
+   * Les rejets de `onExpire` doivent être gérés en interne par la fonction
+   * fournie ; ce minuteur les capture côté appel pour éviter une
+   * `UnhandledPromiseRejection` non explicite.
+   */
   function creerMinuteurInactivite({
     delaiMs = DELAI_INACTIVITE_MS,
     estActif = () => true,
@@ -66,7 +82,17 @@
       minuteur = setTimeoutFn(() => {
         expire = true;
         notifier(typeof message === 'function' ? message() : message);
-        onExpire();
+
+        try {
+          const resultat = onExpire();
+          if (resultat && typeof resultat.then === 'function') {
+            resultat.catch((erreur) => {
+              console.error('[inactivite] échec du callback d’expiration :', erreur);
+            });
+          }
+        } catch (erreur) {
+          console.error('[inactivite] exception synchronisée dans le callback d’expiration :', erreur);
+        }
       }, delaiMs);
     }
 
@@ -171,6 +197,9 @@
       },
     });
 
+    // On démarre à une valeur qui représente « jamais » pour garantir qu'un
+    // premier événement fréquent est bien accepté, même si Date.now() vaut 0
+    // dans un environnement de test avec fake timers.
     let derniereReinitialisationFrequentMs = Number.NEGATIVE_INFINITY;
     const reactiver = (evenement) => {
       const estEvenementFrequent =
