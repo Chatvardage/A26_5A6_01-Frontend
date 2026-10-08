@@ -67,6 +67,8 @@ export function useAsyncResource<T>(
     void loadInto(id, () => cancelled);
     return () => {
       cancelled = true;
+      // Invalide aussi les requêtes lancées par retry/refresh : plus de setState après démontage ou changement de `load`.
+      requestId.current++;
     };
   }, [loadInto]);
 
@@ -82,7 +84,9 @@ export function useAsyncResource<T>(
     setRefreshError(null);
     setRefreshing(true);
     try {
-      settle(await load());
+      const data = await load();
+      if (id !== requestId.current) return;
+      settle(data);
     } catch (error) {
       if (id !== requestId.current) return;
       const message = describeRef.current(error);

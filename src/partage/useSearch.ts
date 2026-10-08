@@ -48,7 +48,9 @@ export function useSearchResults({ search, describeError, debounceMs = DEFAULT_D
     const controller = new AbortController();
     const timer = setTimeout(() => {
       deps.current.search({ q: normalized, conversationId, signal: controller.signal }).then(
-        (page) => setRemote({ key, status: 'ready', results: page.results, nextCursor: page.nextCursor }),
+        (page) => {
+          if (!controller.signal.aborted) setRemote({ key, status: 'ready', results: page.results, nextCursor: page.nextCursor });
+        },
         (error: unknown) => {
           if (!controller.signal.aborted) setRemote({ key, status: 'error', message: deps.current.describeError(error) });
         },
