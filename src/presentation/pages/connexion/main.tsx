@@ -142,6 +142,11 @@ function App() {
       });
   }, []);
 
+  const fermerMessageRetour = useCallback(() => {
+    setMessageRetour(null);
+    setMessageRetourConfirmable(false);
+  }, []);
+
   // Pas de sélecteur de thème sur ces écrans : on applique simplement le
   // dernier thème connu (voir 'theme:obtenir' dans main.js).
   useEffect(() => {
@@ -239,10 +244,7 @@ function App() {
       changerLangue={changerLangue}
       messageRetour={messageRetour}
       messageRetourConfirmable={messageRetourConfirmable}
-      onMessageRetourConfirme={() => {
-        setMessageRetour(null);
-        setMessageRetourConfirmable(false);
-      }}
+      onMessageRetourConfirme={fermerMessageRetour}
       allerAInscription={() => setVue('inscription')}
     />
   );

@@ -25,10 +25,13 @@ describe('LoginPage', () => {
       );
     });
 
-    const popup = container.querySelector('[role="dialog"][aria-modal="true"]');
+    const popup = container.querySelector('[role="alertdialog"][aria-modal="true"]');
 
     expect(popup).not.toBeNull();
-    expect(popup?.textContent).toContain('Confirme');
+    expect(popup?.getAttribute('aria-describedby')).toBeNull();
+
+    const bouton = popup?.querySelector('button.session-return-button');
+    expect(bouton).not.toBeNull();
 
     root.unmount();
     container.remove();
@@ -54,7 +57,7 @@ describe('LoginPage', () => {
       );
     });
 
-    const popup = container.querySelector('[role="dialog"][aria-modal="true"]');
+    const popup = container.querySelector('[role="alertdialog"][aria-modal="true"]');
     const inline = container.querySelector('.field-message[data-kind="info"]');
 
     expect(popup).toBeNull();

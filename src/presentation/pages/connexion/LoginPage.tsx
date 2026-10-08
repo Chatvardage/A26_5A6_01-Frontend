@@ -135,7 +135,7 @@ export function LoginPage({
         previousActiveElement.focus();
       }
     };
-  }, [messageRetour, messageRetourConfirmable, onMessageRetourConfirme]);
+  }, [messageRetour, messageRetourConfirmable]);
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -262,10 +262,9 @@ export function LoginPage({
             <div
               ref={dialogRef}
               className="session-return-dialog"
-              role="dialog"
+              role="alertdialog"
               aria-modal="true"
               aria-labelledby={messageRetourId}
-              aria-describedby={messageRetourId}
               tabIndex={-1}
               onClick={(event) => event.stopPropagation()}
             >

@@ -3,7 +3,6 @@
 (function (racine) {
   const DELAI_INACTIVITE_MS = 30 * 60 * 1000;
   const DELAI_THROTTLE_REINITIALISATION_MS = 5000;
-  const NOTIFICATION_TITRE_DECONNEXION = 'Déconnexion';
   const EVENEMENTS_INTERACTION = [
     'mousedown',
     'mousemove',
@@ -14,13 +13,20 @@
     'wheel',
   ];
 
+  function obtenirTitreNotificationDeconnexion() {
+    if (racine.I18n && typeof racine.I18n.t === 'function') {
+      return racine.I18n.t('auth.logout') || 'Déconnexion';
+    }
+    return 'Déconnexion';
+  }
+
   function notifierDeconnexion(message) {
     try {
       if (
         typeof racine.Notification === 'function' &&
         racine.Notification.permission === 'granted'
       ) {
-        new racine.Notification(NOTIFICATION_TITRE_DECONNEXION, {
+        new racine.Notification(obtenirTitreNotificationDeconnexion(), {
           body: message,
           tag: 'chatvardage-deconnexion-inactivite',
         });
@@ -110,24 +116,28 @@
       if (!utilisateur) {
         return null;
       }
-    } catch {
+    } catch (erreur) {
+      console.warn('[inactivite] impossible d’obtenir l’utilisateur connecté :', erreur);
       return null;
     }
 
     const minuteur = creerMinuteurInactivite({
       delaiMs: DELAI_INACTIVITE_MS,
-      estActif: () => true,
+      message: obtenirMessageDeconnexionInactivite(),
       notifier: notifierDeconnexion,
       onExpire: async () => {
-        const message = obtenirMessageDeconnexionInactivite();
-        notifierDeconnexion(message);
-
         const { definirMotifRetourConnexion, allerALaConnexion, deconnexionSession } =
           racine.electronAPI;
 
         if (typeof definirMotifRetourConnexion === 'function') {
           try {
-            await definirMotifRetourConnexion('session-inactive');
+            const motifRetour = await definirMotifRetourConnexion('session-inactive');
+            if (motifRetour !== 'session-inactive') {
+              console.warn(
+                '[inactivite] motif de retour non confirmé par le main process :',
+                motifRetour
+              );
+            }
           } catch (erreur) {
             console.error('[inactivite] échec de définition du motif :', erreur);
           }

@@ -54,6 +54,9 @@ function oublierPreferencesDuCompte() {
   etat.avatarActuel = null;
 }
 
+// Le motif est lu plus tard par la page de connexion lors du retour automatique
+// sur l'écran de connexion (voir obtenirMotifRetourConnexion / App dans
+// connexion/main.tsx) pour afficher le message adapté à la raison du retour.
 exposerCanal('session:definir-motif-retour', ({ motif }) => {
   if (
     typeof motif === 'string' &&
