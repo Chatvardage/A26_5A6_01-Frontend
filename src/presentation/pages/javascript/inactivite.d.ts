@@ -1,5 +1,6 @@
 declare global {
   type InactiviteApi = {
+    readonly DELAI_INACTIVITE_MS: number;
     creerMinuteurInactivite: (options?: {
       delaiMs?: number;
       estActif?: () => boolean;

@@ -16,11 +16,34 @@
     'wheel',
   ];
 
+  function obtenirLocaleParDefaut() {
+    // L’application est livrée en français par défaut ; les traductions
+    // réelles doivent passer par `I18n.t(...)` lorsque le contexte de langue
+    // est explicitement configuré par le runtime.
+    return 'fr';
+  }
+
+  function obtenirTextesFallback() {
+    const locale = obtenirLocaleParDefaut();
+    const textes = {
+      fr: {
+        deconnexion: 'Déconnexion',
+        sessionInactive: 'Votre session a été déconnectée pour inactivité.',
+      },
+      en: {
+        deconnexion: 'Sign out',
+        sessionInactive: 'Your session was disconnected due to inactivity.',
+      },
+    };
+    return textes[locale] || textes.fr;
+  }
+
   function obtenirTitreNotificationDeconnexion() {
     if (racine.I18n && typeof racine.I18n.t === 'function') {
-      return racine.I18n.t('auth.logout') || 'Déconnexion';
+      const titre = racine.I18n.t('auth.logout');
+      return titre && titre !== 'auth.logout' ? titre : obtenirTextesFallback().deconnexion;
     }
-    return 'Déconnexion';
+    return obtenirTextesFallback().deconnexion;
   }
 
   function notifierDeconnexion(message) {
@@ -50,9 +73,12 @@
 
   function obtenirMessageDeconnexionInactivite() {
     if (racine.I18n && typeof racine.I18n.t === 'function') {
-      return racine.I18n.t('auth.sessionInactive');
+      const message = racine.I18n.t('auth.sessionInactive');
+      return message && message !== 'auth.sessionInactive'
+        ? message
+        : obtenirTextesFallback().sessionInactive;
     }
-    return 'Votre session a été déconnectée pour inactivité.';
+    return obtenirTextesFallback().sessionInactive;
   }
 
   /**
@@ -74,7 +100,7 @@
   function creerMinuteurInactivite({
     delaiMs = DELAI_INACTIVITE_MS,
     estActif = () => true,
-    message = () => 'Votre session a été déconnectée pour inactivité.',
+    message = () => obtenirMessageDeconnexionInactivite(),
     notifier = notifierDeconnexion,
     onExpire = () => undefined,
     setTimeoutFn = racine.setTimeout.bind(racine),
@@ -163,6 +189,10 @@
         message: () => obtenirMessageDeconnexionInactivite(),
         notifier: notifierDeconnexion,
         onExpire: async () => {
+          if (!racine.electronAPI) {
+            return;
+          }
+
           const { definirMotifRetourConnexion, allerALaConnexion, deconnexionSession } =
             racine.electronAPI;
 

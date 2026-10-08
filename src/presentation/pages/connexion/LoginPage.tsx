@@ -287,10 +287,14 @@ export function LoginPage({
         </button>
       </form>
 
-      {messageRetour && !erreurSoumission && messageRetourConfirmable && (
+      {messageRetour && messageRetourConfirmable && (
         <div
           className="session-return-overlay"
-          onClick={() => onMessageRetourConfirme?.()}
+          onClick={() => {
+            if (onMessageRetourConfirme) {
+              onMessageRetourConfirme();
+            }
+          }}
         >
           <div
             ref={dialogRef}
@@ -314,7 +318,11 @@ export function LoginPage({
             <button
               type="button"
               className="session-return-button"
-              onClick={() => onMessageRetourConfirme?.()}
+              onClick={() => {
+                if (onMessageRetourConfirme) {
+                  onMessageRetourConfirme();
+                }
+              }}
             >
               {t(langue, 'auth.sessionInactiveConfirm')}
             </button>

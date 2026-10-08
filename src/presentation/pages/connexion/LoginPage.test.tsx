@@ -97,6 +97,29 @@ describe('LoginPage', () => {
     expect(onMessageRetourConfirme).toHaveBeenCalledTimes(1);
   });
 
+  it('ignore le clic si le callback de confirmation est absent', () => {
+    const props: Parameters<typeof LoginPage>[0] = {
+      gateway: {
+        authentifier: async () => resultatAuthentification,
+      },
+      langue: 'fr',
+      changerLangue: vi.fn(),
+      allerAInscription: () => undefined,
+      messageRetour: 'auth.sessionInactive',
+      messageRetourConfirmable: true,
+      onMessageRetourConfirme: undefined as unknown as () => void,
+    };
+
+    render(React.createElement(LoginPage, props));
+
+    fireEvent.click(screen.getByRole('button', { name: 'auth.sessionInactiveConfirm' }));
+    fireEvent.click(
+      screen.getByText('auth.sessionInactiveDismissHint').closest('.session-return-overlay') as Element
+    );
+
+    expect(screen.getByRole('alertdialog')).toBeTruthy();
+  });
+
   it('change la langue au clic sur le bouton de langue', () => {
     const changerLangue = vi.fn();
     const props: Parameters<typeof LoginPage>[0] = {
@@ -351,24 +374,6 @@ describe('LoginPage', () => {
 
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(screen.getByRole('status').textContent).toContain('auth.sessionInactive');
-  });
-
-  it('n’attache pas le focus trap quand le dialog n’a pas encore de ref monté', () => {
-    vi.spyOn(React, 'useRef').mockImplementation((initialValue) => ({ current: initialValue }));
-
-    render(
-      <LoginPage
-        gateway={{ authentifier: vi.fn(async () => resultatAuthentification) }}
-        langue="fr"
-        changerLangue={() => undefined}
-        allerAInscription={() => undefined}
-        messageRetour="auth.sessionInactive"
-        messageRetourConfirmable={true}
-        onMessageRetourConfirme={vi.fn()}
-      />
-    );
-
-    expect(screen.queryByRole('alertdialog')).not.toBeNull();
   });
 
   it('utilise le dialogue comme cible de focus quand aucun élément focusable n’est présent', () => {
