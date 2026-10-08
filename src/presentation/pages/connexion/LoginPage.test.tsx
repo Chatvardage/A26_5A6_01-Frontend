@@ -308,7 +308,7 @@ describe('LoginPage', () => {
     const dialog = document.createElement('div');
     document.body.appendChild(dialog);
 
-    let activeElement: Element | null = null;
+    const activeElement: Element | null = null;
     vi.spyOn(document, 'activeElement', 'get').mockImplementation(() => activeElement);
 
     const event = new KeyboardEvent('keydown', {
@@ -346,7 +346,7 @@ describe('LoginPage', () => {
     dialog.append(buttonA, buttonB, buttonC);
     document.body.appendChild(dialog);
 
-    let activeElement: Element | null = buttonB;
+    const activeElement: Element | null = buttonB;
     vi.spyOn(document, 'activeElement', 'get').mockImplementation(() => activeElement);
 
     const event = new KeyboardEvent('keydown', {
