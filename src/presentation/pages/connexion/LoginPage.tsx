@@ -72,6 +72,49 @@ function traduireErreurSoumission(
   return brutTraduit === cleTraduction ? t(langue, 'errors.generic') : brutTraduit;
 }
 
+const SELECTEUR_FOCUSABLES =
+  'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+export function gererFocusTrapRetourSession(
+  dialog: HTMLDivElement,
+  event: KeyboardEvent,
+  onConfirme?: () => void
+): void {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    onConfirme?.();
+    return;
+  }
+
+  if (event.key !== 'Tab') {
+    return;
+  }
+
+  const focusablesActuels = Array.from(
+    dialog.querySelectorAll<HTMLElement>(SELECTEUR_FOCUSABLES)
+  );
+
+  if (focusablesActuels.length === 0) {
+    return;
+  }
+
+  const firstFocusableActuel = focusablesActuels[0];
+  const lastFocusableActuel = focusablesActuels[focusablesActuels.length - 1];
+  const currentTarget = document.activeElement as HTMLElement | null;
+  const doitRebouclement =
+    event.shiftKey
+      ? !dialog.contains(currentTarget) || currentTarget === firstFocusableActuel
+      : !dialog.contains(currentTarget) || currentTarget === lastFocusableActuel;
+
+  if (!doitRebouclement) {
+    return;
+  }
+
+  event.preventDefault();
+  const cibleFocus = event.shiftKey ? lastFocusableActuel : firstFocusableActuel;
+  cibleFocus.focus();
+}
+
 export function LoginPage({
   gateway,
   langue,
@@ -92,11 +135,6 @@ export function LoginPage({
   const dialogRef = useRef<HTMLDivElement>(null);
   const messageRetourTitreId = useId();
   const messageRetourDescriptionId = useId();
-  const onMessageRetourConfirmeRef = useRef(onMessageRetourConfirme);
-
-  useEffect(() => {
-    onMessageRetourConfirmeRef.current = onMessageRetourConfirme;
-  }, [onMessageRetourConfirme]);
 
   /* c8 ignore start */
   useEffect(() => {
@@ -105,47 +143,13 @@ export function LoginPage({
     }
 
     const dialog = dialogRef.current;
-    const getFocusables = (): HTMLElement[] =>
-      Array.from(
-        dialog.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        )
-      );
     const previousActiveElement = document.activeElement as HTMLElement | null;
-
-    const focusables = getFocusables();
+    const focusables = Array.from(dialog.querySelectorAll<HTMLElement>(SELECTEUR_FOCUSABLES));
     const firstFocusable = focusables[0] ?? dialog;
     firstFocusable.focus();
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onMessageRetourConfirmeRef.current?.();
-        return;
-      }
-
-      const focusablesActuels = getFocusables();
-      if (event.key !== 'Tab' || focusablesActuels.length === 0) {
-        return;
-      }
-
-      const firstFocusableActuel = focusablesActuels[0] ?? dialog;
-      const lastFocusableActuel =
-        focusablesActuels[focusablesActuels.length - 1] ?? dialog;
-      const currentTarget = document.activeElement as HTMLElement | null;
-
-      if (event.shiftKey) {
-        if (!dialog.contains(currentTarget) || currentTarget === firstFocusableActuel) {
-          event.preventDefault();
-          lastFocusableActuel.focus();
-        }
-        return;
-      }
-
-      if (!dialog.contains(currentTarget) || currentTarget === lastFocusableActuel) {
-        event.preventDefault();
-        firstFocusableActuel.focus();
-      }
+      gererFocusTrapRetourSession(dialog, event, onMessageRetourConfirme);
     };
 
     window.addEventListener('keydown', onKeyDown);
@@ -155,7 +159,7 @@ export function LoginPage({
         previousActiveElement.focus();
       }
     };
-  }, [messageRetour, messageRetourConfirmable]);
+  }, [messageRetour, messageRetourConfirmable, onMessageRetourConfirme]);
   /* c8 ignore stop */
 
   const handleSubmit = useCallback(
@@ -183,7 +187,12 @@ export function LoginPage({
           await window.electronAPI.allerAuTableauDeBord();
         }
       } catch (err) {
-        const cle = err instanceof Error ? err.message : '';
+        const cle =
+          err instanceof Error
+            ? err.message
+            : typeof err === 'string' && err.length > 0
+              ? err
+              : 'generic';
         setErreurSoumission({ cle });
         setEnCours(false);
         identifiantRef.current?.focus();
@@ -283,7 +292,7 @@ export function LoginPage({
       {messageRetour && !erreurSoumission && messageRetourConfirmable && (
         <div
           className="session-return-overlay"
-          onClick={() => onMessageRetourConfirmeRef.current?.()}
+          onClick={() => onMessageRetourConfirme?.()}
         >
           <div
             ref={dialogRef}
@@ -307,7 +316,7 @@ export function LoginPage({
             <button
               type="button"
               className="session-return-button"
-              onClick={() => onMessageRetourConfirmeRef.current?.()}
+              onClick={() => onMessageRetourConfirme?.()}
             >
               {t(langue, 'auth.sessionInactiveConfirm')}
             </button>

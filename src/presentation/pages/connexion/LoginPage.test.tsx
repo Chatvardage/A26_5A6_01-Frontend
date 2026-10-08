@@ -1,7 +1,7 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LoginPage } from './LoginPage';
+import { LoginPage, gererFocusTrapRetourSession } from './LoginPage';
 
 afterEach(() => {
   cleanup();
@@ -29,15 +29,14 @@ describe('LoginPage', () => {
     });
   });
 
-  it('affiche un pop-up de confirmation pour la session inactive et le confirme via bouton', async () => {
+  it('affiche le dialog de confirmation de session inactive avec le texte et le bouton', () => {
     const onMessageRetourConfirme = vi.fn();
-    const changerLangue = vi.fn();
     const props: Parameters<typeof LoginPage>[0] = {
       gateway: {
         authentifier: async () => resultatAuthentification,
       },
       langue: 'fr',
-      changerLangue,
+      changerLangue: vi.fn(),
       allerAInscription: () => undefined,
       messageRetour: 'auth.sessionInactive',
       messageRetourConfirmable: true,
@@ -50,30 +49,96 @@ describe('LoginPage', () => {
     expect(popup).toBeTruthy();
     expect(popup.textContent).toContain('auth.sessionInactive');
     expect(screen.getByText('auth.sessionInactiveDismissHint')).toBeTruthy();
-    const boutonConfirmation = screen.getByRole('button', {
-      name: 'auth.sessionInactiveConfirm',
-    });
-    expect(boutonConfirmation).toBeTruthy();
+    expect(
+      screen.getByRole('button', {
+        name: 'auth.sessionInactiveConfirm',
+      })
+    ).toBeTruthy();
+  });
 
-    fireEvent.click(boutonConfirmation);
+  it('confirme le retour de session via le bouton de confirmation', () => {
+    const onMessageRetourConfirme = vi.fn();
+    const props: Parameters<typeof LoginPage>[0] = {
+      gateway: {
+        authentifier: async () => resultatAuthentification,
+      },
+      langue: 'fr',
+      changerLangue: vi.fn(),
+      allerAInscription: () => undefined,
+      messageRetour: 'auth.sessionInactive',
+      messageRetourConfirmable: true,
+      onMessageRetourConfirme,
+    };
+
+    render(React.createElement(LoginPage, props));
+
+    fireEvent.click(screen.getByRole('button', { name: 'auth.sessionInactiveConfirm' }));
     expect(onMessageRetourConfirme).toHaveBeenCalledTimes(1);
+  });
 
-    fireEvent.keyDown(window, { key: 'a' });
+  it('confirme le retour de session quand la touche Escape est pressée', () => {
+    const onMessageRetourConfirme = vi.fn();
+    const props: Parameters<typeof LoginPage>[0] = {
+      gateway: {
+        authentifier: async () => resultatAuthentification,
+      },
+      langue: 'fr',
+      changerLangue: vi.fn(),
+      allerAInscription: () => undefined,
+      messageRetour: 'auth.sessionInactive',
+      messageRetourConfirmable: true,
+      onMessageRetourConfirme,
+    };
+
+    render(React.createElement(LoginPage, props));
+
+    fireEvent.click(screen.getByRole('button', { name: 'auth.sessionInactiveConfirm' }));
     fireEvent.keyDown(window, { key: 'Escape' });
-    expect(onMessageRetourConfirme.mock.calls.length).toBeGreaterThan(1);
+
+    expect(onMessageRetourConfirme).toHaveBeenCalledTimes(2);
+  });
+
+  it('change la langue au clic sur le bouton de langue', () => {
+    const changerLangue = vi.fn();
+    const props: Parameters<typeof LoginPage>[0] = {
+      gateway: {
+        authentifier: async () => resultatAuthentification,
+      },
+      langue: 'fr',
+      changerLangue,
+      allerAInscription: () => undefined,
+      messageRetour: 'auth.sessionInactive',
+      messageRetourConfirmable: true,
+      onMessageRetourConfirme: vi.fn(),
+    };
+
+    render(React.createElement(LoginPage, props));
 
     fireEvent.click(screen.getByRole('button', { name: 'EN' }));
     expect(changerLangue).toHaveBeenCalledWith('en');
+  });
+
+  it('ferme le dialogue au clic sur l’overlay de retour de session', () => {
+    const onMessageRetourConfirme = vi.fn();
+    const props: Parameters<typeof LoginPage>[0] = {
+      gateway: {
+        authentifier: async () => resultatAuthentification,
+      },
+      langue: 'fr',
+      changerLangue: vi.fn(),
+      allerAInscription: () => undefined,
+      messageRetour: 'auth.sessionInactive',
+      messageRetourConfirmable: true,
+      onMessageRetourConfirme,
+    };
+
+    render(React.createElement(LoginPage, props));
 
     const overlay = document.querySelector('.session-return-overlay');
     expect(overlay).not.toBeNull();
-    fireEvent.click(overlay as Element);
-    expect(onMessageRetourConfirme).toHaveBeenCalled();
 
-    const button = screen.getByRole('button', { name: 'auth.sessionInactiveConfirm' });
-    button.focus();
-    fireEvent.keyDown(window, { key: 'Tab', shiftKey: false });
-    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
+    fireEvent.click(overlay as Element);
+    expect(onMessageRetourConfirme).toHaveBeenCalledTimes(1);
   });
 
   it('affiche un message simple inline quand la session expirée n’est pas confirmable', () => {
@@ -184,35 +249,129 @@ describe('LoginPage', () => {
     );
   });
 
-  it('gère les cas de focus trap et d’erreur non-Error dans la modale de retour', async () => {
-    const gateway = {
-      authentifier: vi.fn(async () => {
-        throw 'ERR_BACKEND_BRUT';
-      }),
-    };
+  it('gère un Tab de sortie et un Escape dans le piège de focus', () => {
+    const onMessageRetourConfirme = vi.fn();
+    const dialog = document.createElement('div');
+    const buttonA = document.createElement('button');
+    const buttonB = document.createElement('button');
+    dialog.append(buttonA, buttonB);
+    document.body.appendChild(dialog);
+
+    let activeElement: Element | null = buttonA;
+    vi.spyOn(document, 'activeElement', 'get').mockImplementation(() => activeElement);
+    const focusButtonB = vi.spyOn(buttonB, 'focus').mockImplementation(() => {
+      activeElement = buttonB;
+    });
+    const focusButtonA = vi.spyOn(buttonA, 'focus').mockImplementation(() => {
+      activeElement = buttonA;
+    });
+
+    const eventTabShift = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      shiftKey: true,
+      cancelable: true,
+    });
+    gererFocusTrapRetourSession(dialog, eventTabShift, onMessageRetourConfirme);
+    expect(eventTabShift.defaultPrevented).toBe(true);
+    expect(focusButtonB).toHaveBeenCalledTimes(1);
+    expect(activeElement).toBe(buttonB);
+
+    const eventEscape = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      cancelable: true,
+    });
+    gererFocusTrapRetourSession(dialog, eventEscape, onMessageRetourConfirme);
+    expect(onMessageRetourConfirme).toHaveBeenCalledTimes(1);
+    expect(eventEscape.defaultPrevented).toBe(true);
+    expect(focusButtonA).not.toHaveBeenCalled();
+
+    document.body.removeChild(dialog);
+  });
+
+  it('ignore les touches autres que Tab et Escape dans le piège de focus', () => {
+    const dialog = document.createElement('div');
+    const button = document.createElement('button');
+    dialog.append(button);
+    document.body.appendChild(dialog);
+
+    const event = new KeyboardEvent('keydown', { key: 'a', cancelable: true });
+    const focusSpy = vi.spyOn(button, 'focus');
+
+    gererFocusTrapRetourSession(dialog, event, vi.fn());
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(focusSpy).not.toHaveBeenCalled();
+    document.body.removeChild(dialog);
+  });
+
+  it('ignore le Tab quand le dialogue n’a aucun élément focusable', () => {
+    const dialog = document.createElement('div');
+    document.body.appendChild(dialog);
+
+    let activeElement: Element | null = null;
+    vi.spyOn(document, 'activeElement', 'get').mockImplementation(() => activeElement);
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      cancelable: true,
+    });
+    gererFocusTrapRetourSession(dialog, event, vi.fn());
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(activeElement).toBeNull();
+    document.body.removeChild(dialog);
+  });
+
+  it('ne branche pas le focus trap quand aucun message de retour n’est affiché', () => {
+    render(
+      <LoginPage
+        gateway={{ authentifier: vi.fn(async () => resultatAuthentification) }}
+        langue="fr"
+        changerLangue={() => undefined}
+        allerAInscription={() => undefined}
+        messageRetour={null}
+        messageRetourConfirmable={true}
+        onMessageRetourConfirme={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('laisse passer le Tab normal quand le focus est au milieu du dialogue', () => {
+    const dialog = document.createElement('div');
+    const buttonA = document.createElement('button');
+    const buttonB = document.createElement('button');
+    const buttonC = document.createElement('button');
+    dialog.append(buttonA, buttonB, buttonC);
+    document.body.appendChild(dialog);
+
+    let activeElement: Element | null = buttonB;
+    vi.spyOn(document, 'activeElement', 'get').mockImplementation(() => activeElement);
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      shiftKey: false,
+      cancelable: true,
+    });
+    gererFocusTrapRetourSession(dialog, event, vi.fn());
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(activeElement).toBe(buttonB);
+    document.body.removeChild(dialog);
+  });
+
+  it('restaure le focus précédent quand la modale est fermée', () => {
     const previous = document.createElement('button');
-    previous.textContent = 'focus-prev';
+    const focusSpy = vi.spyOn(previous, 'focus');
     document.body.appendChild(previous);
 
-    const originalQuerySelectorAll = HTMLElement.prototype.querySelectorAll;
-    const querySelectorAllSpy = vi
-      .spyOn(HTMLElement.prototype, 'querySelectorAll')
-      .mockImplementation(function (this: HTMLElement, selector: string) {
-        if (selector.includes('button:not([disabled])')) {
-          return [] as unknown as NodeListOf<Element>;
-        }
-        return originalQuerySelectorAll.call(this, selector);
-      });
-
-    Object.defineProperty(document, 'activeElement', {
-      configurable: true,
-      get: () => previous,
-    });
+    vi.spyOn(document, 'activeElement', 'get').mockReturnValue(previous);
 
     const onMessageRetourConfirme = vi.fn();
     const { unmount } = render(
       <LoginPage
-        gateway={gateway}
+        gateway={{ authentifier: vi.fn(async () => resultatAuthentification) }}
         langue="fr"
         changerLangue={() => undefined}
         allerAInscription={() => undefined}
@@ -222,24 +381,77 @@ describe('LoginPage', () => {
       />
     );
 
-    const dialog = screen.getByRole('alertdialog');
-    dialog.focus();
-    fireEvent.keyDown(window, { key: 'Tab', shiftKey: false });
-    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
-    fireEvent.keyDown(window, { key: 'Escape' });
-    fireEvent.click(dialog.parentElement as Element);
-
-    expect(onMessageRetourConfirme).toHaveBeenCalled();
-
     unmount();
-    expect(document.activeElement).toBe(previous);
 
-    Object.defineProperty(document, 'activeElement', {
-      configurable: true,
-      get: () => document.body,
-    });
-    querySelectorAllSpy.mockRestore();
+    expect(focusSpy).toHaveBeenCalledTimes(1);
     document.body.removeChild(previous);
+  });
+
+  it('bloque le focus quand le curseur est hors du dialogue sur la dernière cible du trap', () => {
+    const dialog = document.createElement('div');
+    const buttonA = document.createElement('button');
+    const buttonB = document.createElement('button');
+    dialog.append(buttonA, buttonB);
+    document.body.appendChild(dialog);
+
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+
+    let activeElement: Element | null = outside;
+    vi.spyOn(document, 'activeElement', 'get').mockImplementation(() => activeElement);
+    const focusButtonA = vi.spyOn(buttonA, 'focus').mockImplementation(() => {
+      activeElement = buttonA;
+    });
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      shiftKey: false,
+      cancelable: true,
+    });
+    gererFocusTrapRetourSession(dialog, event, vi.fn());
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(focusButtonA).toHaveBeenCalledTimes(1);
+    expect(activeElement).toBe(buttonA);
+    document.body.removeChild(dialog);
+    document.body.removeChild(outside);
+  });
+
+  it('traduit une erreur brute non-Error dans la modale de retour', async () => {
+    const gateway = {
+      authentifier: vi.fn(async () => {
+        throw 'ERR_BACKEND_BRUT';
+      }),
+    };
+
+    render(
+      <LoginPage
+        gateway={gateway}
+        langue="fr"
+        changerLangue={() => undefined}
+        allerAInscription={() => undefined}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('auth.fieldLabel'), {
+      target: { value: 'alice' },
+    });
+    fireEvent.change(screen.getByLabelText('auth.passwordLabel'), {
+      target: { value: 'motdepasse' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'auth.join' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('status').textContent).toContain('errors.generic');
+    });
+  });
+
+  it('affiche un message générique pour une erreur inconnue non-Error', async () => {
+    const gateway = {
+      authentifier: vi.fn(async () => {
+        throw { cause: 'boom' };
+      }),
+    };
 
     render(
       <LoginPage

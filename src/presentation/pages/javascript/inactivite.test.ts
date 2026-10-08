@@ -119,22 +119,18 @@ describe('Inactivite', () => {
   });
 
   it('throttle les événements fréquents tactiles pour éviter les réinitialisations inutiles', async () => {
-    const minuter = I.creerMinuteurInactivite({
-      delaiMs: 1000,
-      estActif: () => true,
-      notifier: vi.fn(),
-      onExpire: vi.fn(),
-    });
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    const stopper = await I.initialiserPageInactivite();
 
-    minuter.demarrer();
-    const touchmoveEvent = new Event('touchmove', { bubbles: true });
-    const secondTouchmoveEvent = new Event('touchmove', { bubbles: true });
+    const compteAvant = setTimeoutSpy.mock.calls.length;
+    document.dispatchEvent(new Event('touchmove', { bubbles: true }));
+    expect(setTimeoutSpy.mock.calls.length).toBe(compteAvant + 1);
 
-    document.dispatchEvent(touchmoveEvent);
-    vi.advanceTimersByTime(4000);
-    document.dispatchEvent(secondTouchmoveEvent);
-    vi.advanceTimersByTime(100);
-    expect(minuter).toBeTruthy();
+    document.dispatchEvent(new Event('touchmove', { bubbles: true }));
+    expect(setTimeoutSpy.mock.calls.length).toBe(compteAvant + 1);
+
+    stopper?.();
+    setTimeoutSpy.mockRestore();
   });
 
   it('arrête l’instance précédente avant d’en initialiser une nouvelle', async () => {

@@ -44,7 +44,7 @@
       "sessionExpired": "Ta session a expiré. Reconnecte-toi pour continuer.",
       "sessionInactive": "Ta session a été fermée automatiquement après 30 minutes d'inactivité. Confirme pour revenir à l'écran de connexion.",
       "sessionReturnTitle": "Session terminée",
-      "sessionInactiveDismissHint": "Cliquez à l'extérieur de cette fenêtre pour confirmer.",
+      "sessionInactiveDismissHint": "Tu peux aussi confirmer en cliquant à l'extérieur.",
       "sessionInactiveConfirm": "Confirmer"
     },
     "nav": {
@@ -399,7 +399,7 @@
       "sessionExpired": "Your session has expired. Please sign in again.",
       "sessionInactive": "Your session was closed automatically after 30 minutes of inactivity. Confirm to return to the sign-in screen.",
       "sessionReturnTitle": "Session ended",
-      "sessionInactiveDismissHint": "Click outside this window to confirm.",
+      "sessionInactiveDismissHint": "You can also confirm by clicking outside.",
       "sessionInactiveConfirm": "Confirm"
     },
     "nav": {

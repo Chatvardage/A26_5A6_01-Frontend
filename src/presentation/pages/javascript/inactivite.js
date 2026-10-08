@@ -146,113 +146,110 @@
     initialisationEnCours = true;
     objetInactivite.stopper();
 
-    if (!racine.electronAPI || typeof racine.electronAPI.deconnexionSession !== 'function') {
-      initialisationEnCours = false;
-      return null;
-    }
-
     try {
-      const utilisateur = await racine.electronAPI.obtenirUtilisateurConnecte?.();
-      if (!utilisateur) {
-        initialisationEnCours = false;
+      if (!racine.electronAPI || typeof racine.electronAPI.deconnexionSession !== 'function') {
         return null;
       }
-    } catch (erreur) {
-      console.warn('[inactivite] impossible d’obtenir l’utilisateur connecté :', erreur);
-      initialisationEnCours = false;
-      return null;
-    }
 
-    const minuteur = creerMinuteurInactivite({
-      delaiMs: DELAI_INACTIVITE_MS,
-      message: () => obtenirMessageDeconnexionInactivite(),
-      notifier: notifierDeconnexion,
-      onExpire: async () => {
-        const { definirMotifRetourConnexion, allerALaConnexion, deconnexionSession } =
-          racine.electronAPI;
+      const utilisateur = await racine.electronAPI.obtenirUtilisateurConnecte?.();
+      if (!utilisateur) {
+        return null;
+      }
 
-        if (typeof definirMotifRetourConnexion === 'function') {
-          try {
-            const motifRetour = await definirMotifRetourConnexion('session-inactive');
-            if (motifRetour !== 'session-inactive') {
-              console.warn(
-                '[inactivite] motif de retour non confirmé par le main process :',
-                motifRetour
-              );
+      const minuteur = creerMinuteurInactivite({
+        delaiMs: DELAI_INACTIVITE_MS,
+        message: () => obtenirMessageDeconnexionInactivite(),
+        notifier: notifierDeconnexion,
+        onExpire: async () => {
+          const { definirMotifRetourConnexion, allerALaConnexion, deconnexionSession } =
+            racine.electronAPI;
+
+          if (typeof definirMotifRetourConnexion === 'function') {
+            try {
+              const motifRetour = await definirMotifRetourConnexion('session-inactive');
+              if (motifRetour !== 'session-inactive') {
+                console.warn(
+                  '[inactivite] motif de retour non confirmé par le main process :',
+                  motifRetour
+                );
+              }
+            } catch (erreur) {
+              console.error('[inactivite] échec de définition du motif :', erreur);
             }
-          } catch (erreur) {
-            console.error('[inactivite] échec de définition du motif :', erreur);
+          } else {
+            console.error(
+              '[inactivite] méthode absente pour définir le motif de retour à la connexion.'
+            );
           }
-        } else {
-          console.error(
-            '[inactivite] méthode absente pour définir le motif de retour à la connexion.'
-          );
-        }
 
-        if (typeof deconnexionSession !== 'function') {
-          console.error('[inactivite] méthode absente pour la déconnexion.');
-          return;
-        }
+          if (typeof deconnexionSession === 'function') {
+            try {
+              await deconnexionSession();
+            } catch (erreur) {
+              console.error('[inactivite] échec de déconnexion :', erreur);
+            }
+          } else {
+            console.error('[inactivite] méthode absente pour la déconnexion.');
+          }
 
-        try {
-          await deconnexionSession();
-        } catch (erreur) {
-          console.error('[inactivite] échec de déconnexion :', erreur);
-        }
+          if (typeof allerALaConnexion !== 'function') {
+            console.error('[inactivite] méthode absente pour revenir à la connexion.');
+            return;
+          }
 
-        if (typeof allerALaConnexion !== 'function') {
-          console.error('[inactivite] méthode absente pour revenir à la connexion.');
-          return;
-        }
-
-        try {
-          await allerALaConnexion();
-        } catch (erreur) {
-          console.error('[inactivite] échec de retour à la connexion :', erreur);
-        }
-      },
-    });
-
-    // On démarre à une valeur qui représente « jamais » pour garantir qu'un
-    // premier événement fréquent est bien accepté, même si Date.now() vaut 0
-    // dans un environnement de test avec fake timers.
-    let derniereReinitialisationFrequentMs = Number.NEGATIVE_INFINITY;
-    const reactiver = (evenement) => {
-      const estEvenementFrequent =
-        evenement.type === 'mousemove' ||
-        evenement.type === 'scroll' ||
-        evenement.type === 'wheel' ||
-        evenement.type === 'touchmove';
-
-      if (estEvenementFrequent) {
-        const maintenant = Date.now();
-        if (maintenant - derniereReinitialisationFrequentMs < DELAI_THROTTLE_REINITIALISATION_MS) {
-          return;
-        }
-        derniereReinitialisationFrequentMs = maintenant;
-      }
-
-      minuteur.reinitialiser();
-    };
-    const ecouteurs = EVENEMENTS_INTERACTION.map((nom) => {
-      document.addEventListener(nom, reactiver, { passive: true });
-      return { nom, reactiver };
-    });
-
-    const stopper = () => {
-      ecouteurs.forEach(({ nom }) => {
-        document.removeEventListener(nom, reactiver);
+          try {
+            await allerALaConnexion();
+          } catch (erreur) {
+            console.error('[inactivite] échec de retour à la connexion :', erreur);
+          }
+        },
       });
-      minuteur.arreter();
-      if (stopperActif === stopper) {
-        stopperActif = () => undefined;
-      }
-    };
 
-    stopperActif = stopper;
-    initialisationEnCours = false;
-    minuteur.demarrer();
-    return stopper;
+      // On démarre à une valeur qui représente « jamais » pour garantir qu'un
+      // premier événement fréquent est bien accepté, même si Date.now() vaut 0
+      // dans un environnement de test avec fake timers.
+      let derniereReinitialisationFrequentMs = Number.NEGATIVE_INFINITY;
+      const reactiver = (evenement) => {
+        const estEvenementFrequent =
+          evenement.type === 'mousemove' ||
+          evenement.type === 'scroll' ||
+          evenement.type === 'wheel' ||
+          evenement.type === 'touchmove';
+
+        if (estEvenementFrequent) {
+          const maintenant = Date.now();
+          if (maintenant - derniereReinitialisationFrequentMs < DELAI_THROTTLE_REINITIALISATION_MS) {
+            return;
+          }
+          derniereReinitialisationFrequentMs = maintenant;
+        }
+
+        minuteur.reinitialiser();
+      };
+      const ecouteurs = EVENEMENTS_INTERACTION.map((nom) => {
+        document.addEventListener(nom, reactiver, { passive: true });
+        return { nom, reactiver };
+      });
+
+      const stopper = () => {
+        ecouteurs.forEach(({ nom }) => {
+          document.removeEventListener(nom, reactiver);
+        });
+        minuteur.arreter();
+        if (stopperActif === stopper) {
+          stopperActif = () => undefined;
+        }
+      };
+
+      stopperActif = stopper;
+      minuteur.demarrer();
+      return stopper;
+    } catch (erreur) {
+      console.error('[inactivite] échec de l’initialisation :', erreur);
+      return null;
+    } finally {
+      initialisationEnCours = false;
+    }
   }
 
   // L’initialisation de la page est volontairement explicite : le script ne doit
