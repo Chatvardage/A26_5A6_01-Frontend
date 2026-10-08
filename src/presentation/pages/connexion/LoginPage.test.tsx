@@ -13,10 +13,15 @@ vi.mock('../../../i18n/i18n-web', () => ({
 }));
 
 describe('LoginPage', () => {
+  const resultatAuthentification = {
+    utilisateur: { id: 'u1', pseudo: 'alice' },
+    etatConnexion: { statut: 'connecte' as const, depuis: Date.now() },
+  };
+
   it('affiche un pop-up de confirmation pour la session inactive', () => {
     const props: Parameters<typeof LoginPage>[0] = {
       gateway: {
-        authentifier: async () => undefined,
+        authentifier: async () => resultatAuthentification,
       },
       langue: 'fr',
       changerLangue: () => undefined,
@@ -38,7 +43,7 @@ describe('LoginPage', () => {
   it('affiche un message simple inline quand la session expirée n’est pas confirmable', () => {
     const props: Parameters<typeof LoginPage>[0] = {
       gateway: {
-        authentifier: async () => undefined,
+        authentifier: async () => resultatAuthentification,
       },
       langue: 'fr',
       changerLangue: () => undefined,

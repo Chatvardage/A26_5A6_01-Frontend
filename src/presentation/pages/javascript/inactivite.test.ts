@@ -30,11 +30,19 @@ type ElectronApi = {
   allerALaConnexion: () => Promise<void> | void;
 };
 
-const I = (globalThis as typeof globalThis & { Inactivite?: InactiviteApi }).Inactivite as InactiviteApi;
+type BrowserGlobals = typeof globalThis & {
+  electronAPI?: ElectronApi;
+  I18n?: { t: (cle: string) => string };
+  Notification?: typeof Notification;
+  Inactivite?: InactiviteApi;
+};
+
+const g = globalThis as BrowserGlobals;
+const I = g.Inactivite as InactiviteApi;
 
 describe('Inactivite', () => {
-  const originalElectronApi = globalThis.electronAPI as ElectronApi | undefined;
-  const originalI18n = globalThis.I18n as { t: (cle: string) => string } | undefined;
+  const originalElectronApi = g.electronAPI;
+  const originalI18n = g.I18n;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -60,7 +68,7 @@ describe('Inactivite', () => {
   it('ne s’initialise pas automatiquement au chargement du module', async () => {
     vi.resetModules();
 
-    const electronApi = globalThis.electronAPI as ElectronApi;
+    const electronApi = g.electronAPI as ElectronApi;
     const obtenirUtilisateurConnecte = electronApi.obtenirUtilisateurConnecte;
     const definirMotifRetourConnexion = electronApi.definirMotifRetourConnexion;
 
@@ -145,22 +153,24 @@ describe('Inactivite', () => {
 
   it('utilise la traduction active pour le message de déconnexion par inactivité', async () => {
     const originalConsoleWarn = console.warn;
-    const originalNotification = globalThis.Notification;
+    const originalNotification = g.Notification;
 
     const warnMock = vi.fn();
     console.warn = warnMock;
     vi.stubGlobal('Notification', undefined);
-    globalThis.I18n.t = vi.fn((cle: string) =>
-      cle === 'auth.sessionInactive'
-        ? 'Your session was closed automatically after 30 minutes of inactivity.'
-        : cle
-    );
+    g.I18n = {
+      t: vi.fn((cle: string) =>
+        cle === 'auth.sessionInactive'
+          ? 'Your session was closed automatically after 30 minutes of inactivity.'
+          : cle
+      ),
+    };
 
     try {
       await I.initialiserPageInactivite();
       await vi.runAllTimersAsync();
 
-      expect(globalThis.I18n.t).toHaveBeenCalledWith('auth.sessionInactive');
+      expect(g.I18n.t).toHaveBeenCalledWith('auth.sessionInactive');
       expect(warnMock).toHaveBeenCalledWith(
         '[inactivite] notification de déconnexion non disponible :',
         'Your session was closed automatically after 30 minutes of inactivity.'
