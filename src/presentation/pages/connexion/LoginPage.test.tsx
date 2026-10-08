@@ -92,10 +92,9 @@ describe('LoginPage', () => {
 
     render(React.createElement(LoginPage, props));
 
-    fireEvent.click(screen.getByRole('button', { name: 'auth.sessionInactiveConfirm' }));
     fireEvent.keyDown(window, { key: 'Escape' });
 
-    expect(onMessageRetourConfirme).toHaveBeenCalledTimes(2);
+    expect(onMessageRetourConfirme).toHaveBeenCalledTimes(1);
   });
 
   it('change la langue au clic sur le bouton de langue', () => {
@@ -336,6 +335,83 @@ describe('LoginPage', () => {
     );
 
     expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('ne branche pas le focus trap quand la confirmation du message n’est pas activée', () => {
+    render(
+      <LoginPage
+        gateway={{ authentifier: vi.fn(async () => resultatAuthentification) }}
+        langue="fr"
+        changerLangue={() => undefined}
+        allerAInscription={() => undefined}
+        messageRetour="auth.sessionInactive"
+        messageRetourConfirmable={false}
+        onMessageRetourConfirme={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.getByRole('status').textContent).toContain('auth.sessionInactive');
+  });
+
+  it('n’attache pas le focus trap quand le dialog n’a pas encore de ref monté', () => {
+    vi.spyOn(React, 'useRef').mockImplementation((initialValue) => ({ current: initialValue }));
+
+    render(
+      <LoginPage
+        gateway={{ authentifier: vi.fn(async () => resultatAuthentification) }}
+        langue="fr"
+        changerLangue={() => undefined}
+        allerAInscription={() => undefined}
+        messageRetour="auth.sessionInactive"
+        messageRetourConfirmable={true}
+        onMessageRetourConfirme={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole('alertdialog')).not.toBeNull();
+  });
+
+  it('utilise le dialogue comme cible de focus quand aucun élément focusable n’est présent', () => {
+    const querySelectorAllSpy = vi.spyOn(HTMLElement.prototype, 'querySelectorAll');
+    querySelectorAllSpy.mockReturnValue([] as unknown as NodeListOf<Element>);
+
+    render(
+      <LoginPage
+        gateway={{ authentifier: vi.fn(async () => resultatAuthentification) }}
+        langue="fr"
+        changerLangue={() => undefined}
+        allerAInscription={() => undefined}
+        messageRetour="auth.sessionInactive"
+        messageRetourConfirmable={true}
+        onMessageRetourConfirme={vi.fn()}
+      />
+    );
+
+    expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
+    querySelectorAllSpy.mockRestore();
+  });
+
+  it('ne restaure pas le focus précédent si aucun élément précédent n’était actif', () => {
+    const previousActiveElement = document.body;
+    const previousFocusSpy = vi.spyOn(previousActiveElement, 'focus');
+    vi.spyOn(document, 'activeElement', 'get').mockReturnValue(null);
+
+    const { unmount } = render(
+      <LoginPage
+        gateway={{ authentifier: vi.fn(async () => resultatAuthentification) }}
+        langue="fr"
+        changerLangue={() => undefined}
+        allerAInscription={() => undefined}
+        messageRetour="auth.sessionInactive"
+        messageRetourConfirmable={true}
+        onMessageRetourConfirme={vi.fn()}
+      />
+    );
+
+    unmount();
+
+    expect(previousFocusSpy).not.toHaveBeenCalled();
   });
 
   it('laisse passer le Tab normal quand le focus est au milieu du dialogue', () => {

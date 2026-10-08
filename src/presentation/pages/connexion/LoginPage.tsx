@@ -136,7 +136,6 @@ export function LoginPage({
   const messageRetourTitreId = useId();
   const messageRetourDescriptionId = useId();
 
-  /* c8 ignore start */
   useEffect(() => {
     if (!messageRetour || !messageRetourConfirmable || !dialogRef.current) {
       return undefined;
@@ -160,7 +159,6 @@ export function LoginPage({
       }
     };
   }, [messageRetour, messageRetourConfirmable, onMessageRetourConfirme]);
-  /* c8 ignore stop */
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {

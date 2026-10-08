@@ -1,6 +1,8 @@
 'use strict';
 
 (function (racine) {
+  if (racine.Inactivite) return;
+
   const DELAI_INACTIVITE_MS = 30 * 60 * 1000;
   const DELAI_THROTTLE_REINITIALISATION_MS = 5000;
   const EVENEMENTS_INTERACTION = [
@@ -212,6 +214,7 @@
       const reactiver = (evenement) => {
         const estEvenementFrequent =
           evenement.type === 'mousemove' ||
+          evenement.type === 'keydown' ||
           evenement.type === 'scroll' ||
           evenement.type === 'wheel' ||
           evenement.type === 'touchmove';
