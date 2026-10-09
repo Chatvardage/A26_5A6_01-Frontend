@@ -261,18 +261,17 @@ function actualiserBadgeMessagesPrives() {
 }
 
 /** Serveurs du rail ayant au moins un salon non lu. */
+/** Nombre de non-lus de chaque serveur (somme de ses salons), pour le rail. */
 function serveursAvecNonLus() {
-  if (!NotifPrefs.afficheRonds(utilisateurActuelId)) return new Set();
-  return new Set(
-    etat.serveurs
-      .filter(
-        (serveur) =>
-          NotifPrefs.totalNonLus({
-            type: 'salon',
-            conversationIds: serveur.salonIds ?? [],
-          }) > 0
-      )
-      .map((serveur) => serveur.id)
+  if (!NotifPrefs.afficheRonds(utilisateurActuelId)) return new Map();
+  return new Map(
+    etat.serveurs.map((serveur) => [
+      serveur.id,
+      NotifPrefs.totalNonLus({
+        type: 'salon',
+        conversationIds: serveur.salonIds ?? [],
+      }),
+    ])
   );
 }
 
@@ -315,6 +314,7 @@ function afficherSalons() {
     serveurs: etat.serveurs,
     serveurActifId,
     nonLus: pastilles,
+    libelleVoirPlus: t('servers.showMoreRail'),
     surChoix: (serveur) => changerServeur(serveur.id),
   });
 }

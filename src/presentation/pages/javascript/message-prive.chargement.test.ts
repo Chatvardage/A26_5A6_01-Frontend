@@ -483,17 +483,23 @@ describe('page des messages privés', () => {
     );
     expect(compteur('bob:moi')?.hidden).toBe(true);
     expect(compteur('carla:moi')?.textContent).toBe('4');
-    // Pastille du serveur qui a un salon non lu, pas de l'autre.
+    // Compteur du serveur qui a un salon non lu, pas de l'autre.
     await vi.waitFor(() =>
       expect(
         document.querySelector<HTMLElement>(
-          '.server-icon[data-serveur-id="srv"] .notif-dot'
+          '.server-icon[data-serveur-id="srv"] .notif-count--rail'
         )?.hidden
       ).toBe(false)
     );
+    // Compteur numérique : somme des non-lus des salons du serveur.
     expect(
       document.querySelector<HTMLElement>(
-        '.server-icon[data-serveur-id="calme"] .notif-dot'
+        '.server-icon[data-serveur-id="srv"] .notif-count--rail'
+      )?.textContent
+    ).toMatch(/^\d+\+?$/);
+    expect(
+      document.querySelector<HTMLElement>(
+        '.server-icon[data-serveur-id="calme"] .notif-count--rail'
       )?.hidden
     ).toBe(true);
 
@@ -511,7 +517,7 @@ describe('page des messages privés', () => {
       expect(compteur('carla:moi')?.textContent).toBe('5')
     );
     nonLus.salons.s2 = 1;
-    // Message de salon : pastille de son serveur.
+    // Message de salon : compteur de son serveur.
     await rappels.onNouveauMessage({
       conversationType: 'salon',
       salonId: 's2',
@@ -521,7 +527,7 @@ describe('page des messages privés', () => {
     await vi.waitFor(() =>
       expect(
         document.querySelector<HTMLElement>(
-          '.server-icon[data-serveur-id="calme"] .notif-dot'
+          '.server-icon[data-serveur-id="calme"] .notif-count--rail'
         )?.hidden
       ).toBe(false)
     );

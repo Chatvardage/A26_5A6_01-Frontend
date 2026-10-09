@@ -439,24 +439,28 @@ describe('RealGatewayRuntime', () => {
       const { runtime } = creerRuntime();
       runtime.jeton = 'jwt';
       runtime.utilisateurConnecte = { id: 'u1', pseudo: 'ariane' };
-      let repondre!: (valeur: unknown) => void;
+      // Serveurs et activité des salons : deux requêtes, retenues jusqu'après
+      // la déconnexion.
+      const repondres: ((valeur: unknown) => void)[] = [];
       vi.stubGlobal(
         'fetch',
         vi.fn(
           () =>
             new Promise((resolution) => {
-              repondre = resolution;
+              repondres.push(resolution);
             })
         )
       );
 
       const chargement = runtime.chargerServeurs();
       await runtime.deconnexion();
-      repondre(
-        reponseJson([
-          { id: 'srv-a', nom: 'Serveur de A', salons: [{ id: 's1' }] },
-        ])
-      );
+      for (const repondre of repondres) {
+        repondre(
+          reponseJson([
+            { id: 'srv-a', nom: 'Serveur de A', salons: [{ id: 's1' }] },
+          ])
+        );
+      }
 
       await expect(chargement).rejects.toThrow('ERR_SESSION_FERMEE');
       expect(runtime.serveurs.size).toBe(0);
@@ -489,11 +493,16 @@ describe('RealGatewayRuntime', () => {
       ...extra,
     });
 
-    function preparer() {
+    function preparer(activite: unknown = { rooms: {} }) {
       const { runtime } = creerRuntime();
       runtime.utilisateurConnecte = { id: 'moi', pseudo: 'moi' };
       const fetchMock = vi.fn().mockImplementation((url: string) => {
         const chemin = url.replace('http://gateway.test', '').split('?')[0];
+        if (chemin === '/api/messages/activity') {
+          return activite instanceof Error
+            ? Promise.reject(activite)
+            : Promise.resolve(reponseJson(activite));
+        }
         if (chemin === '/api/servers') {
           return Promise.resolve(
             reponseJson([
@@ -525,6 +534,30 @@ describe('RealGatewayRuntime', () => {
       vi.stubGlobal('fetch', fetchMock);
       return { runtime, fetchMock };
     }
+
+    it('trie les serveurs du plus récemment actif au moins actif, Chatvardage reste actif par défaut', async () => {
+      const { runtime } = preparer({
+        rooms: {
+          'room:annonces': '2026-10-01T10:00:00.000Z',
+          'room:equipe': '2026-10-08T10:00:00.000Z',
+        },
+      });
+      const etat = await runtime.obtenirEtat();
+      expect(etat.serveurs.map((s: { id: string }) => s.id)).toEqual([
+        'projet',
+        'chatvardage',
+      ]);
+      expect(etat.serveurActif).toMatchObject({ id: 'chatvardage' });
+    });
+
+    it('activité indisponible : ordre de l’API conservé', async () => {
+      const { runtime } = preparer(new Error('503'));
+      const serveurs = await runtime.obtenirServeurs();
+      expect(serveurs.map((s: { id: string }) => s.id)).toEqual([
+        'chatvardage',
+        'projet',
+      ]);
+    });
 
     it('par défaut : premier serveur, ses salons avec messages, invitations aux serveurs', async () => {
       const { runtime, fetchMock } = preparer();

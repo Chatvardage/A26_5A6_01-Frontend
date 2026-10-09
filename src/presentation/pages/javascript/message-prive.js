@@ -257,8 +257,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     conteneur: document.getElementById('server-rail'),
     avant: document.getElementById('open-create-channel-rail'),
     serveurActifId: null,
-    // Pastilles : avec les compteurs de non-lus, voir actualiserBadgeSalons.
-    nonLus: new Set(),
+    // Compteurs : avec les non-lus, voir actualiserBadgeSalons.
+    nonLus: new Map(),
+    libelleVoirPlus: t('servers.showMoreRail'),
     surChoix: (serveur) => {
       ecrireStockage(localStorage, CLEF_SERVEUR_ACTIF, serveur.id);
       window.electronAPI.navigate('index.html');

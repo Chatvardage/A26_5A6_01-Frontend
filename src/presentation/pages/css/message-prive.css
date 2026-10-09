@@ -60,7 +60,13 @@ body {
   color: var(--text-primary);
 
   font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    'Twemoji',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    Helvetica,
+    Arial,
     sans-serif;
 }
 
@@ -238,7 +244,6 @@ body {
 .avatar.sans-presence::after {
   content: none;
 }
-
 
 .conversation-info {
   min-width: 0;

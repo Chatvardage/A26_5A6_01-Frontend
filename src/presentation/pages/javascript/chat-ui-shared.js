@@ -397,8 +397,9 @@
    * @param {HTMLElement|null} options.avant élément avant lequel insérer
    * @param {object[]} options.serveurs résumés { id, nom, icone }
    * @param {string|null} options.serveurActifId
-   * @param {Set<string>} options.nonLus serveurs à pastiller
+   * @param {Map<string, number>} options.nonLus non-lus par serveur (compteur)
    * @param {(serveur: object) => void} options.surChoix
+   * @param {string} [options.libelleVoirPlus] bouton « voir plus » du rail
    */
   // Dernière liste de serveurs affichée dans le rail, pour la redessiner
   // AUSSITÔT au chargement de la page suivante (voir afficherRailDepuisCache)
@@ -412,6 +413,11 @@
   // Vrai dès que le rail a été dessiné depuis le réseau : le cache, lu de
   // façon asynchrone, ne doit plus l'écraser.
   let railReelAffiche = false;
+  // Pagination du rail : TAILLE_PAGE_RAIL icônes, puis « voir plus » en
+  // ajoute autant (le rail défile). Le serveur actif reste toujours visible.
+  const TAILLE_PAGE_RAIL = 10;
+  let limiteRail = TAILLE_PAGE_RAIL;
+  let dernieresOptionsRail = null;
 
   /** Utilisateur connecté (état du processus main), ou null. */
   async function idUtilisateurConnecte() {
@@ -481,6 +487,7 @@
     serveurActifId,
     nonLus,
     surChoix,
+    libelleVoirPlus,
     memoriser = true,
   }) {
     if (!conteneur) return;
@@ -488,10 +495,22 @@
       railReelAffiche = true;
       void memoriserRail(serveurs);
     }
+    dernieresOptionsRail = {
+      conteneur,
+      avant,
+      serveurs,
+      serveurActifId,
+      nonLus,
+      surChoix,
+      libelleVoirPlus,
+    };
     conteneur
-      .querySelectorAll('.server-icon[data-serveur-id]')
+      .querySelectorAll('.server-icon[data-serveur-id], .server-icon--more')
       .forEach((icone) => icone.remove());
-    for (const serveur of serveurs ?? []) {
+    const liste = serveurs ?? [];
+    const indexActif = liste.findIndex((s) => s.id === serveurActifId);
+    const limite = Math.max(limiteRail, indexActif + 1);
+    for (const serveur of liste.slice(0, limite)) {
       const bouton = document.createElement('button');
       bouton.type = 'button';
       bouton.className = 'server-icon';
@@ -510,12 +529,33 @@
           document.createTextNode(initialesServeur(serveur.nom))
         );
       }
-      const pastille = document.createElement('span');
-      pastille.className = 'notif-dot notif-dot--rail';
-      pastille.hidden = !nonLus?.has(serveur.id);
-      bouton.appendChild(pastille);
+      // Nombre de messages non lus du serveur (somme de ses salons).
+      const nombre = nonLus?.get(serveur.id) ?? 0;
+      const compteur = document.createElement('span');
+      compteur.className = 'notif-count notif-count--rail';
+      compteur.hidden = nombre <= 0;
+      compteur.textContent =
+        nombre > 99 ? '99+' : nombre > 0 ? String(nombre) : '';
+      bouton.appendChild(compteur);
       bouton.addEventListener('click', () => surChoix(serveur));
       conteneur.insertBefore(bouton, avant ?? null);
+    }
+    if (liste.length > limite) {
+      const plus = document.createElement('button');
+      plus.type = 'button';
+      plus.className = 'server-icon server-icon--more';
+      plus.textContent = '⋯';
+      plus.title = libelleVoirPlus ?? '';
+      plus.setAttribute('aria-label', libelleVoirPlus ?? '');
+      plus.addEventListener('click', () => {
+        limiteRail = limite + TAILLE_PAGE_RAIL;
+        afficherRailServeurs({ ...dernieresOptionsRail, memoriser: false });
+        // Les nouvelles icônes sont sous le bouton : on les fait apparaître.
+        conteneur
+          .querySelectorAll('.server-icon[data-serveur-id]')
+          [limite]?.scrollIntoView?.({ block: 'nearest' });
+      });
+      conteneur.insertBefore(plus, avant ?? null);
     }
   }
 

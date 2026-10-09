@@ -482,6 +482,48 @@ describe('page des salons (scripts découpés)', () => {
     expect(erreurs).toEqual([]);
   });
 
+  it('rail : 10 serveurs, puis « voir plus » ; le serveur actif reste visible', async () => {
+    const etat = etatInitial();
+    // Le serveur actif (« srv ») est le 15e : il est affiché quand même.
+    etat.serveurs = [
+      ...Array.from({ length: 14 }, (_, i) => ({
+        id: `s${i}`,
+        nom: `Serveur ${i}`,
+        icone: null,
+        parDefaut: false,
+        salonIds: [],
+      })),
+      ...etat.serveurs,
+      ...Array.from({ length: 10 }, (_, i) => ({
+        id: `t${i}`,
+        nom: `Autre ${i}`,
+        icone: null,
+        parDefaut: false,
+        salonIds: [],
+      })),
+    ];
+    const { document, erreurs } = await chargerPage({
+      autresReponses: { obtenirEtatSalons: etat },
+    });
+    const icones = () =>
+      document.querySelectorAll('#server-rail .server-icon[data-serveur-id]');
+    const plus = () =>
+      document.querySelector<HTMLButtonElement>(
+        '#server-rail .server-icon--more'
+      );
+    await vi.waitFor(() => expect(icones()).toHaveLength(15));
+    expect(icones()[14].getAttribute('data-serveur-id')).toBe('srv');
+    expect(plus()?.getAttribute('aria-label')).toBe(
+      traductions.fr.servers.showMoreRail
+    );
+    // « Voir plus » juste avant le bouton « + » du rail.
+    expect(plus()?.nextElementSibling?.id).toBe('open-create-channel-rail');
+    plus()!.click();
+    expect(icones()).toHaveLength(25);
+    expect(plus()).toBeNull();
+    expect(erreurs).toEqual([]);
+  });
+
   it('invitation masquée pour un simple membre, visible pour un modérateur', async () => {
     const membre = await chargerPage({ monRole: 'membre' });
     expect(
@@ -517,11 +559,12 @@ describe('page des salons (scripts découpés)', () => {
     );
     expect(compteur('général')?.hidden).toBe(true);
     expect(compteur('autre')?.textContent).toBe('99+');
-    expect(
-      document.querySelector<HTMLElement>(
-        '.server-icon[data-serveur-id="srv"] .notif-dot'
-      )?.hidden
-    ).toBe(false);
+    // Compteur du serveur : somme de ses salons non lus (« autre » : 99+).
+    const compteurServeur = document.querySelector<HTMLElement>(
+      '.server-icon[data-serveur-id="srv"] .notif-count--rail'
+    );
+    expect(compteurServeur?.hidden).toBe(false);
+    expect(compteurServeur?.textContent).toBe('99+');
   });
 
   it('un message reçu ailleurs incrémente le compteur ; dans le salon affiché, il est lu', async () => {

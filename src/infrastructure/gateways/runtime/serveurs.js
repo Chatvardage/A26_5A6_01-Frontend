@@ -56,10 +56,39 @@ module.exports = {
     };
   },
 
-  /** GET /api/servers, mémorisé (voir `this.serveurs`). */
+  /**
+   * Dernier message de chaque salon lisible (`room:<id>` -> date). Une panne
+   * laisse l'ordre de l'API : ce n'est qu'un tri.
+   */
+  async chargerActiviteSalons() {
+    try {
+      const corps = await this.appelHttp('/api/messages/activity');
+      return corps?.rooms ?? {};
+    } catch {
+      return {};
+    }
+  },
+
+  /**
+   * GET /api/servers, mémorisé (voir `this.serveurs`), du serveur le plus
+   * récemment actif (dernier message d'un de ses salons) au moins actif ; à
+   * égalité ou sans message, l'ordre de l'API est conservé.
+   */
   async chargerServeurs() {
     const generation = this.generationSession;
-    const serveurs = await this.appelHttp('/api/servers');
+    const [bruts, activite] = await Promise.all([
+      this.appelHttp('/api/servers'),
+      this.chargerActiviteSalons(),
+    ]);
+    const derniere = (serveur) =>
+      serveur.salons.reduce((max, salon) => {
+        const date = Date.parse(activite[`room:${salon.id}`] ?? '') || 0;
+        return date > max ? date : max;
+      }, 0);
+    const serveurs = bruts
+      .map((serveur) => ({ serveur, date: derniere(serveur) }))
+      .sort((a, b) => b.date - a.date)
+      .map(({ serveur }) => serveur);
     // Déconnecté pendant l'appel : ces serveurs sont ceux de l'ancien
     // compte, ils ne doivent pas repeupler l'état de la session suivante.
     if (generation !== this.generationSession) {
@@ -136,7 +165,8 @@ module.exports = {
     const actifId =
       (salonId && this.salonVersServeur.get(salonId)) ||
       (serveurId && this.serveurs.has(serveurId) ? serveurId : null) ||
-      serveurs[0]?.id;
+      // Par défaut, Chatvardage (le rail est trié par activité).
+      (serveurs.find((serveur) => serveur.parDefaut) ?? serveurs[0])?.id;
     const actif = this.serveurs.get(actifId) ?? null;
 
     // Rooms Socket.IO de TOUS les salons visibles de tous mes serveurs : les
