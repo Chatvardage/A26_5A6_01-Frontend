@@ -117,6 +117,7 @@
       "hiddenPreview": "Nouveau message reçu"
     },
     "dm": {
+      "showMoreConversations": "Voir plus de conversations",
       "title": "Messages privés",
       "filterAll": "Tous",
       "filterOnline": "En ligne",
@@ -151,7 +152,8 @@
     "history": {
       "loadOlder": "Charger les messages plus anciens",
       "loading": "Chargement des messages…",
-      "endOfHistory": "Fin de l'historique"
+      "endOfHistory": "Fin de l'historique",
+      "loadNewer": "Charger les messages plus récents"
     },
     "errors": {
       "generic": "Une erreur est survenue.",
@@ -286,6 +288,9 @@
       "accountSectionHint": "Change ton mot de passe. Le courriel ne peut pas être modifié.",
       "logoutAll": "Se déconnecter partout",
       "logoutAllHint": "Ferme ta session sur tous tes appareils, celui-ci compris (appareil perdu ou prêté).",
+      "logoutOthers": "Déconnecter les autres appareils",
+      "logoutOthersHint": "Ferme ta session sur tous tes autres appareils ; celui-ci reste connecté.",
+      "logoutOthersDone": "Les autres appareils ont été déconnectés.",
       "emailReadonlyHint": "Le courriel ne peut pas être modifié.",
       "currentPasswordIncorrect": "Mot de passe actuel incorrect."
     },
@@ -299,6 +304,8 @@
       "discoverTitle": "Rejoindre un serveur public",
       "searchPlaceholder": "Rechercher un serveur…",
       "noPublic": "Aucun serveur public à rejoindre.",
+      "showMorePublic": "Afficher plus de serveurs",
+      "showMoreRail": "Voir plus de serveurs",
       "join": "Rejoindre",
       "joined": "Serveur rejoint.",
       "memberCount": "{n} membre(s)",
@@ -313,6 +320,10 @@
       "roleUpdated": "Rôle mis à jour.",
       "kick": "Expulser",
       "kicked": "Membre expulsé.",
+      "transferTitle": "Expulser {name}, propriétaire du serveur",
+      "transferHint": "Choisissez le membre qui deviendra propriétaire. L’ancien propriétaire perd l’accès au serveur et à ses messages. Seuls les membres affichés sont proposés.",
+      "makeOwner": "Nommer propriétaire et expulser",
+      "noOtherMember": "Aucun autre membre ne peut reprendre ce serveur : supprimez-le plutôt.",
       "updated": "Serveur mis à jour.",
       "leave": "Quitter le serveur",
       "leaveConfirm": "Quitter ce serveur ?",
@@ -347,11 +358,21 @@
     },
     "readReceipts": {
       "newMessages": "Nouveaux messages",
-      "delivered": "Distribué",
+      "delivered": "Livré, non lu",
       "read": "Lu",
       "seenBy": "Vu par {names}",
       "seenByOneMore": "Vu par {names} et 1 autre",
-      "seenByMore": "Vu par {names} et {count} autres"
+      "seenByMore": "Vu par {names} et {count} autres",
+      "sent": "Envoyé, non lu"
+    },
+    "userCard": {
+      "title": "Profil",
+      "view": "Voir le profil de {name}",
+      "alias": "Alias",
+      "pseudo": "Pseudo",
+      "noAlias": "Aucun alias",
+      "message": "Message privé",
+      "close": "Fermer"
     }
   },
   "en": {
@@ -472,6 +493,7 @@
       "hiddenPreview": "New message received"
     },
     "dm": {
+      "showMoreConversations": "See more conversations",
       "title": "Direct Messages",
       "filterAll": "All",
       "filterOnline": "Online",
@@ -506,7 +528,8 @@
     "history": {
       "loadOlder": "Load older messages",
       "loading": "Loading messages…",
-      "endOfHistory": "End of history"
+      "endOfHistory": "End of history",
+      "loadNewer": "Load newer messages"
     },
     "errors": {
       "generic": "An error occurred.",
@@ -641,6 +664,9 @@
       "accountSectionHint": "Change your password. The email address cannot be changed.",
       "logoutAll": "Log out everywhere",
       "logoutAllHint": "Ends your session on all your devices, this one included (lost or lent device).",
+      "logoutOthers": "Sign out other devices",
+      "logoutOthersHint": "Ends your session on all your other devices; this one stays signed in.",
+      "logoutOthersDone": "Your other devices have been signed out.",
       "emailReadonlyHint": "The email address cannot be changed.",
       "currentPasswordIncorrect": "Current password is incorrect."
     },
@@ -654,6 +680,8 @@
       "discoverTitle": "Join a public server",
       "searchPlaceholder": "Search a server…",
       "noPublic": "No public server to join.",
+      "showMorePublic": "Show more servers",
+      "showMoreRail": "See more servers",
       "join": "Join",
       "joined": "Server joined.",
       "memberCount": "{n} member(s)",
@@ -668,6 +696,10 @@
       "roleUpdated": "Role updated.",
       "kick": "Kick",
       "kicked": "Member kicked.",
+      "transferTitle": "Kick {name}, the server owner",
+      "transferHint": "Choose the member who will become the owner. The former owner loses access to the server and its messages. Only the members shown are offered.",
+      "makeOwner": "Make owner and kick",
+      "noOtherMember": "No other member can take over this server: delete it instead.",
       "updated": "Server updated.",
       "leave": "Leave server",
       "leaveConfirm": "Leave this server?",
@@ -702,11 +734,21 @@
     },
     "readReceipts": {
       "newMessages": "New messages",
-      "delivered": "Delivered",
+      "delivered": "Delivered, unread",
       "read": "Read",
       "seenBy": "Seen by {names}",
       "seenByOneMore": "Seen by {names} and 1 other",
-      "seenByMore": "Seen by {names} and {count} others"
+      "seenByMore": "Seen by {names} and {count} others",
+      "sent": "Sent, unread"
+    },
+    "userCard": {
+      "title": "Profile",
+      "view": "View {name}'s profile",
+      "alias": "Alias",
+      "pseudo": "Username",
+      "noAlias": "No alias",
+      "message": "Direct message",
+      "close": "Close"
     }
   }
 }

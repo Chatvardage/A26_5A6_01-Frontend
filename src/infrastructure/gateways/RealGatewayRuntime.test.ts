@@ -434,29 +434,109 @@ describe('RealGatewayRuntime', () => {
     });
   });
 
+  describe('deconnexionAutres', () => {
+    it.each([null, {}, { jeton: '' }, { jeton: '   ' }, { jeton: 42 }])(
+      'refuse une réponse sans nouveau jeton valide sans effacer la session : %j',
+      async (reponse) => {
+        const { runtime } = creerRuntime();
+        runtime.etatConnexion.statut = 'connecte';
+        runtime.jeton = 'ancien';
+        const connecter = vi.spyOn(runtime, 'connecterSocket').mockImplementation(() => undefined);
+        vi.spyOn(runtime, 'appelHttp').mockResolvedValue(reponse);
+        await expect(runtime.deconnexionAutres()).rejects.toThrow('ERR_RECONNEXION_REQUISE');
+        expect(runtime.jeton).toBe('ancien');
+        expect(runtime.sauvegarderJetonPersiste).not.toHaveBeenCalled();
+        expect(connecter).not.toHaveBeenCalled();
+        expect(runtime.rotationJetonEnCours).toBe(false);
+      }
+    );
+    it('garde cet appareil connecté avec la nouvelle session renvoyée par Auth', async () => {
+      const { runtime } = creerRuntime();
+      runtime.etatConnexion.statut = 'connecte';
+      runtime.jeton = 'ancien';
+      runtime.utilisateurConnecte = { id: 'u1', pseudo: 'ariane' };
+      const connecter = vi
+        .spyOn(runtime, 'connecterSocket')
+        .mockImplementation(() => undefined);
+      let pendantAppel = false;
+      const fetchMock = vi.fn().mockImplementation(() => {
+        pendantAppel = runtime.rotationJetonEnCours;
+        return Promise.resolve(
+          reponseJson({ jeton: 'nouveau', refresh_token: 'r', utilisateur: {} })
+        );
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      await runtime.deconnexionAutres();
+
+      const [url, options] = fetchMock.mock.calls[0];
+      expect(url).toBe('http://gateway.test/api/auth/logout-others');
+      expect(options.method).toBe('POST');
+      expect(options.headers.Authorization).toBe('Bearer ancien');
+      // Pendant le remplacement, un refus de l'ancien jeton ne ferme rien.
+      expect(pendantAppel).toBe(true);
+      expect(runtime.rotationJetonEnCours).toBe(false);
+      expect(runtime.jeton).toBe('nouveau');
+      expect(runtime.sauvegarderJetonPersiste).toHaveBeenCalledWith('nouveau');
+      expect(connecter).toHaveBeenCalled();
+      expect(runtime.utilisateurConnecte).not.toBeNull();
+    });
+
+    it('garde la session et l’ancien jeton si Auth refuse ou si le réseau manque', async () => {
+      const { runtime } = creerRuntime();
+      runtime.etatConnexion.statut = 'connecte';
+      runtime.jeton = 'jwt';
+      runtime.utilisateurConnecte = { id: 'u1', pseudo: 'ariane' };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(reponseJson({ erreur: 'x' }, 503))
+      );
+      await expect(runtime.deconnexionAutres()).rejects.toThrow();
+      expect(runtime.jeton).toBe('jwt');
+      expect(runtime.rotationJetonEnCours).toBe(false);
+      runtime.etatConnexion.statut = 'hors-ligne';
+      await expect(runtime.deconnexionAutres()).rejects.toThrow();
+    });
+
+    it('ignore le refus de l’ancien jeton pendant le remplacement', async () => {
+      const { runtime } = creerRuntime();
+      runtime.jeton = 'jwt';
+      runtime.rotationJetonEnCours = true;
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      await runtime.verifierSessionApres401();
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(runtime.jeton).toBe('jwt');
+    });
+  });
+
   describe('chargerServeurs après une déconnexion', () => {
     it('ignore la réponse arrivée après la déconnexion (ancien compte)', async () => {
       const { runtime } = creerRuntime();
       runtime.jeton = 'jwt';
       runtime.utilisateurConnecte = { id: 'u1', pseudo: 'ariane' };
-      let repondre!: (valeur: unknown) => void;
+      // Serveurs et activité des salons : deux requêtes, retenues jusqu'après
+      // la déconnexion.
+      const repondres: ((valeur: unknown) => void)[] = [];
       vi.stubGlobal(
         'fetch',
         vi.fn(
           () =>
             new Promise((resolution) => {
-              repondre = resolution;
+              repondres.push(resolution);
             })
         )
       );
 
       const chargement = runtime.chargerServeurs();
       await runtime.deconnexion();
-      repondre(
-        reponseJson([
-          { id: 'srv-a', nom: 'Serveur de A', salons: [{ id: 's1' }] },
-        ])
-      );
+      for (const repondre of repondres) {
+        repondre(
+          reponseJson([
+            { id: 'srv-a', nom: 'Serveur de A', salons: [{ id: 's1' }] },
+          ])
+        );
+      }
 
       await expect(chargement).rejects.toThrow('ERR_SESSION_FERMEE');
       expect(runtime.serveurs.size).toBe(0);
@@ -489,11 +569,16 @@ describe('RealGatewayRuntime', () => {
       ...extra,
     });
 
-    function preparer() {
+    function preparer(activite: unknown = { rooms: {} }) {
       const { runtime } = creerRuntime();
       runtime.utilisateurConnecte = { id: 'moi', pseudo: 'moi' };
       const fetchMock = vi.fn().mockImplementation((url: string) => {
         const chemin = url.replace('http://gateway.test', '').split('?')[0];
+        if (chemin === '/api/messages/activity') {
+          return activite instanceof Error
+            ? Promise.reject(activite)
+            : Promise.resolve(reponseJson(activite));
+        }
         if (chemin === '/api/servers') {
           return Promise.resolve(
             reponseJson([
@@ -525,6 +610,30 @@ describe('RealGatewayRuntime', () => {
       vi.stubGlobal('fetch', fetchMock);
       return { runtime, fetchMock };
     }
+
+    it('trie les serveurs du plus récemment actif au moins actif, Chatvardage reste actif par défaut', async () => {
+      const { runtime } = preparer({
+        rooms: {
+          'room:annonces': '2026-10-01T10:00:00.000Z',
+          'room:equipe': '2026-10-08T10:00:00.000Z',
+        },
+      });
+      const etat = await runtime.obtenirEtat();
+      expect(etat.serveurs.map((s: { id: string }) => s.id)).toEqual([
+        'projet',
+        'chatvardage',
+      ]);
+      expect(etat.serveurActif).toMatchObject({ id: 'chatvardage' });
+    });
+
+    it('activité indisponible : ordre de l’API conservé', async () => {
+      const { runtime } = preparer(new Error('503'));
+      const serveurs = await runtime.obtenirServeurs();
+      expect(serveurs.map((s: { id: string }) => s.id)).toEqual([
+        'chatvardage',
+        'projet',
+      ]);
+    });
 
     it('par défaut : premier serveur, ses salons avec messages, invitations aux serveurs', async () => {
       const { runtime, fetchMock } = preparer();
@@ -777,7 +886,12 @@ describe('RealGatewayRuntime', () => {
         })
       ).toEqual({ nonLus: 0 });
 
-      await expect(runtime.marquerConversationLue({ type: 'salon', conversationId: 'salon 1' })).rejects.toThrow('ERR_MESSAGE_INTROUVABLE');
+      await expect(
+        runtime.marquerConversationLue({
+          type: 'salon',
+          conversationId: 'salon 1',
+        })
+      ).rejects.toThrow('ERR_MESSAGE_INTROUVABLE');
       expect(fetchMock).toHaveBeenCalledTimes(3);
 
       const appels = fetchMock.mock.calls.map(([url, init]) => [
@@ -1041,6 +1155,13 @@ describe('RealGatewayRuntime', () => {
         undefined,
       ],
       [
+        'expulserMembre',
+        { serveurId: 's', utilisateurId: 'owner', nouveauProprietaire: 'b/c' },
+        'DELETE',
+        '/api/servers/s/members/owner?nouveauProprietaire=b%2Fc',
+        undefined,
+      ],
+      [
         'changerRoleMembre',
         { serveurId: 's', utilisateurId: 'u', role: 'moderateur' },
         'PATCH',
@@ -1087,15 +1208,20 @@ describe('RealGatewayRuntime', () => {
       ).toEqual(corps);
     });
 
-    it('decouvrirServeurs : filtre optionnel par nom', async () => {
+    it('decouvrirServeurs : filtre optionnel par nom et pages', async () => {
       const { runtime } = creerRuntime();
-      const fetchMock = vi.fn().mockResolvedValue(reponseJson([]));
+      const page = { serveurs: [], total: 0, suivant: null };
+      const fetchMock = vi.fn().mockResolvedValue(reponseJson(page));
       vi.stubGlobal('fetch', fetchMock);
-      await runtime.decouvrirServeurs('  pro ');
+      await expect(runtime.decouvrirServeurs('  pro ')).resolves.toEqual(page);
       await runtime.decouvrirServeurs('');
+      await runtime.decouvrirServeurs('pro', 20);
+      await runtime.decouvrirServeurs('', 40);
       expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
         'http://gateway.test/api/servers/decouvrir?q=pro',
         'http://gateway.test/api/servers/decouvrir',
+        'http://gateway.test/api/servers/decouvrir?q=pro&decalage=20',
+        'http://gateway.test/api/servers/decouvrir?decalage=40',
       ]);
     });
 
@@ -1959,9 +2085,62 @@ describe('RealGatewayRuntime', () => {
       expect(runtime.utilisateursConnus.get('u2').pseudo).toBe('nouveau');
     });
 
-    it("ignore 'profil.changed' pour soi-même, un inconnu ou un payload invalide", () => {
+    it('relit notre propre profil quand il change sur un autre appareil', async () => {
+      const { runtime, socket } = runtimeConnecte();
+      runtime.presences.moi = 'en-ligne';
+      const config = {
+        alias: 'Nouvel alias',
+        avatar: 'data:image/png;base64,AA',
+        statutPresence: 'horsLigne',
+        vuLaDerniereFois: '2026-10-08T10:00:00.000Z',
+        theme: 'sombre',
+        langue: 'fr',
+        modeNotification: 'systeme',
+      };
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(reponseJson(config)));
+      const profils: unknown[] = [];
+      const presences: unknown[] = [];
+      runtime.on('profil-soi', (c: unknown) => profils.push(c));
+      runtime.on('presence', (p: unknown) => presences.push(p));
+
+      socket._declencher('profil.changed', { userId: 'moi' });
+      await vi.waitFor(() => expect(profils).toHaveLength(1));
+      expect(profils[0]).toMatchObject({
+        alias: 'Nouvel alias',
+        avatar: 'data:image/png;base64,AA',
+      });
+      expect(runtime.presences.moi).toBe('hors-ligne');
+      expect(presences).toContainEqual(
+        expect.objectContaining({ utilisateurId: 'moi', statut: 'hors-ligne' })
+      );
+    });
+
+    it('notre profil : présence jamais définie gardée, panne et session fermée sans effet', async () => {
+      const { runtime } = runtimeConnecte();
+      runtime.presences.moi = 'en-ligne';
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValue(
+            reponseJson({ statutPresence: 'horsLigne', vuLaDerniereFois: null })
+          )
+      );
+      await runtime.rafraichirProfilSoi();
+      expect(runtime.presences.moi).toBe('en-ligne');
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('réseau')));
+      await expect(runtime.rafraichirProfilSoi()).resolves.toBeUndefined();
+      runtime.utilisateurConnecte = null;
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      await runtime.rafraichirProfilSoi();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("ignore 'profil.changed' d'un inconnu ou un payload invalide (soi-même : profil relu à part)", () => {
       const { runtime, socket } = runtimeConnecte();
       const rafraichir = vi.spyOn(runtime, 'rafraichirProfil');
+      vi.spyOn(runtime, 'rafraichirProfilSoi').mockResolvedValue(undefined);
       socket._declencher('profil.changed', { userId: 'moi' });
       socket._declencher('profil.changed', { userId: 'jamais-vu' });
       socket._declencher('profil.changed', { userId: 42 });

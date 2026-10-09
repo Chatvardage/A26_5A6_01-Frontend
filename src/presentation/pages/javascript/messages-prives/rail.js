@@ -45,25 +45,25 @@ async function actualiserBadgeSalons({ recharger = true } = {}) {
       return; // Rail best-effort, voir commentaire ci-dessus.
     }
   }
+  // Nombre de non-lus de chaque serveur (somme de ses salons).
   const pastilles = NotifPrefs.afficheRonds(state.currentUserId)
-    ? new Set(
-        serveursRail
-          .filter(
-            (serveur) =>
-              NotifPrefs.totalNonLus({
-                type: 'salon',
-                conversationIds: serveur.salonIds ?? [],
-              }) > 0
-          )
-          .map((serveur) => serveur.id)
+    ? new Map(
+        serveursRail.map((serveur) => [
+          serveur.id,
+          NotifPrefs.totalNonLus({
+            type: 'salon',
+            conversationIds: serveur.salonIds ?? [],
+          }),
+        ])
       )
-    : new Set();
+    : new Map();
   ChatUiShared.afficherRailServeurs({
     conteneur: document.getElementById('server-rail'),
     avant: document.getElementById('open-create-channel-rail'),
     serveurs: serveursRail,
     serveurActifId: null, // aucun serveur « actif » sur cette page
     nonLus: pastilles,
+    libelleVoirPlus: t('servers.showMoreRail'),
     surChoix: (serveur) => {
       ecrireStockage(localStorage, CLEF_SERVEUR_ACTIF, serveur.id);
       window.electronAPI.navigate('index.html');

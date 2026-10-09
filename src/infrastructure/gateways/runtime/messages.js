@@ -25,6 +25,20 @@ module.exports = {
 
   // --- Messages privés / DM (HTTP, voir Message-Service) ------------------------
 
+  /** Reception par ce client, meme si la conversation nest pas ouverte. */
+  async confirmerLivraisonDm(brut) {
+    if (!brut.id || brut.recipientId !== this.utilisateurConnecte?.id || brut.deliveredAt)
+      return;
+    try {
+      await this.appelHttp(
+        `/api/messages/${encodeURIComponent(brut.id)}/delivered`,
+        { methode: 'PUT' }
+      );
+    } catch {
+      /* Une reconnexion ou la prochaine lecture retentera la confirmation. */
+    }
+  },
+
   mapperMessageDm(brut) {
     const cree = new Date(brut.createdAt).getTime();
     const modifie = new Date(brut.updatedAt).getTime();
@@ -34,6 +48,9 @@ module.exports = {
       auteurId: brut.senderId,
       contenu: brut.content,
       envoi: cree,
+      ...(brut.deliveredAt
+        ? { livraison: new Date(brut.deliveredAt).getTime() }
+        : {}),
       ...(modifie !== cree ? { modification: modifie } : {}),
     };
   },
@@ -46,23 +63,35 @@ module.exports = {
 
   async obtenirMessagesPriveesAvantParUtilisateur(
     autreUtilisateurId,
-    { avantId, taille } = {}
+    { avantId, autourId, apresId, taille } = {}
   ) {
     const limite = taille || TAILLE_PAGE_MESSAGES;
     const params = new URLSearchParams({ limit: String(limite) });
     if (avantId) params.set('cursor', avantId);
+    if (autourId) params.set('around', autourId);
+    if (apresId) {
+      params.set('cursor', apresId);
+      params.set('direction', 'after');
+    }
     const bruts = await this.appelHttp(
       `/api/messages/history/${encodeURIComponent(autreUtilisateurId)}?${params.toString()}`
     );
+    for (const brut of bruts) void this.confirmerLivraisonDm(brut);
     const messages = bruts.map((m) => this.mapperMessageDm(m));
     messages.forEach((m) => this.indexMessages.set(m.id, { type: 'dm' }));
     return { messages, finHistorique: bruts.length < limite };
   },
 
-  async obtenirMessagesPriveesAvant({ conversationId, avantId, taille }) {
+  async obtenirMessagesPriveesAvant({
+    conversationId,
+    avantId,
+    autourId,
+    apresId,
+    taille,
+  }) {
     return this.obtenirMessagesPriveesAvantParUtilisateur(
       this.autreParticipantDm(conversationId),
-      { avantId, taille }
+      { avantId, autourId, apresId, taille }
     );
   },
 
@@ -230,7 +259,10 @@ module.exports = {
       type === 'salon'
         ? `/api/messages/rooms/${encodeURIComponent(conversationId)}/read`
         : `/api/messages/conversations/${encodeURIComponent(this.autreParticipantDm(conversationId))}/read`;
-    const etat = await this.appelHttp(chemin, { methode: 'PUT', corps: { messageId } });
+    const etat = await this.appelHttp(chemin, {
+      methode: 'PUT',
+      corps: { messageId },
+    });
     return { nonLus: etat?.unreadCount ?? 0 };
   },
 

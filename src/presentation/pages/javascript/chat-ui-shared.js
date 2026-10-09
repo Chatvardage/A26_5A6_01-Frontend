@@ -397,8 +397,9 @@
    * @param {HTMLElement|null} options.avant élément avant lequel insérer
    * @param {object[]} options.serveurs résumés { id, nom, icone }
    * @param {string|null} options.serveurActifId
-   * @param {Set<string>} options.nonLus serveurs à pastiller
+   * @param {Map<string, number>} options.nonLus non-lus par serveur (compteur)
    * @param {(serveur: object) => void} options.surChoix
+   * @param {string} [options.libelleVoirPlus] bouton « voir plus » du rail
    */
   // Dernière liste de serveurs affichée dans le rail, pour la redessiner
   // AUSSITÔT au chargement de la page suivante (voir afficherRailDepuisCache)
@@ -412,6 +413,11 @@
   // Vrai dès que le rail a été dessiné depuis le réseau : le cache, lu de
   // façon asynchrone, ne doit plus l'écraser.
   let railReelAffiche = false;
+  // Pagination du rail : TAILLE_PAGE_RAIL icônes, puis « voir plus » en
+  // ajoute autant (le rail défile). Le serveur actif reste toujours visible.
+  const TAILLE_PAGE_RAIL = 10;
+  let limiteRail = TAILLE_PAGE_RAIL;
+  let dernieresOptionsRail = null;
 
   /** Utilisateur connecté (état du processus main), ou null. */
   async function idUtilisateurConnecte() {
@@ -481,6 +487,7 @@
     serveurActifId,
     nonLus,
     surChoix,
+    libelleVoirPlus,
     memoriser = true,
   }) {
     if (!conteneur) return;
@@ -488,10 +495,25 @@
       railReelAffiche = true;
       void memoriserRail(serveurs);
     }
+    dernieresOptionsRail = {
+      conteneur,
+      avant,
+      serveurs,
+      serveurActifId,
+      nonLus,
+      surChoix,
+      libelleVoirPlus,
+    };
     conteneur
-      .querySelectorAll('.server-icon[data-serveur-id]')
+      .querySelectorAll('.server-icon[data-serveur-id], .server-icon--more')
       .forEach((icone) => icone.remove());
-    for (const serveur of serveurs ?? []) {
+    const liste = serveurs ?? [];
+    const indexActif = liste.findIndex((s) => s.id === serveurActifId);
+    const limite = limiteRail;
+    const visibles = liste.slice(0, limite);
+    // Le serveur actif hors page reste visible sans dévoiler les pages suivantes.
+    if (indexActif >= limite) visibles.push(liste[indexActif]);
+    for (const serveur of visibles) {
       const bouton = document.createElement('button');
       bouton.type = 'button';
       bouton.className = 'server-icon';
@@ -510,12 +532,33 @@
           document.createTextNode(initialesServeur(serveur.nom))
         );
       }
-      const pastille = document.createElement('span');
-      pastille.className = 'notif-dot notif-dot--rail';
-      pastille.hidden = !nonLus?.has(serveur.id);
-      bouton.appendChild(pastille);
+      // Nombre de messages non lus du serveur (somme de ses salons).
+      const nombre = nonLus?.get(serveur.id) ?? 0;
+      const compteur = document.createElement('span');
+      compteur.className = 'notif-count notif-count--rail';
+      compteur.hidden = nombre <= 0;
+      compteur.textContent =
+        nombre > 99 ? '99+' : nombre > 0 ? String(nombre) : '';
+      bouton.appendChild(compteur);
       bouton.addEventListener('click', () => surChoix(serveur));
       conteneur.insertBefore(bouton, avant ?? null);
+    }
+    if (liste.length > visibles.length) {
+      const plus = document.createElement('button');
+      plus.type = 'button';
+      plus.className = 'server-icon server-icon--more';
+      plus.textContent = '⋯';
+      plus.title = libelleVoirPlus ?? '';
+      plus.setAttribute('aria-label', libelleVoirPlus ?? '');
+      plus.addEventListener('click', () => {
+        limiteRail = limite + TAILLE_PAGE_RAIL;
+        afficherRailServeurs({ ...dernieresOptionsRail, memoriser: false });
+        // Les nouvelles icônes sont sous le bouton : on les fait apparaître.
+        conteneur
+          .querySelectorAll('.server-icon[data-serveur-id]')
+          [limite]?.scrollIntoView?.({ block: 'nearest' });
+      });
+      conteneur.insertBefore(plus, avant ?? null);
     }
   }
 
@@ -1052,9 +1095,14 @@
   function creerStatutLecture(statut, t) {
     const marque = document.createElement('span');
     marque.classList.add('read-status', `read-status--${statut}`);
-    marque.textContent = statut === 'lu' ? '✓✓' : '✓';
+    marque.textContent =
+      statut === 'lu' ? '✓✓' : statut === 'distribue' ? '✓' : '○';
     const libelle = t(
-      statut === 'lu' ? 'readReceipts.read' : 'readReceipts.delivered'
+      statut === 'lu'
+        ? 'readReceipts.read'
+        : statut === 'distribue'
+          ? 'readReceipts.delivered'
+          : 'readReceipts.sent'
     );
     marque.title = libelle;
     marque.setAttribute('aria-label', libelle);
@@ -1094,7 +1142,7 @@
       jusqua: Date.now() + DUREE_MISE_EN_EVIDENCE_MS,
     };
     ligne.classList.add('message-cible');
-    ligne.scrollIntoView?.({ block: 'center' });
+    ligne.scrollIntoView?.({ block: 'center', behavior: 'instant' });
     window.setTimeout(() => {
       conteneur
         .querySelectorAll('.message-cible')
@@ -1117,7 +1165,151 @@
     );
   }
 
+  function afficherChargementRecherche(conteneur, t) {
+    const statut = document.createElement('div');
+    statut.className = 'recherche-message-chargement';
+    statut.setAttribute('role', 'status');
+    statut.setAttribute('aria-label', t('history.loading'));
+    const roue = document.createElement('span');
+    roue.className = 'recherche-message-roue';
+    roue.setAttribute('aria-hidden', 'true');
+    statut.appendChild(roue);
+    conteneur.replaceChildren(statut);
+  }
+
+  /**
+   * Fiche de profil d'un autre utilisateur ({ id, pseudo, alias, avatar }) :
+   * photo (ou initiale), nom affiché, @pseudo, présence, alias et pseudo, et
+   * un bouton « Message privé » (`surMessagePrive(utilisateur)`), absent pour
+   * soi-même et pour la conversation privée déjà affichée avec cette
+   * personne (`conversationAvecId`). Dialogue créé à la demande et retiré à
+   * la fermeture : utilisable par-dessus un autre dialogue (liste des
+   * membres d'un serveur).
+   */
+  function ouvrirFicheProfil({
+    utilisateur,
+    enLigne,
+    t,
+    utilisateurActuelId,
+    conversationAvecId,
+    surMessagePrive,
+  }) {
+    if (!utilisateur?.id) return null;
+    const fiche = window.LogiqueInterface.ficheProfil(utilisateur, {
+      utilisateurActuelId,
+      conversationAvecId,
+    });
+    const nom = fiche.nom || t('dm.defaultUser');
+
+    const dialogue = document.createElement('dialog');
+    dialogue.className = 'profile-card-dialog';
+    dialogue.setAttribute('aria-label', t('userCard.title'));
+
+    const entete = document.createElement('div');
+    entete.className = 'dialog-header';
+    const titre = document.createElement('h2');
+    titre.textContent = t('userCard.title');
+    const fermer = document.createElement('button');
+    fermer.type = 'button';
+    fermer.className = 'close-button';
+    fermer.setAttribute('aria-label', t('userCard.close'));
+    fermer.textContent = '×';
+    fermer.addEventListener('click', () => dialogue.close());
+    entete.append(titre, fermer);
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar profile-card-avatar';
+    avatar.classList.toggle('offline', !enLigne);
+    avatar.textContent = fiche.initiale || nom.charAt(0).toUpperCase();
+    remplirAvatar(avatar, utilisateur.avatar);
+
+    const nomEl = document.createElement('strong');
+    nomEl.className = 'profile-card-name';
+    nomEl.textContent = nom;
+    const identite = document.createElement('div');
+    identite.className = 'profile-card-identity';
+    identite.append(nomEl);
+    if (fiche.identifiant) {
+      const handle = document.createElement('span');
+      handle.className = 'profile-card-handle';
+      handle.textContent = fiche.identifiant;
+      identite.append(handle);
+    }
+    const presence = document.createElement('span');
+    presence.className = 'profile-card-presence';
+    presence.dataset.presence = enLigne ? 'en-ligne' : 'hors-ligne';
+    presence.textContent = enLigne ? t('dm.online') : t('dm.offline');
+    identite.append(presence);
+
+    const details = document.createElement('dl');
+    details.className = 'profile-card-details';
+    for (const [cle, valeur] of [
+      ['userCard.alias', fiche.alias || t('userCard.noAlias')],
+      ['userCard.pseudo', fiche.pseudo || t('dm.defaultUser')],
+    ]) {
+      const terme = document.createElement('dt');
+      terme.textContent = t(cle);
+      const definition = document.createElement('dd');
+      definition.textContent = valeur;
+      details.append(terme, definition);
+    }
+
+    const contenu = document.createElement('div');
+    contenu.className = 'profile-card';
+    contenu.append(avatar, identite, details);
+    if (fiche.messagePrive && typeof surMessagePrive === 'function') {
+      const bouton = document.createElement('button');
+      bouton.type = 'button';
+      bouton.className = 'primary-button profile-card-message';
+      bouton.textContent = t('userCard.message');
+      bouton.addEventListener('click', () => {
+        dialogue.close();
+        surMessagePrive(utilisateur);
+      });
+      contenu.append(bouton);
+    }
+
+    const corps = document.createElement('div');
+    corps.className = 'profile-card-body';
+    corps.append(entete, contenu);
+    dialogue.append(corps);
+    // Clic sur le fond (hors du contenu) : ferme, comme Échap.
+    dialogue.addEventListener('click', (event) => {
+      if (event.target === dialogue) dialogue.close();
+    });
+    dialogue.addEventListener('close', () => dialogue.remove());
+    document.body.append(dialogue);
+    dialogue.showModal();
+    return dialogue;
+  }
+
+  /**
+   * Rend un avatar cliquable : ouvre la fiche de profil de `utilisateurId`
+   * (souris ou clavier, Entrée/Espace). `ouvrir` reçoit l'identifiant au
+   * moment du clic, pour lire les données à jour (alias, photo, présence).
+   */
+  function rendreAvatarCliquable(element, { utilisateurId, nom, t, ouvrir }) {
+    if (!element || !utilisateurId) return;
+    element.classList.add('avatar-clickable');
+    element.setAttribute('role', 'button');
+    element.tabIndex = 0;
+    element.setAttribute('aria-label', t('userCard.view', { name: nom }));
+    element.title = t('userCard.view', { name: nom });
+    const declencher = (event) => {
+      event.stopPropagation();
+      ouvrir(utilisateurId);
+    };
+    element.addEventListener('click', declencher);
+    element.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        declencher(event);
+      }
+    });
+  }
+
   window.ChatUiShared = Object.freeze({
+    afficherChargementRecherche,
     estMessageCible,
     allerAuMessageAffiche,
     creerSeparateurNonLus,
@@ -1129,6 +1321,8 @@
     afficherAvatarCourant,
     remplirAvatar,
     nomAffiche,
+    ouvrirFicheProfil,
+    rendreAvatarCliquable,
     creerSelecteurUtilisateurs,
     chargerEtatReseauEtPresences,
     brancherBoutonReessayer,

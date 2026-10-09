@@ -1,3 +1,20 @@
+/* Emoji en couleur partout, y compris sous Linux/WSL où aucune police emoji
+   n'est installée (les emoji s'affichaient en carrés). Police Twemoji Mozilla
+   (COLR, OFL-1.1, voir fonts/TWEMOJI-LICENSE.txt), embarquée : aucune
+   ressource externe (CSP default-src 'self'). `unicode-range` la limite aux
+   emoji : lettres, chiffres et ponctuation gardent la police du système. */
+@font-face {
+  font-family: 'Twemoji';
+  src: url('../fonts/twemoji.woff2') format('woff2');
+  font-display: swap;
+  unicode-range:
+    U+00A9, U+00AE, U+200D, U+203C, U+2049, U+20E3, U+2122, U+2139, U+2194-2199,
+    U+21A9-21AA, U+231A-231B, U+2328, U+23CF, U+23E9-23F3, U+23F8-23FA, U+24C2,
+    U+25AA-25AB, U+25B6, U+25C0, U+25FB-25FE, U+2600-27BF, U+2934-2935,
+    U+2B05-2B07, U+2B1B-2B1C, U+2B50, U+2B55, U+3030, U+303D, U+3297, U+3299,
+    U+FE0F, U+1F000-1FAFF, U+E0020-E007F;
+}
+
 :root {
   --bg-app: #0a5447;
   --bg-panel: #0d3d38;
@@ -168,46 +185,36 @@ body {
 }
 
 /* --- Barres de défilement -------------------------------------------------
-   Electron (Chromium) affiche par défaut la barre de défilement native du
-   système sur toute zone en overflow — grise, épaisse, hors thème, et
-   d'autant plus visible depuis l'ajout du défilement pour charger l'historique
-   des messages (voir #message-list plus bas). On la restyle ici pour les
-   listes défilantes de l'app (messages, salons, conversations privées),
-   partagée entre styles.css et message-prive.css puisque ce fichier est
-   chargé par les deux pages. `scrollbar-color`/`scrollbar-width` couvrent un
-   moteur non basé sur Chromium (repli, sans effet ici) ; les pseudo-éléments
-   ::-webkit-scrollbar-* ci-dessous sont ceux qu'Electron applique réellement. */
-#message-list,
-#channel-list,
-#conversation-list {
+   Electron (Chromium) affiche par défaut la barre native du système (blanche
+   ou grise, hors thème). Toutes les zones défilantes de l'app (messages,
+   salons, conversations, rail des serveurs, dialogues…) la prennent aux
+   couleurs du thème clair ou sombre ; ce fichier est chargé par toutes les
+   pages. Chromium récent (Electron 44) applique `scrollbar-color` et
+   `scrollbar-width` ; les pseudo-éléments ::-webkit-scrollbar-* couvrent les
+   versions plus anciennes. */
+* {
   scrollbar-color: var(--bg-bubble) transparent;
   scrollbar-width: thin;
 }
 
-#message-list::-webkit-scrollbar,
-#channel-list::-webkit-scrollbar,
-#conversation-list::-webkit-scrollbar {
+*::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
-#message-list::-webkit-scrollbar-track,
-#channel-list::-webkit-scrollbar-track,
-#conversation-list::-webkit-scrollbar-track {
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
   background: transparent;
 }
 
-#message-list::-webkit-scrollbar-thumb,
-#channel-list::-webkit-scrollbar-thumb,
-#conversation-list::-webkit-scrollbar-thumb {
+*::-webkit-scrollbar-thumb {
   background-color: var(--bg-bubble);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
-#message-list::-webkit-scrollbar-thumb:hover,
-#channel-list::-webkit-scrollbar-thumb:hover,
-#conversation-list::-webkit-scrollbar-thumb:hover {
+*::-webkit-scrollbar-thumb:hover {
   background-color: var(--accent-end);
 }
 
@@ -220,14 +227,23 @@ body {
   margin: 0;
   overflow: hidden;
   font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    'Twemoji',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    Helvetica,
+    Arial,
     sans-serif;
   color: var(--text-primary);
   background: var(--bg-panel);
   display: flex;
 }
 
-button {
+button,
+input,
+textarea,
+select {
   font-family: inherit;
 }
 
@@ -274,6 +290,13 @@ img {
   align-items: center;
   padding: 12px 0;
   gap: 10px;
+  /* Beaucoup de serveurs : le rail défile au lieu de couper les derniers. */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+#server-rail > * {
+  flex-shrink: 0;
 }
 
 #server-rail .app-logo {
@@ -406,6 +429,24 @@ img {
   height: 100%;
   border-radius: inherit;
   object-fit: cover;
+}
+
+/* « Voir plus » : page suivante d'icônes du rail (voir afficherRailServeurs). */
+.server-icon--more {
+  font-size: 1.2rem;
+  color: var(--text-primary);
+}
+
+/* Nombre de non-lus d'un serveur, en haut à droite de son icône. */
+.notif-count--rail {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  font-size: 0.65rem;
+  border: 2px solid var(--bg-panel);
 }
 
 .server-icon--add {
@@ -2012,4 +2053,106 @@ dialog::backdrop {
 .message-row.message-cible .text {
   box-shadow: 0 0 0 2px var(--primary);
   transition: box-shadow 0.3s ease;
+}
+
+.recherche-message-chargement {
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.recherche-message-roue {
+  width: 30px;
+  height: 30px;
+  border: 3px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: recherche-message-tourne 0.8s linear infinite;
+}
+@keyframes recherche-message-tourne {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- Fiche de profil (ChatUiShared.ouvrirFicheProfil) ---------------
+   Ouverte par un clic sur la photo d'un utilisateur (messages, liste des
+   messages privés, membres d'un serveur). Mêmes règles sur les deux pages. */
+.avatar-clickable {
+  cursor: pointer;
+}
+
+.avatar-clickable:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.profile-card-dialog {
+  width: min(360px, calc(100vw - 40px));
+}
+
+.profile-card-body {
+  padding: 20px;
+}
+
+.profile-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.profile-card .profile-card-avatar {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
+}
+
+.profile-card-identity {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  text-align: center;
+}
+
+.profile-card-name {
+  font-size: 1.25rem;
+}
+
+.profile-card-handle,
+.profile-card-presence {
+  color: var(--text-muted);
+}
+
+.profile-card-presence[data-presence='en-ligne'] {
+  color: var(--online);
+}
+
+.profile-card-details {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  width: 100%;
+  margin: 0;
+}
+
+.profile-card-details dt {
+  color: var(--text-muted);
+}
+
+.profile-card-details dd {
+  margin: 0;
+}
+
+.profile-card-message {
+  width: 100%;
+  padding: 10px 12px;
 }

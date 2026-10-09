@@ -104,6 +104,38 @@ if (typeof serviceNotifications?.onNavigateToConversation === 'function') {
   serviceNotifications.onNavigateToConversation(ouvrirConversation);
 }
 
+// --- Fiche de profil ---------------------------------------------------------
+/** « Message privé » depuis une fiche : crée (ou retrouve) la conversation,
+ * puis ouvre la page des messages privés dessus. */
+async function ouvrirMessagePriveAvec(autre) {
+  try {
+    const conversation = await window.electronAPI.demarrerConversationPrivee({
+      utilisateurId: utilisateurActuelId,
+      autreUtilisateurId: autre.id,
+    });
+    await window.electronAPI.definirCibleNavigation({
+      type: 'prive',
+      id: conversation.id,
+    });
+    window.electronAPI.navigate('message-prive.html');
+  } catch (erreur) {
+    notifier(messageErreur(erreur), true);
+  }
+}
+
+/** Fiche de profil d'un utilisateur ({ id, pseudo, alias, avatar }) : photo
+ * cliquée dans un message ou dans la liste des membres d'un serveur. */
+function ouvrirProfilUtilisateur(donnees) {
+  if (!donnees) return;
+  ChatUiShared.ouvrirFicheProfil({
+    utilisateur: donnees,
+    enLigne: presences[donnees.id] === 'en-ligne',
+    t,
+    utilisateurActuelId,
+    surMessagePrive: ouvrirMessagePriveAvec,
+  });
+}
+
 // --- Recherche de messages ------------------------------------------------
 ChatUiShared.brancherRechercheMessages({
   bouton: document.querySelector('#open-search'),
@@ -149,6 +181,18 @@ async function integrerMessageSalonRecu(payload) {
     return;
   }
   const { message } = payload;
+  if (
+    message.auteurId === utilisateurActuelId &&
+    etatHistoriqueSalon.ancreId &&
+    etatHistoriqueSalon.salonId === salon.id
+  ) {
+    etatHistoriqueSalon = {
+      salonId: salon.id,
+      messagesAnciens: [],
+      finHistorique: Boolean(salon.finHistorique),
+      enChargement: false,
+    };
+  }
   // On ne suit le nouveau message (défilement en bas) que s'il est dans le
   // salon affiché ET qu'on est soi-même l'auteur ou déjà en bas de la liste :
   // sinon, quelqu'un qui relit l'historique (ou un message d'un autre salon)
@@ -158,7 +202,10 @@ async function integrerMessageSalonRecu(payload) {
     estAuteur: message.auteurId === utilisateurActuelId,
     presDuBas: LogiqueInterface.estPresDuBas(el.messages),
   });
-  const optionsAffichage = suivre ? {} : { garderScroll: true };
+  const optionsAffichage =
+    suivre && !(etatHistoriqueSalon.ancreId && !etatHistoriqueSalon.finRecents)
+      ? {}
+      : { garderScroll: true };
   if (
     message.auteurId !== utilisateurActuelId &&
     !utilisateur(message.auteurId)

@@ -132,6 +132,11 @@ function persisterPreferenceEnArrierePlan(donnees) {
 // (themeActuel, langueActuelle, modeNotificationActuel, aliasActuel), chargée
 // à l'ouverture de session et diffusée à la fenêtre via 'preferences:change'
 // à chaque modification, pour que toutes les pages s'y alignent en direct.
+// Notre profil modifié sur un autre appareil : alias et avatar réalignés
+// sur toutes les pages, en direct (la présence passe par 'presence:change').
+chatGateway.on('profil-soi', (config) => {
+  appliquerPreferencesLocales({ alias: config.alias, avatar: config.avatar });
+});
 exposerCanal('config:obtenir', () => chatGateway.configObtenir());
 exposerCanal('config:modifier', async (donnees) => {
   const config = await chatGateway.configModifier(donnees);

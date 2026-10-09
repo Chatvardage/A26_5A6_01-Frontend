@@ -62,13 +62,15 @@ export function useAsyncResource<T>(
   );
 
   useEffect(() => {
-    const id = ++requestId.current;
+    // Alias du compteur : le nettoyage doit incrémenter la valeur courante.
+    const counter = requestId;
+    const id = ++counter.current;
     let cancelled = false;
     void loadInto(id, () => cancelled);
     return () => {
       cancelled = true;
       // Invalide aussi les requêtes lancées par retry/refresh : plus de setState après démontage ou changement de `load`.
-      requestId.current++;
+      counter.current++;
     };
   }, [loadInto]);
 

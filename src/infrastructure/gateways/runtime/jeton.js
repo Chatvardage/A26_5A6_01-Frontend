@@ -26,7 +26,10 @@ function cheminFichierSession() {
  */
 function coffreJeton() {
   const { safeStorage } = require('electron');
-  return safeStorage?.isEncryptionAvailable?.() ? safeStorage : null;
+  if (!safeStorage?.isEncryptionAvailable?.()) return null;
+  // basic_text utilise une clé publique fixe : ne jamais persister un jeton avec ce repli.
+  if (safeStorage.getSelectedStorageBackend?.() === 'basic_text') return null;
+  return safeStorage;
 }
 
 /**
@@ -49,7 +52,11 @@ function chargerJetonPersiste() {
       return jeton || null;
     }
     if (typeof donnees.jeton === 'string' && donnees.jeton) {
-      if (coffreJeton()) sauvegarderJetonPersiste(donnees.jeton);
+      if (!coffreJeton()) {
+        sauvegarderJetonPersiste(null);
+        return null;
+      }
+      sauvegarderJetonPersiste(donnees.jeton);
       return donnees.jeton;
     }
     return null;
@@ -60,16 +67,18 @@ function chargerJetonPersiste() {
 
 /**
  * Persiste le jeton de session (ou l'efface si `jeton` est vide). Chiffré par
- * le système quand c'est possible ; sinon, en clair (repli) — dans les deux
- * cas dans un fichier lisible par son seul propriétaire (0600).
+ * le système quand c'est possible ; sinon, aucune persistance. Le fichier
+ * chiffré n'est lisible que par son propriétaire (0600).
  */
 function sauvegarderJetonPersiste(jeton) {
   try {
     if (jeton) {
       const coffre = coffreJeton();
-      const donnees = coffre
-        ? { jetonChiffre: coffre.encryptString(jeton).toString('base64') }
-        : { jeton };
+      if (!coffre) {
+        fs.rmSync(cheminFichierSession(), { force: true });
+        return;
+      }
+      const donnees = { jetonChiffre: coffre.encryptString(jeton).toString('base64') };
       const chemin = cheminFichierSession();
       fs.writeFileSync(chemin, JSON.stringify(donnees), {
         encoding: 'utf8',

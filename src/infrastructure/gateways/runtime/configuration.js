@@ -74,9 +74,39 @@ module.exports = {
     }
   },
 
+  /**
+   * Notre propre profil modifié sur un autre appareil (alias, avatar,
+   * présence) : on relit la configuration, puis 'profil-soi' prévient le
+   * processus main qui réaligne toutes les pages (voir main/preferences.js),
+   * sans attendre le sondage de présence.
+   */
+  async rafraichirProfilSoi() {
+    const moi = this.utilisateurConnecte?.id;
+    if (!moi) return;
+    try {
+      const config = await this.configObtenir();
+      if (
+        config.vuLaDerniereFois !== null &&
+        this.presences[moi] !== config.statutPresence
+      ) {
+        this.definirPresenceInterne({
+          utilisateurId: moi,
+          statut: config.statutPresence,
+        });
+      }
+      this.emettre('profil-soi', config);
+    } catch {
+      // Best-effort : le sondage de présence finira par se réaligner.
+    }
+  },
+
   traiterProfilEntrant(evt) {
     const id = evt?.userId;
-    if (typeof id !== 'string' || id === this.utilisateurConnecte?.id) return;
+    if (typeof id !== 'string') return;
+    if (id === this.utilisateurConnecte?.id) {
+      void this.rafraichirProfilSoi();
+      return;
+    }
     // Uniquement les utilisateurs qu'on affiche déjà quelque part.
     if (!this.utilisateursConnus.has(id) && !this.profilsPublics.has(id))
       return;

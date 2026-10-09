@@ -113,3 +113,19 @@ Validation : audit high, types, lint, build et 298 tests avec couverture 100 % p
 La comparaison lexicographique des identifiants à dates égales est conservée : elle reproduit le contrat serveur `(createdAt, id)`, son `orderBy` et ses filtres `id > lastReadMessageId`. Un tri numérique naturel de m2/m10 divergerait de ce contrat; les identifiants ne définissent jamais seuls la chronologie. Le séparateur de non-lus est fixé par identifiant et ne dépend pas de ces comparaisons.
 
 Les événements de lecture vérifient désormais Number.isFinite après Date.parse avant toute résolution de lecteur ou émission vers les pages. Les dates vides, non interprétables et hors plage sont ignorées; les régressions sont ajoutées au test de relais existant. Validation : audit high, types, lint, build et 298 tests avec couverture 100 % passent sous Node 24. Validation manuelle Electron non effectuée.
+
+### Conversation et messagerie : résultats anciens
+
+Un résultat de recherche ouvre une page directement depuis le message choisi, avec un indicateur de chargement puis une mise en évidence instantanée. Les messages intermédiaires ne sont plus chargés. La pagination reprend depuis cette position, vers les messages plus anciens ou plus récents. Une reconstruction locale de Message-Service est nécessaire pour activer les nouveaux paramètres `around` et `direction`.
+
+## Renforcement sécurité — 9 octobre 2026
+
+Une origine distante exige HTTPS hors développement. Les URLs doivent être des origines HTTP(S), sans identifiants, chemin, paramètres ou fragment. Sans configuration Socket séparée, le client utilise l'origine API.
+
+Le jeton persistant requiert le chiffrement `safeStorage`. Le backend Linux `basic_text` est refusé. Sans coffre sécurisé, le client conserve seulement la session en mémoire et supprime l'ancien fichier persistant; une ancienne session en clair est migrée uniquement si un coffre réel est disponible. La recherche paginée partagée annule les requêtes remplacées et déduplique aussi les résultats d'une même page.
+
+« Déconnecter les autres appareils » vérifie que la réponse contient un nouveau jeton non vide avant de remplacer la session. Une réponse invalide affiche la demande de reconnexion sans effacer silencieusement le jeton persistant. Les confirmations de livraison reçues sans identifiant sont ignorées.
+
+### Limites connues
+
+L'audit npm conserve huit alertes modérées issues de `sprintf-js` dans les outils `electron-builder` (`global-agent`/`roarr`). Ne pas appliquer une rétrogradation forcée du packager. Revoir la chaîne au prochain correctif amont. Voir le rapport global dans `../A26_5A6_01-Infra/docs/audit-securite-2026-10-09.md`.

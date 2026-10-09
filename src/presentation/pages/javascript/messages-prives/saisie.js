@@ -33,6 +33,32 @@ async function ouvrirConversationAvec(user) {
   }
 }
 
+/** Autre personne d'une conversation privée, lue au moment du clic (alias,
+ * photo et présence à jour). */
+function interlocuteur(utilisateurId) {
+  return state.conversations.find((c) => c.otherUser?.id === utilisateurId)
+    ?.otherUser;
+}
+
+/** Fiche de profil de l'autre personne (photo cliquée dans la liste, la
+ * barre du haut ou un message) ; « Message privé » ouvre sa conversation,
+ * sauf si c'est déjà celle affichée. */
+function ouvrirProfilDm(utilisateurId) {
+  const autre = interlocuteur(utilisateurId);
+  if (!autre) return;
+  const active = state.conversations.find(
+    (c) => c.id === state.activeConversationId
+  );
+  ChatUiShared.ouvrirFicheProfil({
+    utilisateur: autre,
+    enLigne: Boolean(autre.present),
+    t,
+    utilisateurActuelId: state.currentUserId,
+    conversationAvecId: active?.otherUser?.id,
+    surMessagePrive: ouvrirConversationAvec,
+  });
+}
+
 function renderNewDmChoices() {
   if (!dmDialogContent) return;
   dmDialogContent.replaceChildren(

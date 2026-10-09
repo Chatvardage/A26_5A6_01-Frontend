@@ -164,6 +164,19 @@ async function integrerMessagePrive(message, options = {}) {
     await refreshConversations(options);
     return;
   }
+  if (
+    message.auteurId === state.currentUserId &&
+    etatHistoriqueDm.ancreId &&
+    etatHistoriqueDm.conversationId === conversation.id
+  ) {
+    etatHistoriqueDm = {
+      conversationId: conversation.id,
+      messagesAnciens: [],
+      finHistorique: Boolean(conversation.finHistorique),
+      enChargement: false,
+    };
+    options = {};
+  }
   conversation.messages = LogiqueInterface.ajouterMessage(
     conversation.messages,
     message,

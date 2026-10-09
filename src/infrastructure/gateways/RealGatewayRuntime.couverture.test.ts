@@ -158,14 +158,25 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
       }
     });
 
-    it('sans chiffrement disponible : repli en clair, efface à la déconnexion', () => {
+    it('sans chiffrement disponible : aucune persistance', () => {
       expect(chargerJetonPersiste()).toBeNull();
       simulerElectron(coffre(false));
       sauvegarderJetonPersiste('jwt-1');
-      expect(lire()).toEqual({ jeton: 'jwt-1' });
-      expect(chargerJetonPersiste()).toBe('jwt-1');
+      expect(existsSync(fichier())).toBe(false);
+      writeFileSync(fichier(), JSON.stringify({ jeton: 'ancien-jwt' }));
+      expect(chargerJetonPersiste()).toBeNull();
+      expect(existsSync(fichier())).toBe(false);
       sauvegarderJetonPersiste(null);
       expect(existsSync(fichier())).toBe(false);
+    });
+
+    it('refuse le coffre Linux basic_text', () => {
+      simulerElectron({ ...coffre(), getSelectedStorageBackend: () => 'basic_text' });
+      sauvegarderJetonPersiste('secret');
+      expect(existsSync(fichier())).toBe(false);
+      simulerElectron({ ...coffre(), getSelectedStorageBackend: () => 'gnome_libsecret' });
+      sauvegarderJetonPersiste('secret');
+      expect(chargerJetonPersiste()).toBe('secret');
     });
 
     it('migre un ancien jeton en clair vers le format chiffré', () => {
@@ -214,6 +225,7 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
       requireLocal.cache[cheminElectron] = {
         exports: {
           app: { getPath: () => path.join(dossier, 'inexistant', 'profond') },
+          safeStorage: coffre(),
         },
       } as unknown as NodeJS.Module;
       expect(() => sauvegarderJetonPersiste('jwt')).not.toThrow();
@@ -1494,5 +1506,55 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
       runtime.arreterPollPresence();
       expect(String(publiques()[0][0])).not.toContain('inclureAvatar=false');
     });
+  });
+});
+
+
+describe('pagination depuis une cible et confirmation de livraison', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('transmet la cible et le sens de pagination pour les DM et salons', async () => {
+    const { runtime } = runtimeConnecte();
+    const http = vi.spyOn(runtime, 'appelHttp').mockResolvedValue([]);
+    for (const contexte of ['dm', 'salon']) {
+      for (const options of [{ autourId: 'ancien' }, { apresId: 'ancien' }]) {
+        if (contexte === 'dm') {
+          await runtime.obtenirMessagesPriveesAvant({ conversationId: 'moi:u2', taille: 50, ...options });
+        } else {
+          await runtime.obtenirMessagesSalonAvant({ salonId: 'salon', taille: 50, ...options });
+        }
+        const url = new URL(String(http.mock.calls.at(-1)?.[0]), 'http://gateway.test');
+        expect(url.searchParams.get('limit')).toBe('50');
+        if ('autourId' in options) {
+          expect(url.searchParams.get('around')).toBe('ancien');
+          expect(url.searchParams.has('cursor')).toBe(false);
+        } else {
+          expect(url.searchParams.get('cursor')).toBe('ancien');
+          expect(url.searchParams.get('direction')).toBe('after');
+        }
+      }
+    }
+  });
+
+  it('tolere une confirmation en panne et conserve la livraison deja recue', async () => {
+    const { runtime } = runtimeConnecte();
+    vi.spyOn(runtime, 'appelHttp').mockRejectedValue(new Error('offline'));
+    await expect(runtime.confirmerLivraisonDm(messageBrut())).resolves.toBeUndefined();
+    const deliveredAt = '2026-01-01T00:00:01.000Z';
+    expect(runtime.mapperMessageDm(messageBrut({ deliveredAt })).livraison).toBe(Date.parse(deliveredAt));
+    await runtime.confirmerLivraisonDm(messageBrut({ deliveredAt }));
+    await runtime.confirmerLivraisonDm(messageBrut({ recipientId: 'autre' }));
+    await runtime.confirmerLivraisonDm(messageBrut({ id: undefined }));
+    await runtime.confirmerLivraisonDm(messageBrut({ id: '' }));
+    expect(runtime.appelHttp).toHaveBeenCalledTimes(1);
+  });
+
+  it('transmet les confirmations de livraison recues en temps reel', () => {
+    const { runtime, socket } = runtimeConnecte();
+    const traiter = vi.spyOn(runtime, 'traiterMessageDmModifie').mockImplementation(() => {});
+    runtime.connecterSocket();
+    const message = messageBrut({ deliveredAt: '2026-01-01T00:00:01.000Z' });
+    socket()._declencher('private-message.delivered', message);
+    expect(traiter).toHaveBeenCalledWith(message);
   });
 });

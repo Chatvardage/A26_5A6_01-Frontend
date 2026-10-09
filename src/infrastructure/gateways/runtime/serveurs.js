@@ -56,10 +56,39 @@ module.exports = {
     };
   },
 
-  /** GET /api/servers, mémorisé (voir `this.serveurs`). */
+  /**
+   * Dernier message de chaque salon lisible (`room:<id>` -> date). Une panne
+   * laisse l'ordre de l'API : ce n'est qu'un tri.
+   */
+  async chargerActiviteSalons() {
+    try {
+      const corps = await this.appelHttp('/api/messages/activity');
+      return corps?.rooms ?? {};
+    } catch {
+      return {};
+    }
+  },
+
+  /**
+   * GET /api/servers, mémorisé (voir `this.serveurs`), du serveur le plus
+   * récemment actif (dernier message d'un de ses salons) au moins actif ; à
+   * égalité ou sans message, l'ordre de l'API est conservé.
+   */
   async chargerServeurs() {
     const generation = this.generationSession;
-    const serveurs = await this.appelHttp('/api/servers');
+    const [bruts, activite] = await Promise.all([
+      this.appelHttp('/api/servers'),
+      this.chargerActiviteSalons(),
+    ]);
+    const derniere = (serveur) =>
+      serveur.salons.reduce((max, salon) => {
+        const date = Date.parse(activite[`room:${salon.id}`] ?? '') || 0;
+        return date > max ? date : max;
+      }, 0);
+    const serveurs = bruts
+      .map((serveur) => ({ serveur, date: derniere(serveur) }))
+      .sort((a, b) => b.date - a.date)
+      .map(({ serveur }) => serveur);
     // Déconnecté pendant l'appel : ces serveurs sont ceux de l'ancien
     // compte, ils ne doivent pas repeupler l'état de la session suivante.
     if (generation !== this.generationSession) {
@@ -82,10 +111,21 @@ module.exports = {
     return serveurs.map((serveur) => this.resumeServeur(serveur));
   },
 
-  async obtenirMessagesSalonAvant({ salonId, avantId, taille }) {
+  async obtenirMessagesSalonAvant({
+    salonId,
+    avantId,
+    autourId,
+    apresId,
+    taille,
+  }) {
     const limite = taille || TAILLE_PAGE_MESSAGES;
     const params = new URLSearchParams({ limit: String(limite) });
     if (avantId) params.set('cursor', avantId);
+    if (autourId) params.set('around', autourId);
+    if (apresId) {
+      params.set('cursor', apresId);
+      params.set('direction', 'after');
+    }
     const bruts = await this.appelHttp(
       `/api/messages/rooms/${encodeURIComponent(salonId)}/history?${params.toString()}`
     );
@@ -125,7 +165,8 @@ module.exports = {
     const actifId =
       (salonId && this.salonVersServeur.get(salonId)) ||
       (serveurId && this.serveurs.has(serveurId) ? serveurId : null) ||
-      serveurs[0]?.id;
+      // Par défaut, Chatvardage (le rail est trié par activité).
+      (serveurs.find((serveur) => serveur.parDefaut) ?? serveurs[0])?.id;
     const actif = this.serveurs.get(actifId) ?? null;
 
     // Rooms Socket.IO de TOUS les salons visibles de tous mes serveurs : les
@@ -252,19 +293,33 @@ module.exports = {
     return { serveurId };
   },
 
-  /** Serveurs publics dont je ne suis pas membre (recherche par nom). */
-  async decouvrirServeurs(texte) {
+  /**
+   * Serveurs publics dont je ne suis pas membre (recherche par nom), par
+   * pages : `{ serveurs, total, suivant }`.
+   */
+  async decouvrirServeurs(texte, decalage = 0) {
     const q = String(texte ?? '')
       .trim()
       .slice(0, 80);
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (decalage > 0) params.set('decalage', String(decalage));
+    const requete = params.toString();
     return this.appelHttp(
-      `/api/servers/decouvrir${q ? `?q=${encodeURIComponent(q)}` : ''}`
+      `/api/servers/decouvrir${requete ? `?${requete}` : ''}`
     );
   },
 
-  async expulserMembre({ serveurId, utilisateurId }) {
+  /**
+   * Expulser le propriétaire (administrateur) exige `nouveauProprietaire`,
+   * le membre qui reprend le serveur.
+   */
+  async expulserMembre({ serveurId, utilisateurId, nouveauProprietaire }) {
+    const suite = nouveauProprietaire
+      ? `?nouveauProprietaire=${encodeURIComponent(nouveauProprietaire)}`
+      : '';
     return this.appelHttp(
-      `/api/servers/${encodeURIComponent(serveurId)}/members/${encodeURIComponent(utilisateurId)}`,
+      `/api/servers/${encodeURIComponent(serveurId)}/members/${encodeURIComponent(utilisateurId)}${suite}`,
       { methode: 'DELETE' }
     );
   },

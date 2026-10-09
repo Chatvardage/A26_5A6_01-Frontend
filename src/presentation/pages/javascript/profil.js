@@ -91,6 +91,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     logoutBtn: $('logout-btn'),
     logoutAllBtn: $('logout-all-btn'),
     logoutAllMessage: $('logout-all-message'),
+    logoutOthersBtn: $('logout-others-btn'),
+    logoutOthersMessage: $('logout-others-message'),
     toast: $('toast'),
   };
 
@@ -537,6 +539,27 @@ window.addEventListener('DOMContentLoaded', async () => {
       console.error('[logout] échec de deconnexionSession :', erreur);
     }
     await window.electronAPI.allerALaConnexion();
+  });
+  el.logoutOthersBtn?.addEventListener('click', async () => {
+    afficherMessageChamp(el.logoutOthersMessage, '', 'ok');
+    el.logoutOthersBtn.disabled = true;
+    try {
+      await window.electronAPI.deconnexionAutres();
+      afficherMessageChamp(
+        el.logoutOthersMessage,
+        t('profile.logoutOthersDone'),
+        'ok'
+      );
+    } catch (erreur) {
+      // Hors ligne ou Auth indisponible : les autres sessions restent.
+      afficherMessageChamp(
+        el.logoutOthersMessage,
+        messageErreur(erreur),
+        'error'
+      );
+    } finally {
+      el.logoutOthersBtn.disabled = false;
+    }
   });
   el.logoutAllBtn?.addEventListener('click', async () => {
     afficherMessageChamp(el.logoutAllMessage, '', 'ok');
