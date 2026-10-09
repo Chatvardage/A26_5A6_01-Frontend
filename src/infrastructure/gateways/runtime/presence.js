@@ -73,6 +73,8 @@ module.exports = {
       statut,
     });
     this.annoncerPresence();
+    // Nos autres appareils relisent alors notre profil (présence comprise).
+    this.annoncerProfil();
     return presence;
   },
 

@@ -80,6 +80,11 @@ exposerCanal('session:deconnexion-partout', async () => {
   etat.cibleNavigation = null;
 });
 
+// Les autres appareils sont déconnectés ; celui-ci garde sa session.
+exposerCanal('session:deconnexion-autres', () =>
+  chatGateway.deconnexionAutres()
+);
+
 exposerCanal('navigation:motif-retour-connexion', () => {
   const motif = etat.motifRetourConnexion;
   etat.motifRetourConnexion = null;

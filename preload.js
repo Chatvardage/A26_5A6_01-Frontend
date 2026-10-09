@@ -212,6 +212,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('session:definir-motif-retour', { motif }),
   // Invalide aussi les jetons des autres appareils (voir page profil).
   deconnexionPartout: () => ipcRenderer.invoke('session:deconnexion-partout'),
+  // Déconnecte les autres appareils ; celui-ci reste connecté.
+  deconnexionAutres: () => ipcRenderer.invoke('session:deconnexion-autres'),
   obtenirUtilisateurConnecte: () =>
     ipcRenderer.invoke('session:utilisateur-connecte'),
 

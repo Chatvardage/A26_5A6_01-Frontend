@@ -108,6 +108,9 @@ class RealGatewayRuntime {
     // Vrai pendant la revérification du jeton après un 401 (voir
     // verifierSessionApres401).
     this.verificationSessionEnCours = false;
+    // Vrai pendant le remplacement des jetons de cet appareil (mot de passe
+    // changé, autres appareils déconnectés) : voir verifierSessionApres401.
+    this.rotationJetonEnCours = false;
 
     // Partenaires de conversation privée connus localement cette session,
     // en complément de GET /api/messages/conversations (voir

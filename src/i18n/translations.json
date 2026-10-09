@@ -288,6 +288,9 @@
       "accountSectionHint": "Change ton mot de passe. Le courriel ne peut pas être modifié.",
       "logoutAll": "Se déconnecter partout",
       "logoutAllHint": "Ferme ta session sur tous tes appareils, celui-ci compris (appareil perdu ou prêté).",
+      "logoutOthers": "Déconnecter les autres appareils",
+      "logoutOthersHint": "Ferme ta session sur tous tes autres appareils ; celui-ci reste connecté.",
+      "logoutOthersDone": "Les autres appareils ont été déconnectés.",
       "emailReadonlyHint": "Le courriel ne peut pas être modifié.",
       "currentPasswordIncorrect": "Mot de passe actuel incorrect."
     },
@@ -652,6 +655,9 @@
       "accountSectionHint": "Change your password. The email address cannot be changed.",
       "logoutAll": "Log out everywhere",
       "logoutAllHint": "Ends your session on all your devices, this one included (lost or lent device).",
+      "logoutOthers": "Sign out other devices",
+      "logoutOthersHint": "Ends your session on all your other devices; this one stays signed in.",
+      "logoutOthersDone": "Your other devices have been signed out.",
       "emailReadonlyHint": "The email address cannot be changed.",
       "currentPasswordIncorrect": "Current password is incorrect."
     },

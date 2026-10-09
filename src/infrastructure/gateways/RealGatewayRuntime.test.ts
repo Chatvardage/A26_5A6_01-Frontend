@@ -434,6 +434,67 @@ describe('RealGatewayRuntime', () => {
     });
   });
 
+  describe('deconnexionAutres', () => {
+    it('garde cet appareil connecté avec la nouvelle session renvoyée par Auth', async () => {
+      const { runtime } = creerRuntime();
+      runtime.etatConnexion.statut = 'connecte';
+      runtime.jeton = 'ancien';
+      runtime.utilisateurConnecte = { id: 'u1', pseudo: 'ariane' };
+      const connecter = vi
+        .spyOn(runtime, 'connecterSocket')
+        .mockImplementation(() => undefined);
+      let pendantAppel = false;
+      const fetchMock = vi.fn().mockImplementation(() => {
+        pendantAppel = runtime.rotationJetonEnCours;
+        return Promise.resolve(
+          reponseJson({ jeton: 'nouveau', refresh_token: 'r', utilisateur: {} })
+        );
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      await runtime.deconnexionAutres();
+
+      const [url, options] = fetchMock.mock.calls[0];
+      expect(url).toBe('http://gateway.test/api/auth/logout-others');
+      expect(options.method).toBe('POST');
+      expect(options.headers.Authorization).toBe('Bearer ancien');
+      // Pendant le remplacement, un refus de l'ancien jeton ne ferme rien.
+      expect(pendantAppel).toBe(true);
+      expect(runtime.rotationJetonEnCours).toBe(false);
+      expect(runtime.jeton).toBe('nouveau');
+      expect(runtime.sauvegarderJetonPersiste).toHaveBeenCalledWith('nouveau');
+      expect(connecter).toHaveBeenCalled();
+      expect(runtime.utilisateurConnecte).not.toBeNull();
+    });
+
+    it('garde la session et l’ancien jeton si Auth refuse ou si le réseau manque', async () => {
+      const { runtime } = creerRuntime();
+      runtime.etatConnexion.statut = 'connecte';
+      runtime.jeton = 'jwt';
+      runtime.utilisateurConnecte = { id: 'u1', pseudo: 'ariane' };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(reponseJson({ erreur: 'x' }, 503))
+      );
+      await expect(runtime.deconnexionAutres()).rejects.toThrow();
+      expect(runtime.jeton).toBe('jwt');
+      expect(runtime.rotationJetonEnCours).toBe(false);
+      runtime.etatConnexion.statut = 'hors-ligne';
+      await expect(runtime.deconnexionAutres()).rejects.toThrow();
+    });
+
+    it('ignore le refus de l’ancien jeton pendant le remplacement', async () => {
+      const { runtime } = creerRuntime();
+      runtime.jeton = 'jwt';
+      runtime.rotationJetonEnCours = true;
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      await runtime.verifierSessionApres401();
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(runtime.jeton).toBe('jwt');
+    });
+  });
+
   describe('chargerServeurs après une déconnexion', () => {
     it('ignore la réponse arrivée après la déconnexion (ancien compte)', async () => {
       const { runtime } = creerRuntime();
@@ -2009,9 +2070,62 @@ describe('RealGatewayRuntime', () => {
       expect(runtime.utilisateursConnus.get('u2').pseudo).toBe('nouveau');
     });
 
-    it("ignore 'profil.changed' pour soi-même, un inconnu ou un payload invalide", () => {
+    it('relit notre propre profil quand il change sur un autre appareil', async () => {
+      const { runtime, socket } = runtimeConnecte();
+      runtime.presences.moi = 'en-ligne';
+      const config = {
+        alias: 'Nouvel alias',
+        avatar: 'data:image/png;base64,AA',
+        statutPresence: 'horsLigne',
+        vuLaDerniereFois: '2026-10-08T10:00:00.000Z',
+        theme: 'sombre',
+        langue: 'fr',
+        modeNotification: 'systeme',
+      };
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(reponseJson(config)));
+      const profils: unknown[] = [];
+      const presences: unknown[] = [];
+      runtime.on('profil-soi', (c: unknown) => profils.push(c));
+      runtime.on('presence', (p: unknown) => presences.push(p));
+
+      socket._declencher('profil.changed', { userId: 'moi' });
+      await vi.waitFor(() => expect(profils).toHaveLength(1));
+      expect(profils[0]).toMatchObject({
+        alias: 'Nouvel alias',
+        avatar: 'data:image/png;base64,AA',
+      });
+      expect(runtime.presences.moi).toBe('hors-ligne');
+      expect(presences).toContainEqual(
+        expect.objectContaining({ utilisateurId: 'moi', statut: 'hors-ligne' })
+      );
+    });
+
+    it('notre profil : présence jamais définie gardée, panne et session fermée sans effet', async () => {
+      const { runtime } = runtimeConnecte();
+      runtime.presences.moi = 'en-ligne';
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValue(
+            reponseJson({ statutPresence: 'horsLigne', vuLaDerniereFois: null })
+          )
+      );
+      await runtime.rafraichirProfilSoi();
+      expect(runtime.presences.moi).toBe('en-ligne');
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('réseau')));
+      await expect(runtime.rafraichirProfilSoi()).resolves.toBeUndefined();
+      runtime.utilisateurConnecte = null;
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      await runtime.rafraichirProfilSoi();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("ignore 'profil.changed' d'un inconnu ou un payload invalide (soi-même : profil relu à part)", () => {
       const { runtime, socket } = runtimeConnecte();
       const rafraichir = vi.spyOn(runtime, 'rafraichirProfil');
+      vi.spyOn(runtime, 'rafraichirProfilSoi').mockResolvedValue(undefined);
       socket._declencher('profil.changed', { userId: 'moi' });
       socket._declencher('profil.changed', { userId: 'jamais-vu' });
       socket._declencher('profil.changed', { userId: 42 });

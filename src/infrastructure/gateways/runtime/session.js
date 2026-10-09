@@ -133,6 +133,27 @@ module.exports = {
     await this.deconnexion();
   },
 
+  /**
+   * « Déconnecter les autres appareils » : Auth invalide tous les jetons du
+   * compte et renvoie une nouvelle session pour celui-ci, qui reste
+   * connecté (le socket repart avec le nouveau jeton). Message-Service ferme
+   * aussitôt les sockets des autres appareils.
+   */
+  async deconnexionAutres() {
+    this.verifierReseauConnecte();
+    this.rotationJetonEnCours = true;
+    try {
+      const reponse = await this.appelHttp('/api/auth/logout-others', {
+        methode: 'POST',
+      });
+      this.jeton = reponse.jeton;
+      this.sauvegarderJetonPersiste(reponse.jeton);
+      this.connecterSocket();
+    } finally {
+      this.rotationJetonEnCours = false;
+    }
+  },
+
   async deconnexion() {
     // Une réponse encore en route (ex. chargerServeurs) appartient à la
     // session qui se ferme : voir sessionCourante dans serveurs.js.
@@ -179,7 +200,10 @@ module.exports = {
    * réseau ne permet de rien conclure.
    */
   async verifierSessionApres401() {
-    if (this.verificationSessionEnCours) return;
+    // Jetons de cet appareil en cours de remplacement (mot de passe changé,
+    // autres appareils déconnectés) : le refus de l'ancien jeton est attendu,
+    // la session continue avec le nouveau.
+    if (this.verificationSessionEnCours || this.rotationJetonEnCours) return;
     this.verificationSessionEnCours = true;
     const jeton = this.jeton;
     try {
@@ -239,20 +263,27 @@ module.exports = {
     // Pas de courriel : Authentification refuse de le modifier via /me.
     const corps = { mot_de_passe_actuel: motDePasseActuel };
     if (motDePasse !== undefined) corps.mot_de_passe = motDePasse;
-    const brut = await this.appelHttp('/api/auth/me', {
-      methode: 'PATCH',
-      corps,
-    });
-    const utilisateur = this.mapperUtilisateur(brut);
-    this.utilisateurConnecte = utilisateur;
-    this.enregistrerUtilisateurConnu(utilisateur);
-    if (motDePasse !== undefined) {
-      await this.renouvelerJetonApresChangementMotDePasse(
-        utilisateur.courriel,
-        motDePasse
-      );
+    // Nouveau mot de passe : tous les jetons sont invalidés, celui-ci compris
+    // (voir verifierSessionApres401 et renouvelerJetonApresChangementMotDePasse).
+    this.rotationJetonEnCours = motDePasse !== undefined;
+    try {
+      const brut = await this.appelHttp('/api/auth/me', {
+        methode: 'PATCH',
+        corps,
+      });
+      const utilisateur = this.mapperUtilisateur(brut);
+      this.utilisateurConnecte = utilisateur;
+      this.enregistrerUtilisateurConnu(utilisateur);
+      if (motDePasse !== undefined) {
+        await this.renouvelerJetonApresChangementMotDePasse(
+          utilisateur.courriel,
+          motDePasse
+        );
+      }
+      return utilisateur;
+    } finally {
+      this.rotationJetonEnCours = false;
     }
-    return utilisateur;
   },
 
   /**
