@@ -899,7 +899,8 @@ async function allerAuMessageSalon(messageId) {
       });
       historique.messagesAnciens = fusionnerHistorique(
         historique.messagesAnciens,
-        suite.messages
+        suite.messages,
+        'date'
       );
       historique.finRecents = suite.finHistorique;
     } catch {
@@ -925,6 +926,7 @@ async function chargerMessagesPlusRecentsSalon() {
   historique.enChargement = true;
   try {
     const dernier = historique.messagesAnciens.at(-1);
+    if (!dernier) return;
     const resultat = await window.electronAPI.obtenirMessagesSalonAvant({
       salonId: id,
       apresId: dernier.id,
@@ -933,7 +935,8 @@ async function chargerMessagesPlusRecentsSalon() {
     if (etatHistoriqueSalon !== historique || salonActifId !== id) return;
     historique.messagesAnciens = fusionnerHistorique(
       historique.messagesAnciens,
-      resultat.messages
+      resultat.messages,
+      'date'
     );
     historique.finRecents = resultat.finHistorique;
   } catch (erreur) {

@@ -317,6 +317,17 @@ Infra est la référence du démarrage complet, des architectures, contrats et s
 
 Validation de cette review sous Node 22.23.2 : audit high, types, lint, build et 405 tests avec couverture 100 % passent. Le hostname IPv6 testé est `[::1]`. Validation manuelle Electron non effectuée.
 
+## Nouvelle revue PR #104 — tri de pagination
+
+- Les deux fusions de pages récentes de salon utilisent explicitement `date`; le curseur est donc le dernier message chronologique. La pagination récente DM/salon abandonne un historique vidé sans erreur ni requête invalide. Tests exécutant les fonctions des pages avec la vraie fusion.
+- Boucle de profil non retenue : `definirPresenceInterne` n'appelle pas `annoncerProfil`; seule `modifierPresence` annonce une action locale. `configObtenir` normalise aussi le statut. La review confond ces deux méthodes.
+- Confirmation groupée différée : les confirmations individuelles ignorent déjà les messages sortants et livrés; la page est bornée à 50. Un batch nécessiterait un nouveau contrat backend sans défaut fonctionnel démontré dans cette review.
+- Alias `counter` conservé : capture de la référence utilisée par le nettoyage de l'effet, équivalente fonctionnellement et conforme au lint des hooks. Aucun comportement à corriger; modifier un fichier partagé imposerait en plus une coordination Mobile inutile.
+- URL invalide déjà refusée au démarrage par `URL` : personnaliser ce texte opérateur est facultatif et la suggestion inclut la valeur brute, pouvant exposer des identifiants.
+- Journal des décisions maintenu dans AGENTS conformément à la demande explicite de l'utilisateur.
+
+Validation : audit high, types, lint, build et 408 tests à couverture 100 % sous Node 22.23.2. Les nouvelles régressions exécutent les fonctions des pages; validation manuelle Electron non effectuée.
+
 ## Revue PR #100 — décisions du 6 octobre 2026
 
 - Réponses HTTP vides : correction retenue pour les non-lus et les lecteurs, y compris le DM (204 produit undefined dans appelHttp). Tests de régression pour 204 et JSON null.

@@ -696,6 +696,7 @@ async function chargerMessagesPlusRecentsDm() {
   historique.enChargement = true;
   try {
     const dernier = historique.messagesAnciens.at(-1);
+    if (!dernier) return;
     const resultat = await window.electronAPI.obtenirMessagesPriveesAvant({
       conversationId: id,
       apresId: dernier.id,
