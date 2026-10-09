@@ -158,14 +158,25 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
       }
     });
 
-    it('sans chiffrement disponible : repli en clair, efface à la déconnexion', () => {
+    it('sans chiffrement disponible : aucune persistance', () => {
       expect(chargerJetonPersiste()).toBeNull();
       simulerElectron(coffre(false));
       sauvegarderJetonPersiste('jwt-1');
-      expect(lire()).toEqual({ jeton: 'jwt-1' });
-      expect(chargerJetonPersiste()).toBe('jwt-1');
+      expect(existsSync(fichier())).toBe(false);
+      writeFileSync(fichier(), JSON.stringify({ jeton: 'ancien-jwt' }));
+      expect(chargerJetonPersiste()).toBeNull();
+      expect(existsSync(fichier())).toBe(false);
       sauvegarderJetonPersiste(null);
       expect(existsSync(fichier())).toBe(false);
+    });
+
+    it('refuse le coffre Linux basic_text', () => {
+      simulerElectron({ ...coffre(), getSelectedStorageBackend: () => 'basic_text' });
+      sauvegarderJetonPersiste('secret');
+      expect(existsSync(fichier())).toBe(false);
+      simulerElectron({ ...coffre(), getSelectedStorageBackend: () => 'gnome_libsecret' });
+      sauvegarderJetonPersiste('secret');
+      expect(chargerJetonPersiste()).toBe('secret');
     });
 
     it('migre un ancien jeton en clair vers le format chiffré', () => {
@@ -214,6 +225,7 @@ describe('RealGatewayRuntime (couverture complémentaire)', () => {
       requireLocal.cache[cheminElectron] = {
         exports: {
           app: { getPath: () => path.join(dossier, 'inexistant', 'profond') },
+          safeStorage: coffre(),
         },
       } as unknown as NodeJS.Module;
       expect(() => sauvegarderJetonPersiste('jwt')).not.toThrow();

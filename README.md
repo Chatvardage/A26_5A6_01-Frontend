@@ -117,3 +117,13 @@ Les événements de lecture vérifient désormais Number.isFinite après Date.pa
 ### Conversation et messagerie : résultats anciens
 
 Un résultat de recherche ouvre une page directement depuis le message choisi, avec un indicateur de chargement puis une mise en évidence instantanée. Les messages intermédiaires ne sont plus chargés. La pagination reprend depuis cette position, vers les messages plus anciens ou plus récents. Une reconstruction locale de Message-Service est nécessaire pour activer les nouveaux paramètres `around` et `direction`.
+
+## Renforcement sécurité — 9 octobre 2026
+
+Une origine distante exige HTTPS hors développement. Les URLs doivent être des origines HTTP(S), sans identifiants, chemin, paramètres ou fragment. Sans configuration Socket séparée, le client utilise l'origine API.
+
+Le jeton persistant requiert le chiffrement `safeStorage`. Le backend Linux `basic_text` est refusé. Sans coffre sécurisé, le client conserve seulement la session en mémoire et supprime l'ancien fichier persistant; une ancienne session en clair est migrée uniquement si un coffre réel est disponible. La recherche paginée partagée annule les requêtes remplacées et déduplique aussi les résultats d'une même page.
+
+### Limites connues
+
+L'audit npm conserve huit alertes modérées issues de `sprintf-js` dans les outils `electron-builder` (`global-agent`/`roarr`). Ne pas appliquer une rétrogradation forcée du packager. Revoir la chaîne au prochain correctif amont. Voir le rapport global dans `../A26_5A6_01-Infra/docs/audit-securite-2026-10-09.md`.
