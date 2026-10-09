@@ -2074,3 +2074,85 @@ dialog::backdrop {
     transform: rotate(360deg);
   }
 }
+
+/* --- Fiche de profil (ChatUiShared.ouvrirFicheProfil) ---------------
+   Ouverte par un clic sur la photo d'un utilisateur (messages, liste des
+   messages privés, membres d'un serveur). Mêmes règles sur les deux pages. */
+.avatar-clickable {
+  cursor: pointer;
+}
+
+.avatar-clickable:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.profile-card-dialog {
+  width: min(360px, calc(100vw - 40px));
+}
+
+.profile-card-body {
+  padding: 20px;
+}
+
+.profile-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.profile-card .profile-card-avatar {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
+}
+
+.profile-card-identity {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  text-align: center;
+}
+
+.profile-card-name {
+  font-size: 1.25rem;
+}
+
+.profile-card-handle,
+.profile-card-presence {
+  color: var(--text-muted);
+}
+
+.profile-card-presence[data-presence='en-ligne'] {
+  color: var(--online);
+}
+
+.profile-card-details {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  width: 100%;
+  margin: 0;
+}
+
+.profile-card-details dt {
+  color: var(--text-muted);
+}
+
+.profile-card-details dd {
+  margin: 0;
+}
+
+.profile-card-message {
+  width: 100%;
+  padding: 10px 12px;
+}

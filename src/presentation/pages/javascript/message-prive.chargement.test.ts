@@ -998,3 +998,102 @@ it.each([
     expect(Boolean(bouton)).toBe(cas === 'vérification en échec');
   }
 );
+
+describe('fiche de profil (messages privés)', () => {
+  const avecCarol = () => [
+    ...conversations(),
+    {
+      id: 'carol:moi',
+      participantIds: ['moi', 'carol'],
+      otherUser: {
+        id: 'carol',
+        pseudo: 'carol',
+        present: false,
+        alias: 'Caro',
+        avatar: null,
+      },
+      messages: [],
+      finHistorique: true,
+      lastMessage: null,
+    },
+  ];
+
+  it('photo de la liste, de la barre du haut et des messages : fiche de l’autre personne', async () => {
+    const demandes: unknown[] = [];
+    const { document, window, erreurs } = await chargerPage({
+      autresReponses: {
+        obtenirConversationsPrivees: avecCarol(),
+        demarrerConversationPrivee: (donnees: {
+          autreUtilisateurId: string;
+        }) => {
+          demandes.push(donnees);
+          return { id: `${donnees.autreUtilisateurId}:moi` };
+        },
+      },
+    });
+    const fiche = () =>
+      document.querySelector<HTMLDialogElement>('.profile-card-dialog[open]');
+    const fermer = () =>
+      fiche()?.querySelector<HTMLButtonElement>('.close-button')?.click();
+
+    // Conversation affichée (bob) : pas de bouton vers elle-même.
+    const actif = document.querySelector(
+      '#message-list .message-row .avatar-clickable'
+    ) as HTMLElement;
+    actif.click();
+    expect(fiche()?.querySelector('.profile-card-name')?.textContent).toBe(
+      'bob'
+    );
+    expect(fiche()?.querySelector('.profile-card-message')).toBeNull();
+    fermer();
+
+    const barre = document.querySelector<HTMLElement>('.topbar-avatar')!;
+    expect(barre.getAttribute('aria-label')).toBe('Voir le profil de bob');
+    barre.dispatchEvent(
+      new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+    );
+    expect(fiche()?.querySelector('.profile-card-handle')?.textContent).toBe(
+      '@bob'
+    );
+    fermer();
+    barre.dispatchEvent(
+      new window.KeyboardEvent('keydown', { key: 'x', bubbles: true })
+    );
+    expect(fiche()).toBeNull();
+
+    // Photo dans la liste : fiche, sans ouvrir la conversation.
+    const carol = [
+      ...document.querySelectorAll<HTMLElement>(
+        '#conversation-list .conversation'
+      ),
+    ].find((li) => li.textContent?.includes('Caro'))!;
+    carol.querySelector<HTMLElement>('.avatar')!.click();
+    expect(carol.classList.contains('active')).toBe(false);
+    expect(fiche()?.querySelector('.profile-card-name')?.textContent).toBe(
+      'Caro'
+    );
+    fiche()!.querySelector<HTMLButtonElement>('.profile-card-message')!.click();
+    await vi.waitFor(() =>
+      expect(demandes).toEqual([
+        { utilisateurId: 'moi', autreUtilisateurId: 'carol' },
+      ])
+    );
+    expect(erreurs).toEqual([]);
+  });
+
+  it('sans conversation affichée, la photo de la barre du haut ne fait rien', async () => {
+    const { document } = await chargerPage({
+      attendreMessages: false,
+      autresReponses: { obtenirConversationsPrivees: [] },
+    });
+    await vi.waitFor(() =>
+      expect(
+        document
+          .querySelector('.topbar-avatar')
+          ?.classList.contains('avatar-clickable')
+      ).toBe(true)
+    );
+    document.querySelector<HTMLElement>('.topbar-avatar')!.click();
+    expect(document.querySelector('.profile-card-dialog')).toBeNull();
+  });
+});

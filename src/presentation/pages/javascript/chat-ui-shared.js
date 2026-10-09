@@ -1177,6 +1177,137 @@
     conteneur.replaceChildren(statut);
   }
 
+  /**
+   * Fiche de profil d'un autre utilisateur ({ id, pseudo, alias, avatar }) :
+   * photo (ou initiale), nom affiché, @pseudo, présence, alias et pseudo, et
+   * un bouton « Message privé » (`surMessagePrive(utilisateur)`), absent pour
+   * soi-même et pour la conversation privée déjà affichée avec cette
+   * personne (`conversationAvecId`). Dialogue créé à la demande et retiré à
+   * la fermeture : utilisable par-dessus un autre dialogue (liste des
+   * membres d'un serveur).
+   */
+  function ouvrirFicheProfil({
+    utilisateur,
+    enLigne,
+    t,
+    utilisateurActuelId,
+    conversationAvecId,
+    surMessagePrive,
+  }) {
+    if (!utilisateur?.id) return null;
+    const fiche = window.LogiqueInterface.ficheProfil(utilisateur, {
+      utilisateurActuelId,
+      conversationAvecId,
+    });
+    const nom = fiche.nom || t('dm.defaultUser');
+
+    const dialogue = document.createElement('dialog');
+    dialogue.className = 'profile-card-dialog';
+    dialogue.setAttribute('aria-label', t('userCard.title'));
+
+    const entete = document.createElement('div');
+    entete.className = 'dialog-header';
+    const titre = document.createElement('h2');
+    titre.textContent = t('userCard.title');
+    const fermer = document.createElement('button');
+    fermer.type = 'button';
+    fermer.className = 'close-button';
+    fermer.setAttribute('aria-label', t('userCard.close'));
+    fermer.textContent = '×';
+    fermer.addEventListener('click', () => dialogue.close());
+    entete.append(titre, fermer);
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar profile-card-avatar';
+    avatar.classList.toggle('offline', !enLigne);
+    avatar.textContent = fiche.initiale || nom.charAt(0).toUpperCase();
+    remplirAvatar(avatar, utilisateur.avatar);
+
+    const nomEl = document.createElement('strong');
+    nomEl.className = 'profile-card-name';
+    nomEl.textContent = nom;
+    const identite = document.createElement('div');
+    identite.className = 'profile-card-identity';
+    identite.append(nomEl);
+    if (fiche.identifiant) {
+      const handle = document.createElement('span');
+      handle.className = 'profile-card-handle';
+      handle.textContent = fiche.identifiant;
+      identite.append(handle);
+    }
+    const presence = document.createElement('span');
+    presence.className = 'profile-card-presence';
+    presence.dataset.presence = enLigne ? 'en-ligne' : 'hors-ligne';
+    presence.textContent = enLigne ? t('dm.online') : t('dm.offline');
+    identite.append(presence);
+
+    const details = document.createElement('dl');
+    details.className = 'profile-card-details';
+    for (const [cle, valeur] of [
+      ['userCard.alias', fiche.alias || t('userCard.noAlias')],
+      ['userCard.pseudo', fiche.pseudo || t('dm.defaultUser')],
+    ]) {
+      const terme = document.createElement('dt');
+      terme.textContent = t(cle);
+      const definition = document.createElement('dd');
+      definition.textContent = valeur;
+      details.append(terme, definition);
+    }
+
+    const contenu = document.createElement('div');
+    contenu.className = 'profile-card';
+    contenu.append(avatar, identite, details);
+    if (fiche.messagePrive && typeof surMessagePrive === 'function') {
+      const bouton = document.createElement('button');
+      bouton.type = 'button';
+      bouton.className = 'primary-button profile-card-message';
+      bouton.textContent = t('userCard.message');
+      bouton.addEventListener('click', () => {
+        dialogue.close();
+        surMessagePrive(utilisateur);
+      });
+      contenu.append(bouton);
+    }
+
+    const corps = document.createElement('div');
+    corps.className = 'profile-card-body';
+    corps.append(entete, contenu);
+    dialogue.append(corps);
+    // Clic sur le fond (hors du contenu) : ferme, comme Échap.
+    dialogue.addEventListener('click', (event) => {
+      if (event.target === dialogue) dialogue.close();
+    });
+    dialogue.addEventListener('close', () => dialogue.remove());
+    document.body.append(dialogue);
+    dialogue.showModal();
+    return dialogue;
+  }
+
+  /**
+   * Rend un avatar cliquable : ouvre la fiche de profil de `utilisateurId`
+   * (souris ou clavier, Entrée/Espace). `ouvrir` reçoit l'identifiant au
+   * moment du clic, pour lire les données à jour (alias, photo, présence).
+   */
+  function rendreAvatarCliquable(element, { utilisateurId, nom, t, ouvrir }) {
+    if (!element || !utilisateurId) return;
+    element.classList.add('avatar-clickable');
+    element.setAttribute('role', 'button');
+    element.tabIndex = 0;
+    element.setAttribute('aria-label', t('userCard.view', { name: nom }));
+    element.title = t('userCard.view', { name: nom });
+    const declencher = (event) => {
+      event.stopPropagation();
+      ouvrir(utilisateurId);
+    };
+    element.addEventListener('click', declencher);
+    element.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        declencher(event);
+      }
+    });
+  }
+
   window.ChatUiShared = Object.freeze({
     afficherChargementRecherche,
     estMessageCible,
@@ -1190,6 +1321,8 @@
     afficherAvatarCourant,
     remplirAvatar,
     nomAffiche,
+    ouvrirFicheProfil,
+    rendreAvatarCliquable,
     creerSelecteurUtilisateurs,
     chargerEtatReseauEtPresences,
     brancherBoutonReessayer,

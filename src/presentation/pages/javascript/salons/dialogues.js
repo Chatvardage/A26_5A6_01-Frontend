@@ -435,6 +435,14 @@ el.membres.addEventListener('click', () => {
       texte: nom.charAt(0).toUpperCase(),
     });
     ChatUiShared.remplirAvatar(avatarMembre, membre.avatar);
+    if (connus.has(utilisateurId) && utilisateurId !== utilisateurActuelId) {
+      ChatUiShared.rendreAvatarCliquable(avatarMembre, {
+        utilisateurId,
+        nom,
+        t,
+        ouvrir: (id) => ouvrirProfilUtilisateur(connus.get(id)),
+      });
+    }
 
     // Ligne secondaire : présence (texte mis à jour en direct, voir
     // onPresenceChange) et badge de rôle.

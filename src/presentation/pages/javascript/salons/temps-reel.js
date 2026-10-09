@@ -104,6 +104,38 @@ if (typeof serviceNotifications?.onNavigateToConversation === 'function') {
   serviceNotifications.onNavigateToConversation(ouvrirConversation);
 }
 
+// --- Fiche de profil ---------------------------------------------------------
+/** « Message privé » depuis une fiche : crée (ou retrouve) la conversation,
+ * puis ouvre la page des messages privés dessus. */
+async function ouvrirMessagePriveAvec(autre) {
+  try {
+    const conversation = await window.electronAPI.demarrerConversationPrivee({
+      utilisateurId: utilisateurActuelId,
+      autreUtilisateurId: autre.id,
+    });
+    await window.electronAPI.definirCibleNavigation({
+      type: 'prive',
+      id: conversation.id,
+    });
+    window.electronAPI.navigate('message-prive.html');
+  } catch (erreur) {
+    notifier(messageErreur(erreur), true);
+  }
+}
+
+/** Fiche de profil d'un utilisateur ({ id, pseudo, alias, avatar }) : photo
+ * cliquée dans un message ou dans la liste des membres d'un serveur. */
+function ouvrirProfilUtilisateur(donnees) {
+  if (!donnees) return;
+  ChatUiShared.ouvrirFicheProfil({
+    utilisateur: donnees,
+    enLigne: presences[donnees.id] === 'en-ligne',
+    t,
+    utilisateurActuelId,
+    surMessagePrive: ouvrirMessagePriveAvec,
+  });
+}
+
 // --- Recherche de messages ------------------------------------------------
 ChatUiShared.brancherRechercheMessages({
   bouton: document.querySelector('#open-search'),

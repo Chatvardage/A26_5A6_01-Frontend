@@ -46,6 +46,13 @@ function renderConversationList() {
       avatar.classList.add('offline');
     }
     ChatUiShared.remplirAvatar(avatar, otherUser?.avatar);
+    // Photo : fiche de profil (le clic n'ouvre pas la conversation).
+    ChatUiShared.rendreAvatarCliquable(avatar, {
+      utilisateurId: otherUser?.id,
+      nom: ChatUiShared.nomAffiche(otherUser) || t('dm.defaultUser'),
+      t,
+      ouvrir: ouvrirProfilDm,
+    });
 
     const info = document.createElement('div');
     info.classList.add('conversation-info');
@@ -116,6 +123,11 @@ function afficherAucuneConversation() {
   // Ni photo ni pastille de présence : il n'y a personne en face.
   ChatUiShared.remplirAvatar(topbarAvatar, null);
   topbarAvatar?.classList.add('sans-presence');
+  if (topbarAvatar) {
+    topbarAvatar.dataset.userId = '';
+    topbarAvatar.removeAttribute('title');
+    topbarAvatar.removeAttribute('aria-label');
+  }
   if (topbarName) topbarName.textContent = t('dm.selectConversation');
   if (topbarStatus) {
     topbarStatus.textContent = t('dm.noActiveConversation');
@@ -269,6 +281,11 @@ async function renderActiveConversation(options = {}) {
     topbarAvatar.classList.toggle('offline', !otherUser?.present);
     topbarAvatar.classList.remove('sans-presence');
     ChatUiShared.remplirAvatar(topbarAvatar, otherUser?.avatar);
+    // Le clic (branché une fois au démarrage, message-prive.js) lit cet id.
+    topbarAvatar.dataset.userId = otherUser?.id ?? '';
+    const nomTopbar = ChatUiShared.nomAffiche(otherUser) || t('dm.defaultUser');
+    topbarAvatar.title = t('userCard.view', { name: nomTopbar });
+    topbarAvatar.setAttribute('aria-label', topbarAvatar.title);
   }
   if (typingIndicator && isTypingNom) {
     // Dans un DM, une seule autre personne peut potentiellement écrire
@@ -364,6 +381,14 @@ async function renderActiveConversation(options = {}) {
       avatar,
       isOwn ? state.preferences?.avatar : otherUser?.avatar
     );
+    if (!isOwn) {
+      ChatUiShared.rendreAvatarCliquable(avatar, {
+        utilisateurId: otherUser?.id,
+        nom: author,
+        t,
+        ouvrir: ouvrirProfilDm,
+      });
+    }
 
     const body = document.createElement('div');
     body.classList.add('message-body');

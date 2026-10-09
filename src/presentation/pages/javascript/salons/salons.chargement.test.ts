@@ -1224,3 +1224,170 @@ it.each([
     expect(Boolean(bouton)).toBe(cas === 'vérification en échec');
   }
 );
+
+describe('fiche de profil (page des salons)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    for (const page of pagesOuvertes.splice(0)) page.window.close();
+  });
+
+  // jsdom ne fournit pas l'API native <dialog> : même contrat que Chromium.
+  const brancherDialogues = (window: JSDOM['window']) => {
+    window.HTMLDialogElement.prototype.showModal = function () {
+      this.setAttribute('open', '');
+    };
+    window.HTMLDialogElement.prototype.close = function () {
+      this.removeAttribute('open');
+      this.dispatchEvent(new window.Event('close'));
+    };
+  };
+  const avecAlias = () => {
+    const etat = etatInitial();
+    etat.utilisateurs[1] = {
+      id: 'bob',
+      pseudo: 'bob',
+      alias: 'Bobby',
+      avatar: null,
+    } as never;
+    return etat;
+  };
+
+  it('la photo d’un auteur ouvre sa fiche ; « Message privé » ouvre la conversation sur la page des messages privés', async () => {
+    const cibles: unknown[] = [];
+    const pages: unknown[] = [];
+    const demandes: unknown[] = [];
+    const { document, window, erreurs } = await chargerPage({
+      autresReponses: {
+        obtenirEtatSalons: avecAlias(),
+        obtenirPresences: { bob: 'en-ligne' },
+        demarrerConversationPrivee: (donnees: unknown) => {
+          demandes.push(donnees);
+          return { id: 'bob:moi' };
+        },
+        definirCibleNavigation: (cible: unknown) => {
+          cibles.push(cible);
+        },
+        navigate: (page: unknown) => {
+          pages.push(page);
+        },
+      },
+    });
+    brancherDialogues(window);
+    const avatars = document.querySelectorAll<HTMLElement>(
+      '#message-list .message-row .avatar'
+    );
+    expect(avatars[0].classList.contains('avatar-clickable')).toBe(true);
+    expect(avatars[0].getAttribute('aria-label')).toBe(
+      'Voir le profil de Bobby'
+    );
+
+    avatars[0].click();
+    const fiche = document.querySelector<HTMLDialogElement>(
+      '.profile-card-dialog'
+    );
+    expect(fiche?.open).toBe(true);
+    expect(fiche?.querySelector('.profile-card-name')?.textContent).toBe(
+      'Bobby'
+    );
+    expect(fiche?.querySelector('.profile-card-handle')?.textContent).toBe(
+      '@bob'
+    );
+    expect(fiche?.querySelector('.profile-card-presence')?.textContent).toBe(
+      'En ligne'
+    );
+    expect(
+      [...(fiche?.querySelectorAll('dd') ?? [])].map((d) => d.textContent)
+    ).toEqual(['Bobby', 'bob']);
+
+    fiche?.querySelector<HTMLButtonElement>('.profile-card-message')?.click();
+    await vi.waitFor(() => expect(pages).toEqual(['message-prive.html']));
+    expect(demandes).toEqual([
+      { utilisateurId: 'moi', autreUtilisateurId: 'bob' },
+    ]);
+    expect(cibles).toEqual([{ type: 'prive', id: 'bob:moi' }]);
+    // Fermée, la fiche est retirée du document.
+    expect(document.querySelector('.profile-card-dialog')).toBeNull();
+    expect(erreurs).toEqual([]);
+  });
+
+  it('clavier, fermeture par le fond et par le bouton, et échec de création de la conversation', async () => {
+    const { document, window } = await chargerPage({
+      autresReponses: {
+        obtenirEtatSalons: avecAlias(),
+        demarrerConversationPrivee: () =>
+          Promise.reject(new Error('ERR_RESEAU')),
+      },
+    });
+    brancherDialogues(window);
+    const avatar = () =>
+      document.querySelector<HTMLElement>('#message-list .avatar-clickable')!;
+    const fiche = () =>
+      document.querySelector<HTMLDialogElement>('.profile-card-dialog');
+
+    avatar().dispatchEvent(
+      new window.KeyboardEvent('keydown', { key: 'a', bubbles: true })
+    );
+    expect(fiche()).toBeNull();
+    avatar().dispatchEvent(
+      new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+    );
+    expect(fiche()?.querySelector('.profile-card-presence')?.textContent).toBe(
+      'Hors ligne'
+    );
+    // Clic dans le contenu : la fiche reste ouverte ; sur le fond : fermée.
+    fiche()!.querySelector<HTMLElement>('.profile-card')!.click();
+    expect(fiche()?.open).toBe(true);
+    fiche()!.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    expect(fiche()).toBeNull();
+
+    avatar().dispatchEvent(
+      new window.KeyboardEvent('keydown', { key: ' ', bubbles: true })
+    );
+    fiche()!.querySelector<HTMLButtonElement>('.close-button')!.click();
+    expect(fiche()).toBeNull();
+
+    avatar().click();
+    fiche()!.querySelector<HTMLButtonElement>('.profile-card-message')!.click();
+    await vi.waitFor(() =>
+      expect(
+        document.querySelector('#toast')?.classList.contains('error')
+      ).toBe(true)
+    );
+  });
+
+  it('la photo d’un membre de la liste ouvre sa fiche, pas la sienne', async () => {
+    const { document, window, erreurs } = await chargerPage({
+      autresReponses: {
+        obtenirMembresServeur: () => ({
+          membres: [
+            { utilisateurId: 'bob', role: 'membre' },
+            { utilisateurId: 'moi', role: 'proprietaire' },
+          ],
+          total: 2,
+          suivant: null,
+          utilisateurs: [
+            { id: 'bob', pseudo: 'bob', alias: 'Bobby', avatar: null },
+            { id: 'moi', pseudo: 'moi', alias: null, avatar: null },
+          ],
+        }),
+      },
+    });
+    brancherDialogues(window);
+    document.querySelector<HTMLElement>('#open-members')?.click();
+    await vi.waitFor(() =>
+      expect(document.querySelectorAll('.member-row')).toHaveLength(2)
+    );
+    const avatars = document.querySelectorAll<HTMLElement>(
+      '.member-row .member-avatar'
+    );
+    expect(
+      [...avatars].map((a) => a.classList.contains('avatar-clickable'))
+    ).toEqual([true, false]);
+    avatars[0].click();
+    expect(
+      document.querySelector('.profile-card-dialog .profile-card-name')
+        ?.textContent
+    ).toBe('Bobby');
+    expect(erreurs).toEqual([]);
+  });
+});

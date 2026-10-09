@@ -538,6 +538,16 @@ function afficherMessages(options = {}) {
           ? preferences?.avatar
           : utilisateur(message.auteurId)?.avatar
       );
+      // Photo d'un autre membre : sa fiche de profil (données lues au clic,
+      // à jour si son alias ou sa photo a changé entre-temps).
+      if (!estMessagePersonnel && utilisateur(message.auteurId)) {
+        ChatUiShared.rendreAvatarCliquable(avatarAuteur, {
+          utilisateurId: message.auteurId,
+          nom: auteur,
+          t,
+          ouvrir: (id) => ouvrirProfilUtilisateur(utilisateur(id)),
+        });
+      }
       const article = creerEl('article', {
         classe: classesRow.join(' '),
         enfants: [

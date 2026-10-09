@@ -38,6 +38,26 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // Photo de la barre du haut : fiche de profil de l'autre personne de la
+  // conversation affichée (id posé à chaque affichage, voir
+  // renderActiveConversation). Branché une seule fois : l'élément persiste.
+  if (topbarAvatar) {
+    topbarAvatar.classList.add('avatar-clickable');
+    topbarAvatar.setAttribute('role', 'button');
+    topbarAvatar.tabIndex = 0;
+    const ouvrirProfilTopbar = () => {
+      if (topbarAvatar.dataset.userId)
+        ouvrirProfilDm(topbarAvatar.dataset.userId);
+    };
+    topbarAvatar.addEventListener('click', ouvrirProfilTopbar);
+    topbarAvatar.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        ouvrirProfilTopbar();
+      }
+    });
+  }
+
   // Clic sur une notification système (voir showMessageNotification dans
   // main.js) : ouvre directement la conversation concernée. Si c'est une
   // conversation privée, on est déjà sur la bonne page ; si c'est un salon,

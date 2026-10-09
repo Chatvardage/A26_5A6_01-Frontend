@@ -364,6 +364,15 @@
       "seenByOneMore": "Vu par {names} et 1 autre",
       "seenByMore": "Vu par {names} et {count} autres",
       "sent": "Envoyé, non lu"
+    },
+    "userCard": {
+      "title": "Profil",
+      "view": "Voir le profil de {name}",
+      "alias": "Alias",
+      "pseudo": "Pseudo",
+      "noAlias": "Aucun alias",
+      "message": "Message privé",
+      "close": "Fermer"
     }
   },
   "en": {
@@ -731,6 +740,15 @@
       "seenByOneMore": "Seen by {names} and 1 other",
       "seenByMore": "Seen by {names} and {count} others",
       "sent": "Sent, unread"
+    },
+    "userCard": {
+      "title": "Profile",
+      "view": "View {name}'s profile",
+      "alias": "Alias",
+      "pseudo": "Username",
+      "noAlias": "No alias",
+      "message": "Direct message",
+      "close": "Close"
     }
   }
 }

@@ -293,6 +293,33 @@
     return { noms: noms.slice(0, max), autres: Math.max(0, noms.length - max) };
   }
 
+  // --- Fiche de profil ----------------------------------------------------
+
+  /**
+   * Contenu de la fiche de profil d'un utilisateur ({ id, pseudo, alias }) :
+   * nom affiché (l'alias s'il en a choisi un, sinon le pseudo), ligne
+   * « @pseudo », initiale de l'avatar sans photo, et si le bouton « Message
+   * privé » est proposé : jamais pour soi-même, ni pour la personne dont la
+   * conversation privée est déjà affichée (`conversationAvecId`).
+   */
+  function ficheProfil(utilisateur, contexte = {}) {
+    const pseudo = utilisateur?.pseudo || '';
+    const alias = utilisateur?.alias || '';
+    const nom = alias || pseudo;
+    const id = utilisateur?.id;
+    return {
+      nom,
+      alias,
+      pseudo,
+      identifiant: pseudo ? `@${pseudo}` : '',
+      initiale: nom.charAt(0).toUpperCase(),
+      messagePrive:
+        Boolean(id) &&
+        id !== contexte.utilisateurActuelId &&
+        id !== contexte.conversationAvecId,
+    };
+  }
+
   racine.LogiqueInterface = Object.freeze({
     fusionnerHistorique,
     fusionnerAvecMessagesEnAttente,
@@ -319,5 +346,6 @@
     statutLecture,
     lecteursJusqua,
     resumeNoms,
+    ficheProfil,
   });
 })(globalThis);

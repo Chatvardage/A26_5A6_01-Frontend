@@ -318,3 +318,43 @@ describe('positions de lecture et frontière des non-lus', () => {
     expect(L.indexSeparateur(messages, { nonLus: 0 }, 'moi')).toBe(-1);
   });
 });
+
+describe('fiche de profil', () => {
+  it('nom affiché : alias, sinon pseudo ; ligne @pseudo et initiale', () => {
+    expect(L.ficheProfil({ id: 'bob', pseudo: 'bob', alias: 'Bobby' })).toEqual(
+      {
+        nom: 'Bobby',
+        alias: 'Bobby',
+        pseudo: 'bob',
+        identifiant: '@bob',
+        initiale: 'B',
+        messagePrive: true,
+      }
+    );
+    expect(
+      L.ficheProfil({ id: 'zoe', pseudo: 'zoé', alias: null })
+    ).toMatchObject({ nom: 'zoé', alias: '', initiale: 'Z' });
+    expect(L.ficheProfil({ id: 'x' })).toMatchObject({
+      nom: '',
+      identifiant: '',
+      initiale: '',
+    });
+  });
+
+  it('pas de « Message privé » pour soi-même, la conversation déjà affichée ou un utilisateur sans id', () => {
+    const bob = { id: 'bob', pseudo: 'bob' };
+    expect(
+      L.ficheProfil(bob, { utilisateurActuelId: 'bob' }).messagePrive
+    ).toBe(false);
+    expect(L.ficheProfil(bob, { conversationAvecId: 'bob' }).messagePrive).toBe(
+      false
+    );
+    expect(
+      L.ficheProfil(bob, {
+        utilisateurActuelId: 'moi',
+        conversationAvecId: 'carol',
+      }).messagePrive
+    ).toBe(true);
+    expect(L.ficheProfil(null).messagePrive).toBe(false);
+  });
+});
