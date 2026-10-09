@@ -511,16 +511,45 @@ describe('page des salons (scripts découpés)', () => {
       document.querySelector<HTMLButtonElement>(
         '#server-rail .server-icon--more'
       );
-    await vi.waitFor(() => expect(icones()).toHaveLength(15));
-    expect(icones()[14].getAttribute('data-serveur-id')).toBe('srv');
+    await vi.waitFor(() => expect(icones()).toHaveLength(11));
+    expect(icones()[10].getAttribute('data-serveur-id')).toBe('srv');
     expect(plus()?.getAttribute('aria-label')).toBe(
       traductions.fr.servers.showMoreRail
     );
     // « Voir plus » juste avant le bouton « + » du rail.
     expect(plus()?.nextElementSibling?.id).toBe('open-create-channel-rail');
     plus()!.click();
+    expect(icones()).toHaveLength(20);
+    expect(icones()[14].getAttribute('data-serveur-id')).toBe('srv');
+    expect(document.querySelectorAll('[data-serveur-id="srv"]')).toHaveLength(1);
+    plus()!.click();
     expect(icones()).toHaveLength(25);
     expect(plus()).toBeNull();
+    expect(erreurs).toEqual([]);
+  });
+
+  it('rail : garde la pagination quand le serveur actif est le dernier', async () => {
+    const etat = etatInitial();
+    etat.serveurs = [
+      ...Array.from({ length: 14 }, (_, i) => ({
+        id: `s${i}`,
+        nom: `Serveur ${i}`,
+        icone: null,
+        parDefaut: false,
+        salonIds: [],
+      })),
+      ...etat.serveurs,
+    ];
+    const { document, erreurs } = await chargerPage({
+      autresReponses: { obtenirEtatSalons: etat },
+    });
+    await vi.waitFor(() =>
+      expect(document.querySelectorAll('#server-rail [data-serveur-id]')).toHaveLength(11)
+    );
+    expect(document.querySelector('#server-rail [data-serveur-id="srv"]')?.classList.contains('active')).toBe(true);
+    document.querySelector<HTMLButtonElement>('#server-rail .server-icon--more')!.click();
+    expect(document.querySelectorAll('#server-rail [data-serveur-id]')).toHaveLength(15);
+    expect(document.querySelector('#server-rail .server-icon--more')).toBeNull();
     expect(erreurs).toEqual([]);
   });
 

@@ -509,8 +509,11 @@
       .forEach((icone) => icone.remove());
     const liste = serveurs ?? [];
     const indexActif = liste.findIndex((s) => s.id === serveurActifId);
-    const limite = Math.max(limiteRail, indexActif + 1);
-    for (const serveur of liste.slice(0, limite)) {
+    const limite = limiteRail;
+    const visibles = liste.slice(0, limite);
+    // Le serveur actif hors page reste visible sans dévoiler les pages suivantes.
+    if (indexActif >= limite) visibles.push(liste[indexActif]);
+    for (const serveur of visibles) {
       const bouton = document.createElement('button');
       bouton.type = 'button';
       bouton.className = 'server-icon';
@@ -540,7 +543,7 @@
       bouton.addEventListener('click', () => surChoix(serveur));
       conteneur.insertBefore(bouton, avant ?? null);
     }
-    if (liste.length > limite) {
+    if (liste.length > visibles.length) {
       const plus = document.createElement('button');
       plus.type = 'button';
       plus.className = 'server-icon server-icon--more';
