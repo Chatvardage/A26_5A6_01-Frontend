@@ -438,6 +438,46 @@ describe('page des messages privés', () => {
     expect(erreurs).toEqual([]);
   });
 
+  it('liste paginée : 15 conversations, puis « Voir plus de conversations »', async () => {
+    // 20 conversations, de la plus récente (c0) à la plus ancienne (c19).
+    const liste = Array.from({ length: 20 }, (_, i) => ({
+      id: `c${i}:moi`,
+      participantIds: ['moi', `c${i}`],
+      otherUser: {
+        id: `c${i}`,
+        pseudo: `contact${i}`,
+        present: true,
+        alias: null,
+        avatar: null,
+      },
+      messages: [dm(`m${i}`, `c${i}`, `bonjour ${i}`, 100 - i)],
+      finHistorique: true,
+      lastMessage: dm(`m${i}`, `c${i}`, `bonjour ${i}`, 100 - i),
+    }));
+    const { document, erreurs } = await chargerPage({
+      autresReponses: { obtenirConversationsPrivees: liste },
+    });
+    const lignes = () =>
+      document.querySelectorAll(
+        '#conversation-list .conversation[data-conversation-id]'
+      );
+    const plus = () =>
+      [
+        ...document.querySelectorAll<HTMLButtonElement>(
+          '#conversation-list button'
+        ),
+      ].find(
+        (bouton) =>
+          bouton.textContent === traductions.fr.dm.showMoreConversations
+      );
+    await vi.waitFor(() => expect(lignes()).toHaveLength(15));
+    expect(lignes()[0].getAttribute('data-conversation-id')).toBe('c0:moi');
+    plus()!.click();
+    expect(lignes()).toHaveLength(20);
+    expect(plus()).toBeUndefined();
+    expect(erreurs).toEqual([]);
+  });
+
   it('non-lus : compteur par conversation, conversation affichée marquée lue', async () => {
     const marques: unknown[] = [];
     const deuxConversations = () => [

@@ -8,6 +8,12 @@
 // chargé en dernier, lance quoi que ce soit, au DOMContentLoaded (voir aussi
 // message-prive.chargement.test.ts, qui vérifie ce contrat).
 
+// Pagination de la liste (comme le rail des serveurs) : 15 conversations,
+// les plus récentes d'abord, puis « Voir plus » en ajoute autant. La
+// conversation ouverte reste toujours visible.
+const TAILLE_PAGE_CONVERSATIONS = 15;
+let limiteConversations = TAILLE_PAGE_CONVERSATIONS;
+
 function renderConversationList() {
   if (!listElement) {
     return;
@@ -17,8 +23,12 @@ function renderConversationList() {
   listElement.innerHTML = '';
 
   const afficherRonds = NotifPrefs.afficheRonds(state.currentUserId);
+  const indexActif = filtered.findIndex(
+    (conversation) => conversation.id === state.activeConversationId
+  );
+  const limite = Math.max(limiteConversations, indexActif + 1);
 
-  filtered.forEach((conversation) => {
+  filtered.slice(0, limite).forEach((conversation) => {
     const li = document.createElement('li');
     const otherUser = conversation.otherUser;
     const isActive = conversation.id === state.activeConversationId;
@@ -71,6 +81,25 @@ function renderConversationList() {
 
     listElement.appendChild(li);
   });
+
+  if (filtered.length > limite) {
+    const item = document.createElement('li');
+    item.classList.add('conversation-more');
+    const plus = document.createElement('button');
+    plus.type = 'button';
+    plus.className = 'secondary-button full-width';
+    plus.textContent = t('dm.showMoreConversations');
+    plus.addEventListener('click', () => {
+      limiteConversations = limite + TAILLE_PAGE_CONVERSATIONS;
+      renderConversationList();
+      // Les conversations ajoutées sont sous le bouton : on les fait apparaître.
+      listElement
+        .querySelectorAll('.conversation[data-conversation-id]')
+        [limite]?.scrollIntoView?.({ block: 'nearest' });
+    });
+    item.appendChild(plus);
+    listElement.appendChild(item);
+  }
 }
 
 function reinitialiserHistoriqueDm() {

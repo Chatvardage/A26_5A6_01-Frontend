@@ -117,6 +117,7 @@
       "hiddenPreview": "Nouveau message reçu"
     },
     "dm": {
+      "showMoreConversations": "Voir plus de conversations",
       "title": "Messages privés",
       "filterAll": "Tous",
       "filterOnline": "En ligne",
@@ -480,6 +481,7 @@
       "hiddenPreview": "New message received"
     },
     "dm": {
+      "showMoreConversations": "See more conversations",
       "title": "Direct Messages",
       "filterAll": "All",
       "filterOnline": "Online",
