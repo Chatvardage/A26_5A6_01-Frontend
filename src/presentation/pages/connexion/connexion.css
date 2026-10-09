@@ -16,6 +16,7 @@
   --on-accent: #0b3d30;
   --overlay-bg: rgba(2, 19, 16, 0.65);
   --z-modal: 2000;
+  --login-page-padding: 24px;
 }
 
 /* =========================================================
@@ -45,6 +46,30 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-color: var(--slate) transparent;
+  scrollbar-width: thin;
+}
+
+/* Cette page a son propre bundle CSS : la barre native doit aussi suivre son thème. */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--slate);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--slate-hover);
 }
 
 /* Même règle que styles.css : le logo ne doit pas pouvoir être glissé. */
@@ -67,7 +92,7 @@ body {
   align-items: center;
   justify-content: center;
 
-  padding: 24px;
+  padding: var(--login-page-padding);
 }
 
 /* --- Barre de titre personnalisée ---------------------------------------------
@@ -186,7 +211,8 @@ body {
   gap: clamp(14px, 4vw, 22px);
 
   width: 100%;
-  min-height: calc(100vh - var(--titlebar-height));
+  /* Retirer aussi les marges du body : elles ne doivent pas ajouter 48 px au viewport. */
+  min-height: calc(100vh - var(--titlebar-height) - var(--login-page-padding) - var(--login-page-padding));
 }
 
 /* =========================================================
