@@ -306,6 +306,17 @@ conflit Git (`<<<<<<<`, `=======`, `>>>>>>>`) ne traîne dans le diff.
 
 Infra est la référence du démarrage complet, des architectures, contrats et scénarios de validation. Le README local décrit le dépôt et ses commandes; les guides détaillés sont dans `A26_5A6_01-Infra/docs/`. Toute modification de contrat doit mettre à jour la référence centrale et ses liens.
 
+## Revue PR #104 — 9 octobre 2026
+
+- Nouveau jeton de `logout-others` vérifié avant toute modification de session ou persistance. Réponse invalide : erreur traduite de reconnexion requise, ancien état conservé, rotation terminée sans rouvrir le socket.
+- Confirmation de livraison sans identifiant ignorée : aucune requête vers `/undefined/delivered`.
+- IPv6 conservé avec `[::1]` : `URL.hostname` de Node garde les crochets, contrairement à l'affirmation de la review. Le comportement est vérifié dans le runtime Node utilisé pour les tests.
+- Pas de garde supplémentaire pour les modes de pagination : les appelants fournissent un seul mode; Message-Service rejette explicitement les combinaisons incompatibles en 400. Un nouvel appelant doit respecter ce contrat.
+- `serveur.salons` reste obligatoire : Room-Service fournit ce tableau et il est utilisé par le mapping et les adhésions Socket.IO, pas seulement le tri. Un repli local au tri masquerait un contrat invalide sans réparer ces autres consommateurs.
+- Constantes inactives des fixtures et structure du bloc de déconnexion conservées : aucun défaut de comportement ou de rendu établi par la review. La déconnexion est un bouton d'action, sans formulaire à soumettre.
+
+Validation de cette review sous Node 22.23.2 : audit high, types, lint, build et 405 tests avec couverture 100 % passent. Le hostname IPv6 testé est `[::1]`. Validation manuelle Electron non effectuée.
+
 ## Revue PR #100 — décisions du 6 octobre 2026
 
 - Réponses HTTP vides : correction retenue pour les non-lus et les lecteurs, y compris le DM (204 produit undefined dans appelHttp). Tests de régression pour 204 et JSON null.

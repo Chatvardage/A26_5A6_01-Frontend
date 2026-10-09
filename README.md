@@ -124,6 +124,8 @@ Une origine distante exige HTTPS hors développement. Les URLs doivent être des
 
 Le jeton persistant requiert le chiffrement `safeStorage`. Le backend Linux `basic_text` est refusé. Sans coffre sécurisé, le client conserve seulement la session en mémoire et supprime l'ancien fichier persistant; une ancienne session en clair est migrée uniquement si un coffre réel est disponible. La recherche paginée partagée annule les requêtes remplacées et déduplique aussi les résultats d'une même page.
 
+« Déconnecter les autres appareils » vérifie que la réponse contient un nouveau jeton non vide avant de remplacer la session. Une réponse invalide affiche la demande de reconnexion sans effacer silencieusement le jeton persistant. Les confirmations de livraison reçues sans identifiant sont ignorées.
+
 ### Limites connues
 
 L'audit npm conserve huit alertes modérées issues de `sprintf-js` dans les outils `electron-builder` (`global-agent`/`roarr`). Ne pas appliquer une rétrogradation forcée du packager. Revoir la chaîne au prochain correctif amont. Voir le rapport global dans `../A26_5A6_01-Infra/docs/audit-securite-2026-10-09.md`.

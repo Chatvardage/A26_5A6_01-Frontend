@@ -146,6 +146,9 @@ module.exports = {
       const reponse = await this.appelHttp('/api/auth/logout-others', {
         methode: 'POST',
       });
+      if (typeof reponse?.jeton !== 'string' || !reponse.jeton.trim()) {
+        throw new Error('ERR_RECONNEXION_REQUISE');
+      }
       this.jeton = reponse.jeton;
       this.sauvegarderJetonPersiste(reponse.jeton);
       this.connecterSocket();

@@ -1544,6 +1544,8 @@ describe('pagination depuis une cible et confirmation de livraison', () => {
     expect(runtime.mapperMessageDm(messageBrut({ deliveredAt })).livraison).toBe(Date.parse(deliveredAt));
     await runtime.confirmerLivraisonDm(messageBrut({ deliveredAt }));
     await runtime.confirmerLivraisonDm(messageBrut({ recipientId: 'autre' }));
+    await runtime.confirmerLivraisonDm(messageBrut({ id: undefined }));
+    await runtime.confirmerLivraisonDm(messageBrut({ id: '' }));
     expect(runtime.appelHttp).toHaveBeenCalledTimes(1);
   });
 

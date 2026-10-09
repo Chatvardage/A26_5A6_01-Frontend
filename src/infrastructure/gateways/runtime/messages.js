@@ -27,7 +27,7 @@ module.exports = {
 
   /** Reception par ce client, meme si la conversation nest pas ouverte. */
   async confirmerLivraisonDm(brut) {
-    if (brut.recipientId !== this.utilisateurConnecte?.id || brut.deliveredAt)
+    if (!brut.id || brut.recipientId !== this.utilisateurConnecte?.id || brut.deliveredAt)
       return;
     try {
       await this.appelHttp(

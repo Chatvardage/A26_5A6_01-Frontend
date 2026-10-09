@@ -435,6 +435,21 @@ describe('RealGatewayRuntime', () => {
   });
 
   describe('deconnexionAutres', () => {
+    it.each([null, {}, { jeton: '' }, { jeton: '   ' }, { jeton: 42 }])(
+      'refuse une réponse sans nouveau jeton valide sans effacer la session : %j',
+      async (reponse) => {
+        const { runtime } = creerRuntime();
+        runtime.etatConnexion.statut = 'connecte';
+        runtime.jeton = 'ancien';
+        const connecter = vi.spyOn(runtime, 'connecterSocket').mockImplementation(() => undefined);
+        vi.spyOn(runtime, 'appelHttp').mockResolvedValue(reponse);
+        await expect(runtime.deconnexionAutres()).rejects.toThrow('ERR_RECONNEXION_REQUISE');
+        expect(runtime.jeton).toBe('ancien');
+        expect(runtime.sauvegarderJetonPersiste).not.toHaveBeenCalled();
+        expect(connecter).not.toHaveBeenCalled();
+        expect(runtime.rotationJetonEnCours).toBe(false);
+      }
+    );
     it('garde cet appareil connecté avec la nouvelle session renvoyée par Auth', async () => {
       const { runtime } = creerRuntime();
       runtime.etatConnexion.statut = 'connecte';
