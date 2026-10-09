@@ -185,46 +185,36 @@ body {
 }
 
 /* --- Barres de défilement -------------------------------------------------
-   Electron (Chromium) affiche par défaut la barre de défilement native du
-   système sur toute zone en overflow — grise, épaisse, hors thème, et
-   d'autant plus visible depuis l'ajout du défilement pour charger l'historique
-   des messages (voir #message-list plus bas). On la restyle ici pour les
-   listes défilantes de l'app (messages, salons, conversations privées),
-   partagée entre styles.css et message-prive.css puisque ce fichier est
-   chargé par les deux pages. `scrollbar-color`/`scrollbar-width` couvrent un
-   moteur non basé sur Chromium (repli, sans effet ici) ; les pseudo-éléments
-   ::-webkit-scrollbar-* ci-dessous sont ceux qu'Electron applique réellement. */
-#message-list,
-#channel-list,
-#conversation-list {
+   Electron (Chromium) affiche par défaut la barre native du système (blanche
+   ou grise, hors thème). Toutes les zones défilantes de l'app (messages,
+   salons, conversations, rail des serveurs, dialogues…) la prennent aux
+   couleurs du thème clair ou sombre ; ce fichier est chargé par toutes les
+   pages. Chromium récent (Electron 44) applique `scrollbar-color` et
+   `scrollbar-width` ; les pseudo-éléments ::-webkit-scrollbar-* couvrent les
+   versions plus anciennes. */
+* {
   scrollbar-color: var(--bg-bubble) transparent;
   scrollbar-width: thin;
 }
 
-#message-list::-webkit-scrollbar,
-#channel-list::-webkit-scrollbar,
-#conversation-list::-webkit-scrollbar {
+*::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
-#message-list::-webkit-scrollbar-track,
-#channel-list::-webkit-scrollbar-track,
-#conversation-list::-webkit-scrollbar-track {
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
   background: transparent;
 }
 
-#message-list::-webkit-scrollbar-thumb,
-#channel-list::-webkit-scrollbar-thumb,
-#conversation-list::-webkit-scrollbar-thumb {
+*::-webkit-scrollbar-thumb {
   background-color: var(--bg-bubble);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
-#message-list::-webkit-scrollbar-thumb:hover,
-#channel-list::-webkit-scrollbar-thumb:hover,
-#conversation-list::-webkit-scrollbar-thumb:hover {
+*::-webkit-scrollbar-thumb:hover {
   background-color: var(--accent-end);
 }
 
@@ -303,7 +293,6 @@ img {
   /* Beaucoup de serveurs : le rail défile au lieu de couper les derniers. */
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-width: thin;
 }
 
 #server-rail > * {
